@@ -157,6 +157,27 @@ export interface GuestDocument {
   updated_at: string
 }
 
+// ─── notifications ──────────────────────────────────────────────
+export interface Notification {
+  id: string
+  user_id: string
+  trip_id: string | null
+  title: string
+  body: string | null
+  is_read: boolean
+  created_at: string
+}
+
+// ─── push_subscriptions ───────────────────────────────────────
+export interface PushSubscription {
+  id: string
+  user_id: string
+  endpoint: string
+  p256dh: string | null
+  auth_key: string | null
+  created_at: string
+}
+
 // ─── audit_log ────────────────────────────────────────────────
 export interface AuditLog {
   id: string
@@ -209,6 +230,8 @@ export interface Database {
       feedback: { Row: Feedback; Insert: Omit<Feedback, 'id' | 'created_at'>; Update: never }
       survey_responses: { Row: SurveyResponse; Insert: Omit<SurveyResponse, 'id' | 'created_at'>; Update: never }
       guest_documents: { Row: GuestDocument; Insert: Omit<GuestDocument, 'id' | 'created_at' | 'updated_at'>; Update: Partial<Omit<GuestDocument, 'id'>> }
+      notifications: { Row: Notification; Insert: Omit<Notification, 'id' | 'created_at'>; Update: Partial<Pick<Notification, 'is_read'>> }
+      push_subscriptions: { Row: PushSubscription; Insert: Omit<PushSubscription, 'id' | 'created_at'>; Update: Partial<Omit<PushSubscription, 'id' | 'user_id'>> }
       audit_log: { Row: AuditLog; Insert: Omit<AuditLog, 'id' | 'created_at'>; Update: never }
       login_attempts: { Row: LoginAttempt; Insert: Omit<LoginAttempt, 'id' | 'attempted_at'>; Update: never }
     }

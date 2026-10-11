@@ -40,3 +40,29 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# ── Backend-only repo: exclude frontend UI ──────────────────────
+# Frontend pages (only API routes are tracked)
+src/app/globals.css
+src/app/favicon.ico
+src/app/layout.tsx
+src/app/page.tsx
+src/app/login/
+src/app/admin/
+src/app/change-pin/
+
+# UI component library (shadcn/radix — frontend only)
+src/components/
+components.json
+
+# Public assets
+/public/
+
+# ── Docs, notes, scratch ────────────────────────────────────────
+docs/
+notes.md
+CLAUDE.md
+
+# Supabase temp files and archives
+supabase/.temp/
+supabase/migrations.zip

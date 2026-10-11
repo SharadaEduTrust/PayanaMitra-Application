@@ -14,7 +14,185 @@ create type trip_status as enum ('draft', 'published', 'archived');
 create type food_pref as enum ('veg', 'non_veg');
 
 -- ──────────────────────────────────────────────────────────────
+-- TABLES
+-- All CREATE TABLE statements are grouped here so that the
+-- helper functions below can resolve table references at
+-- function-creation time (Postgres validates SQL function
+-- bodies against existing objects when STABLE/IMMUTABLE).
+-- ──────────────────────────────────────────────────────────────
+
+-- ── profiles ──
+create table profiles (
+  id                uuid primary key references auth.users(id) on delete cascade,
+  phone             text not null unique,
+  first_name        text not null,
+  last_name         text not null,
+  role              user_role not null default 'traveller',
+  is_active         boolean not null default true,
+  must_change_password boolean not null default false,
+  date_of_joining   date,
+  last_active_at    timestamptz,
+  location          text,
+  email             text,
+  remarks           text,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+-- ── traveller_details ──
+create table traveller_details (
+  id                    uuid primary key default gen_random_uuid(),
+  user_id               uuid not null references profiles(id) on delete cascade,
+  dob                   date,
+  food_preference       food_pref,
+  food_allergy          text,
+  emergency_contact_name text,
+  emergency_contact_no  text,
+  travel_insurance_no   text,
+  insurance_company     text,
+  insurance_expiry      date,
+  created_at            timestamptz not null default now(),
+  updated_at            timestamptz not null default now()
+);
+
+-- ── destinations ──
+create table destinations (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  description text,
+  region      text,
+  country     text,
+  image_url   text,
+  created_at  timestamptz not null default now()
+);
+
+-- ── trips ──
+create table trips (
+  id            uuid primary key default gen_random_uuid(),
+  trip_code     text not null unique,
+  name          text not null,
+  destination   text,
+  start_date    date,
+  end_date      date,
+  leader_id     uuid references profiles(id),
+  status        trip_status not null default 'draft',
+  is_active     boolean not null default true,
+  remarks       text,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+-- ── trip_members ──
+create table trip_members (
+  id         uuid primary key default gen_random_uuid(),
+  trip_id    uuid not null references trips(id) on delete cascade,
+  user_id    uuid not null references profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique(trip_id, user_id)
+);
+
+-- ── trip_contacts ──
+create table trip_contacts (
+  id          uuid primary key default gen_random_uuid(),
+  trip_id     uuid not null references trips(id) on delete cascade,
+  name        text not null,
+  role        text,
+  phone       text,
+  email       text,
+  created_at  timestamptz not null default now()
+);
+
+-- ── trip_destinations ──
+create table trip_destinations (
+  id             uuid primary key default gen_random_uuid(),
+  trip_id        uuid not null references trips(id) on delete cascade,
+  destination_id uuid not null references destinations(id) on delete cascade,
+  visit_order    int,
+  created_at     timestamptz not null default now(),
+  unique(trip_id, destination_id)
+);
+
+-- ── itinerary_days ──
+create table itinerary_days (
+  id             uuid primary key default gen_random_uuid(),
+  trip_id        uuid not null references trips(id) on delete cascade,
+  day_number     int not null,
+  destination    text,
+  itinerary_text text,
+  hotel_name     text,
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now(),
+  unique(trip_id, day_number)
+);
+
+-- ── activities ──
+create table activities (
+  id              uuid primary key default gen_random_uuid(),
+  itinerary_day_id uuid not null references itinerary_days(id) on delete cascade,
+  title           text not null,
+  description     text,
+  start_time      time,
+  end_time        time,
+  activity_order  int,
+  created_at      timestamptz not null default now()
+);
+
+-- ── feedback ──
+create table feedback (
+  id          uuid primary key default gen_random_uuid(),
+  trip_id     uuid not null references trips(id) on delete cascade,
+  user_id     uuid not null references profiles(id) on delete cascade,
+  rating      smallint check (rating between 1 and 5),
+  comment     text,
+  created_at  timestamptz not null default now()
+);
+
+-- ── survey_responses ──
+create table survey_responses (
+  id          uuid primary key default gen_random_uuid(),
+  trip_id     uuid not null references trips(id) on delete cascade,
+  user_id     uuid not null references profiles(id) on delete cascade,
+  question    text not null,
+  answer      text,
+  created_at  timestamptz not null default now()
+);
+
+-- ── location_updates ──
+create table location_updates (
+  id          uuid primary key default gen_random_uuid(),
+  trip_id     uuid not null references trips(id) on delete cascade,
+  user_id     uuid not null references profiles(id) on delete cascade,
+  lat         double precision,
+  lng         double precision,
+  accuracy    double precision,
+  recorded_at timestamptz not null default now()
+);
+
+-- ── notifications ──
+create table notifications (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references profiles(id) on delete cascade,
+  trip_id     uuid references trips(id),
+  title       text not null,
+  body        text,
+  is_read     boolean not null default false,
+  created_at  timestamptz not null default now()
+);
+
+-- ── push_subscriptions ──
+create table push_subscriptions (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references profiles(id) on delete cascade,
+  endpoint    text not null,
+  p256dh      text,
+  auth_key    text,
+  created_at  timestamptz not null default now()
+);
+
+-- ──────────────────────────────────────────────────────────────
 -- HELPER FUNCTIONS (security definer, fixed search_path)
+-- Placed after all tables so Postgres can resolve the table
+-- references (profiles, trip_members) at function-creation time.
 -- ──────────────────────────────────────────────────────────────
 create or replace function is_admin()
 returns boolean
@@ -43,25 +221,11 @@ as $$
 $$;
 
 -- ──────────────────────────────────────────────────────────────
--- PROFILES
+-- ROW LEVEL SECURITY + POLICIES
+-- All tables exist and both helper functions are defined above.
 -- ──────────────────────────────────────────────────────────────
-create table profiles (
-  id                uuid primary key references auth.users(id) on delete cascade,
-  phone             text not null unique,
-  first_name        text not null,
-  last_name         text not null,
-  role              user_role not null default 'traveller',
-  is_active         boolean not null default true,
-  must_change_password boolean not null default false,
-  date_of_joining   date,
-  last_active_at    timestamptz,
-  location          text,
-  email             text,
-  remarks           text,
-  created_at        timestamptz not null default now(),
-  updated_at        timestamptz not null default now()
-);
 
+-- ── profiles ──
 alter table profiles enable row level security;
 
 create policy "Users read own profile"
@@ -72,24 +236,7 @@ create policy "Admins full access on profiles"
   on profiles for all
   using (is_admin());
 
--- ──────────────────────────────────────────────────────────────
--- TRAVELLER DETAILS
--- ──────────────────────────────────────────────────────────────
-create table traveller_details (
-  id                    uuid primary key default gen_random_uuid(),
-  user_id               uuid not null references profiles(id) on delete cascade,
-  dob                   date,
-  food_preference       food_pref,
-  food_allergy          text,
-  emergency_contact_name text,
-  emergency_contact_no  text,
-  travel_insurance_no   text,
-  insurance_company     text,
-  insurance_expiry      date,
-  created_at            timestamptz not null default now(),
-  updated_at            timestamptz not null default now()
-);
-
+-- ── traveller_details ──
 alter table traveller_details enable row level security;
 
 create policy "Users read own traveller_details"
@@ -104,19 +251,7 @@ create policy "Admins full access on traveller_details"
   on traveller_details for all
   using (is_admin());
 
--- ──────────────────────────────────────────────────────────────
--- DESTINATIONS
--- ──────────────────────────────────────────────────────────────
-create table destinations (
-  id          uuid primary key default gen_random_uuid(),
-  name        text not null,
-  description text,
-  region      text,
-  country     text,
-  image_url   text,
-  created_at  timestamptz not null default now()
-);
-
+-- ── destinations ──
 alter table destinations enable row level security;
 
 create policy "Authenticated users read destinations"
@@ -128,24 +263,7 @@ create policy "Admins manage destinations"
   on destinations for all
   using (is_admin());
 
--- ──────────────────────────────────────────────────────────────
--- TRIPS
--- ──────────────────────────────────────────────────────────────
-create table trips (
-  id            uuid primary key default gen_random_uuid(),
-  trip_code     text not null unique,
-  name          text not null,
-  destination   text,
-  start_date    date,
-  end_date      date,
-  leader_id     uuid references profiles(id),
-  status        trip_status not null default 'draft',
-  is_active     boolean not null default true,
-  remarks       text,
-  created_at    timestamptz not null default now(),
-  updated_at    timestamptz not null default now()
-);
-
+-- ── trips ──
 alter table trips enable row level security;
 
 create policy "Guests see own published trips"
@@ -160,17 +278,7 @@ create policy "Admins full access on trips"
   on trips for all
   using (is_admin());
 
--- ──────────────────────────────────────────────────────────────
--- TRIP MEMBERS
--- ──────────────────────────────────────────────────────────────
-create table trip_members (
-  id         uuid primary key default gen_random_uuid(),
-  trip_id    uuid not null references trips(id) on delete cascade,
-  user_id    uuid not null references profiles(id) on delete cascade,
-  created_at timestamptz not null default now(),
-  unique(trip_id, user_id)
-);
-
+-- ── trip_members ──
 alter table trip_members enable row level security;
 
 create policy "Users see own trip memberships"
@@ -181,19 +289,7 @@ create policy "Admins full access on trip_members"
   on trip_members for all
   using (is_admin());
 
--- ──────────────────────────────────────────────────────────────
--- TRIP CONTACTS
--- ──────────────────────────────────────────────────────────────
-create table trip_contacts (
-  id          uuid primary key default gen_random_uuid(),
-  trip_id     uuid not null references trips(id) on delete cascade,
-  name        text not null,
-  role        text,
-  phone       text,
-  email       text,
-  created_at  timestamptz not null default now()
-);
-
+-- ── trip_contacts ──
 alter table trip_contacts enable row level security;
 
 create policy "Trip members see trip contacts"
@@ -204,18 +300,7 @@ create policy "Admins full access on trip_contacts"
   on trip_contacts for all
   using (is_admin());
 
--- ──────────────────────────────────────────────────────────────
--- TRIP DESTINATIONS
--- ──────────────────────────────────────────────────────────────
-create table trip_destinations (
-  id             uuid primary key default gen_random_uuid(),
-  trip_id        uuid not null references trips(id) on delete cascade,
-  destination_id uuid not null references destinations(id) on delete cascade,
-  visit_order    int,
-  created_at     timestamptz not null default now(),
-  unique(trip_id, destination_id)
-);
-
+-- ── trip_destinations ──
 alter table trip_destinations enable row level security;
 
 create policy "Trip members see trip destinations"
@@ -226,21 +311,7 @@ create policy "Admins full access on trip_destinations"
   on trip_destinations for all
   using (is_admin());
 
--- ──────────────────────────────────────────────────────────────
--- ITINERARY DAYS
--- ──────────────────────────────────────────────────────────────
-create table itinerary_days (
-  id             uuid primary key default gen_random_uuid(),
-  trip_id        uuid not null references trips(id) on delete cascade,
-  day_number     int not null,
-  destination    text,
-  itinerary_text text,
-  hotel_name     text,
-  created_at     timestamptz not null default now(),
-  updated_at     timestamptz not null default now(),
-  unique(trip_id, day_number)
-);
-
+-- ── itinerary_days ──
 alter table itinerary_days enable row level security;
 
 create policy "Trip members see itinerary"
@@ -251,20 +322,7 @@ create policy "Admins full access on itinerary_days"
   on itinerary_days for all
   using (is_admin());
 
--- ──────────────────────────────────────────────────────────────
--- ACTIVITIES
--- ──────────────────────────────────────────────────────────────
-create table activities (
-  id              uuid primary key default gen_random_uuid(),
-  itinerary_day_id uuid not null references itinerary_days(id) on delete cascade,
-  title           text not null,
-  description     text,
-  start_time      time,
-  end_time        time,
-  activity_order  int,
-  created_at      timestamptz not null default now()
-);
-
+-- ── activities ──
 alter table activities enable row level security;
 
 create policy "Trip members see activities"
@@ -281,18 +339,7 @@ create policy "Admins full access on activities"
   on activities for all
   using (is_admin());
 
--- ──────────────────────────────────────────────────────────────
--- FEEDBACK
--- ──────────────────────────────────────────────────────────────
-create table feedback (
-  id          uuid primary key default gen_random_uuid(),
-  trip_id     uuid not null references trips(id) on delete cascade,
-  user_id     uuid not null references profiles(id) on delete cascade,
-  rating      smallint check (rating between 1 and 5),
-  comment     text,
-  created_at  timestamptz not null default now()
-);
-
+-- ── feedback ──
 alter table feedback enable row level security;
 
 create policy "Users see own feedback"
@@ -310,18 +357,7 @@ create policy "Admins full access on feedback"
   on feedback for all
   using (is_admin());
 
--- ──────────────────────────────────────────────────────────────
--- SURVEY RESPONSES
--- ──────────────────────────────────────────────────────────────
-create table survey_responses (
-  id          uuid primary key default gen_random_uuid(),
-  trip_id     uuid not null references trips(id) on delete cascade,
-  user_id     uuid not null references profiles(id) on delete cascade,
-  question    text not null,
-  answer      text,
-  created_at  timestamptz not null default now()
-);
-
+-- ── survey_responses ──
 alter table survey_responses enable row level security;
 
 create policy "Users see own survey responses"
@@ -339,19 +375,7 @@ create policy "Admins full access on survey_responses"
   on survey_responses for all
   using (is_admin());
 
--- ──────────────────────────────────────────────────────────────
--- LOCATION UPDATES
--- ──────────────────────────────────────────────────────────────
-create table location_updates (
-  id          uuid primary key default gen_random_uuid(),
-  trip_id     uuid not null references trips(id) on delete cascade,
-  user_id     uuid not null references profiles(id) on delete cascade,
-  lat         double precision,
-  lng         double precision,
-  accuracy    double precision,
-  recorded_at timestamptz not null default now()
-);
-
+-- ── location_updates ──
 alter table location_updates enable row level security;
 
 create policy "Users insert own location"
@@ -369,19 +393,7 @@ create policy "Admins full access on location_updates"
   on location_updates for all
   using (is_admin());
 
--- ──────────────────────────────────────────────────────────────
--- NOTIFICATIONS
--- ──────────────────────────────────────────────────────────────
-create table notifications (
-  id          uuid primary key default gen_random_uuid(),
-  user_id     uuid not null references profiles(id) on delete cascade,
-  trip_id     uuid references trips(id),
-  title       text not null,
-  body        text,
-  is_read     boolean not null default false,
-  created_at  timestamptz not null default now()
-);
-
+-- ── notifications ──
 alter table notifications enable row level security;
 
 create policy "Users see own notifications"
@@ -396,18 +408,7 @@ create policy "Admins full access on notifications"
   on notifications for all
   using (is_admin());
 
--- ──────────────────────────────────────────────────────────────
--- PUSH SUBSCRIPTIONS
--- ──────────────────────────────────────────────────────────────
-create table push_subscriptions (
-  id          uuid primary key default gen_random_uuid(),
-  user_id     uuid not null references profiles(id) on delete cascade,
-  endpoint    text not null,
-  p256dh      text,
-  auth_key    text,
-  created_at  timestamptz not null default now()
-);
-
+-- ── push_subscriptions ──
 alter table push_subscriptions enable row level security;
 
 create policy "Users manage own push subscriptions"

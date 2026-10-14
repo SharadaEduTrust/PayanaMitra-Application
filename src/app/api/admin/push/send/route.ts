@@ -2,11 +2,13 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/server/auth'
+import { sendWhatsAppBulk } from '@/lib/server/whatsapp'
 
 /**
  * POST /api/admin/push/send
  *
- * Admin triggers a Web Push notification to all members of a trip.
+ * Admin triggers a Web Push notification to all members of a trip,
+ * with an optional WhatsApp message sent in the same request.
  *
  * Strategy:
  *  1. Verify admin session.
@@ -14,20 +16,26 @@ import { getSession } from '@/lib/server/auth'
  *  3. Fetch all push_subscriptions for those users.
  *  4. Fan-out: send a Web Push message to every subscription using the
  *     Web Push Protocol (RFC 8030) via the Fetch API + VAPID signing.
- *  5. Insert a notifications row for each member so they also see the
+ *  5. Clean up stale (expired) push subscriptions.
+ *  6. Insert a notifications row for each member so they also see the
  *     notification in the in-app notification centre.
- *  6. Return a summary { sent, failed, inAppCreated }.
+ *  7. If sendWhatsapp is true, fetch member phone numbers and fan-out
+ *     a WhatsApp text via the Meta Cloud API.
+ *  8. Return a summary { sent, failed, inAppCreated, whatsappSent, whatsappFailed }.
  *
  * Environment variables required:
- *   VAPID_PUBLIC_KEY   — base64url-encoded uncompressed EC P-256 public key
- *   VAPID_PRIVATE_KEY  — base64url-encoded EC P-256 private key
- *   VAPID_SUBJECT      — mailto: or https: URI (identifies the sender)
+ *   VAPID_PUBLIC_KEY        — base64url-encoded uncompressed EC P-256 public key
+ *   VAPID_PRIVATE_KEY       — base64url-encoded EC P-256 private key
+ *   VAPID_SUBJECT           — mailto: or https: URI (identifies the sender)
+ *   WHATSAPP_PHONE_NUMBER_ID — (optional) Meta Business Manager phone number ID
+ *   WHATSAPP_ACCESS_TOKEN   — (optional) long-lived system-user access token
  *
  * Body:
  * {
- *   trip_id:  string (UUID),
- *   title:    string,
- *   body?:    string,
+ *   trip_id:      string (UUID),
+ *   title:        string,
+ *   body?:        string,
+ *   sendWhatsapp?: boolean  — also send a WhatsApp message (default: false)
  * }
  */
 
@@ -128,9 +136,11 @@ async function sendWebPush(
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
 const SendPushSchema = z.object({
-  trip_id: z.string().uuid(),
-  title:   z.string().min(1).max(200),
-  body:    z.string().max(500).optional(),
+  trip_id:       z.string().uuid(),
+  title:         z.string().min(1).max(200),
+  body:          z.string().max(500).optional(),
+  /** When true, also send the notification via WhatsApp to all trip members. */
+  sendWhatsapp:  z.boolean().optional().default(false),
 })
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────
@@ -156,7 +166,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Validation failed', fieldErrors: parsed.error.flatten().fieldErrors }, { status: 422 })
   }
 
-  const { trip_id, title, body: pushBody } = parsed.data
+  const { trip_id, title, body: pushBody, sendWhatsapp } = parsed.data
   const admin = createAdminClient()
 
   // 1. Verify the trip exists
@@ -231,5 +241,38 @@ export async function POST(req: NextRequest) {
 
   const inAppCreated = notifs?.length ?? 0
 
-  return NextResponse.json({ sent, failed, inAppCreated, staleRemoved: staleEndpoints.length })
+  // ── Optional WhatsApp fan-out ──────────────────────────────────────────────
+  let whatsappSent   = 0
+  let whatsappFailed = 0
+
+  if (sendWhatsapp) {
+    // Fetch phone numbers for all trip members
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: profiles } = await (admin.from('profiles') as any)
+      .select('phone')
+      .in('id', userIds)
+
+    const phones = ((profiles ?? []) as Array<{ phone: string | null }>)
+      .map(p => p.phone as string).filter(Boolean)
+
+    if (phones.length > 0) {
+      const waMessage = `${title}${pushBody ? `\n\n${pushBody}` : ''}`
+      const waResults = await sendWhatsAppBulk(phones, waMessage)
+      for (const r of waResults) {
+        if (r.ok) { whatsappSent++ } else {
+          whatsappFailed++
+          console.warn(`[push/send] WhatsApp failed for ${r.to}: ${r.error}`)
+        }
+      }
+    }
+  }
+
+  return NextResponse.json({
+    sent,
+    failed,
+    inAppCreated,
+    staleRemoved:   staleEndpoints.length,
+    whatsappSent,
+    whatsappFailed,
+  })
 }

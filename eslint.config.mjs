@@ -12,6 +12,13 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Untracked frontend / docs in backend-only repository:
+    "src/app/admin/**",
+    "src/app/login/**",
+    "src/app/change-pin/**",
+    "src/components/**",
+    "docs/**",
+    "notes.md",
   ]),
 ]);
 

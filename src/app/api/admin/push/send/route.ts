@@ -49,9 +49,9 @@ function b64uDecode(str: string): Uint8Array {
   return Uint8Array.from(binary, c => c.charCodeAt(0))
 }
 
-/** Base64url encode a Uint8Array */
-function b64uEncode(buf: ArrayBuffer): string {
-  return Buffer.from(buf).toString('base64url')
+/** Base64url encode a buffer */
+function b64uEncode(buf: ArrayBuffer | Uint8Array): string {
+  return Buffer.from(buf as Uint8Array).toString('base64url')
 }
 
 /**
@@ -81,7 +81,7 @@ async function buildVapidJwt(audience: string): Promise<string> {
   const privateKeyBytes = b64uDecode(privateKeyB64)
   const cryptoKey = await crypto.subtle.importKey(
     'pkcs8',
-    privateKeyBytes,
+    privateKeyBytes as unknown as BufferSource,
     { name: 'ECDSA', namedCurve: 'P-256' },
     false,
     ['sign'],
@@ -174,8 +174,8 @@ export async function POST(req: NextRequest) {
   if (tripErr || !trip) return NextResponse.json({ error: 'Trip not found' }, { status: 404 })
 
   // 2. Fetch trip member user IDs
-  const { data: members, error: membersErr } = await admin
-    .from('trip_members')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: members, error: membersErr } = await (admin.from('trip_members') as any)
     .select('user_id')
     .eq('trip_id', trip_id)
 
@@ -184,15 +184,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ sent: 0, failed: 0, inAppCreated: 0, message: 'No members in this trip' })
   }
 
-  const userIds = members.map(m => m.user_id)
+  const userIds = (members as Array<{ user_id: string }>).map(m => m.user_id)
 
   // 3. Fetch all push subscriptions for these users
-  const { data: subscriptions, error: subErr } = await admin
-    .from('push_subscriptions')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: subscriptions, error: subErr } = await (admin.from('push_subscriptions') as any)
     .select('id, user_id, endpoint, p256dh, auth_key')
     .in('user_id', userIds)
 
   if (subErr) return NextResponse.json({ error: subErr.message }, { status: 500 })
+
+  type PushSub = { id: string; user_id: string; endpoint: string; p256dh: string | null; auth_key: string | null }
+  const subsList = (subscriptions ?? []) as PushSub[]
 
   // 4. Fan-out Web Push
   const pushPayload = JSON.stringify({ title, body: pushBody ?? '' })
@@ -201,7 +204,7 @@ export async function POST(req: NextRequest) {
   const staleEndpoints: string[] = []
 
   await Promise.all(
-    (subscriptions ?? []).map(async sub => {
+    subsList.map(async sub => {
       const result = await sendWebPush(sub.endpoint, sub.p256dh, sub.auth_key, pushPayload)
       if (result.ok) {
         sent++
@@ -217,7 +220,8 @@ export async function POST(req: NextRequest) {
 
   // 5. Clean up stale subscriptions
   if (staleEndpoints.length > 0) {
-    await admin.from('push_subscriptions').delete().in('endpoint', staleEndpoints)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (admin.from('push_subscriptions') as any).delete().in('endpoint', staleEndpoints)
   }
 
   // 6. Insert in-app notification rows for every member

@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "seed": "npx tsx scripts/seed.ts",
-    "rls-test": "npx tsx scripts/rls-test.ts"
+    "rls-test": "npx tsx scripts/rls-test.ts",
+    "admin:create": "npx tsx scripts/create-admin.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

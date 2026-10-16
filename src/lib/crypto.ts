@@ -1,4 +1,4 @@
-import "server-only";
+
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { env } from "@/lib/env";
 

@@ -5,17 +5,24 @@ import { getSession } from '@/lib/server/auth'
 
 /**
  * GET    /api/admin/trips/[id]/days/[dayId]  — get single day (with activities)
- * PATCH  /api/admin/trips/[id]/days/[dayId]  — update day fields
+ * PATCH  /api/admin/trips/[id]/days/[dayId]  — update day fields (including meal_plan)
  * DELETE /api/admin/trips/[id]/days/[dayId]  — delete day (cascades activities)
  */
 
 interface Params { params: Promise<{ id: string; dayId: string }> }
 
+const MealPlanSchema = z.enum([
+  'Breakfast',
+  'Breakfast & Dinner',
+  'Breakfast, Lunch & Dinner',
+]).nullable().optional()
+
 const UpdateDaySchema = z.object({
   day_number:     z.number().int().min(1).optional(),
-  destination:    z.string().max(200).optional().nullable(),
-  itinerary_text: z.string().max(10000).optional().nullable(),
-  hotel_name:     z.string().max(200).optional().nullable(),
+  destination:    z.string().max(100).optional().nullable(),
+  itinerary_text: z.string().max(500).optional().nullable(),
+  hotel_name:     z.string().max(100).optional().nullable(),
+  meal_plan:      MealPlanSchema,
 }).strict()
 
 async function requireAdmin() {
@@ -25,7 +32,6 @@ async function requireAdmin() {
   return { profile }
 }
 
-// ─── GET ──────────────────────────────────────────────────────────────────────
 export async function GET(_req: NextRequest, { params }: Params) {
   const guard = await requireAdmin()
   if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })
@@ -33,8 +39,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const { id: trip_id, dayId } = await params
   const admin = createAdminClient()
 
-  const { data, error } = await admin
-    .from('itinerary_days')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (admin.from('itinerary_days') as any)
     .select('*, activities(id, title, description, start_time, end_time, activity_order)')
     .eq('id', dayId)
     .eq('trip_id', trip_id)
@@ -44,7 +50,6 @@ export async function GET(_req: NextRequest, { params }: Params) {
   return NextResponse.json({ data })
 }
 
-// ─── PATCH ────────────────────────────────────────────────────────────────────
 export async function PATCH(req: NextRequest, { params }: Params) {
   const guard = await requireAdmin()
   if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })
@@ -71,12 +76,25 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const admin = createAdminClient()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (admin.from('itinerary_days') as any)
+  let { data, error } = await (admin.from('itinerary_days') as any)
     .update({ ...parsed.data, updated_at: new Date().toISOString() })
     .eq('id', dayId)
     .eq('trip_id', trip_id)
-    .select()
+    .select('*, activities(id, title, description, start_time, end_time, activity_order)')
     .single()
+
+  if (error && error.message.includes('meal_plan')) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { meal_plan, ...fallbackData } = parsed.data
+    const retry = await (admin.from('itinerary_days') as any)
+      .update({ ...fallbackData, updated_at: new Date().toISOString() })
+      .eq('id', dayId)
+      .eq('trip_id', trip_id)
+      .select('*, activities(id, title, description, start_time, end_time, activity_order)')
+      .single()
+    data = retry.data
+    error = retry.error
+  }
 
   if (error) {
     if (error.code === '23505') {
@@ -89,7 +107,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   return NextResponse.json({ data })
 }
 
-// ─── DELETE ───────────────────────────────────────────────────────────────────
 export async function DELETE(_req: NextRequest, { params }: Params) {
   const guard = await requireAdmin()
   if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })
@@ -97,7 +114,6 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   const { id: trip_id, dayId } = await params
   const admin = createAdminClient()
 
-  // Activities cascade-delete via DB foreign key (ON DELETE CASCADE)
   const { error } = await admin
     .from('itinerary_days')
     .delete()

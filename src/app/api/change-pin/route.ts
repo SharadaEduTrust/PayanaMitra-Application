@@ -58,7 +58,6 @@ export async function POST(req: NextRequest) {
     // 6. Clear must_change_password flag
     const { error: profileError } = await admin
       .from('profiles')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .update({ must_change_password: false, updated_at: new Date().toISOString() } as unknown as never)
       .eq('id', user.id)
     if (profileError) {

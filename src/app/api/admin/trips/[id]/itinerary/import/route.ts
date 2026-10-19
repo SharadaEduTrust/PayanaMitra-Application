@@ -84,17 +84,17 @@ function splitCSVRow(line: string): string[] {
   return fields
 }
 
-export async function GET(_req: NextRequest, { params: _params }: Params) {
+export async function GET() {
   const guard = await requireAdmin()
   if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })
 
   const lines = [
-    'day_number,destination,hotel_name,itinerary_text,activity_title,activity_description,start_time,end_time,activity_order',
-    '1,Srinagar,Hotel Grand Palace,"Drive from Delhi to Srinagar, check-in",Airport Transfer,Pick-up from Srinagar airport,10:00,12:00,1',
-    '1,,,,"Shikara Ride","Evening shikara ride on Dal Lake",16:00,18:00,2',
-    '2,Gulmarg,Snow Peak Resort,"Full day excursion to Gulmarg",Gondola Ride,"Cable car ride to Apharwat Peak",09:00,13:00,1',
-    '2,,,,"Skiing",Skiing on the slopes,14:00,17:00,2',
-    '3,Pahalgam,Pine View Hotel,"Scenic drive to Pahalgam valley",,,,,',
+    'day_number,destination,hotel_name,meal_plan,itinerary_text,activity_title,activity_description,start_time,end_time,activity_order',
+    '1,Srinagar,Hotel Grand Palace,"Breakfast & Dinner","Drive from Delhi to Srinagar, check-in",Airport Transfer,Pick-up from Srinagar airport,10:00,12:00,1',
+    '1,,,,,"Shikara Ride","Evening shikara ride on Dal Lake",16:00,18:00,2',
+    '2,Gulmarg,Snow Peak Resort,"Breakfast, Lunch & Dinner","Full day excursion to Gulmarg",Gondola Ride,"Cable car ride to Apharwat Peak",09:00,13:00,1',
+    '2,,,,,"Skiing",Skiing on the slopes,14:00,17:00,2',
+    '3,Pahalgam,Pine View Hotel,"Breakfast","Scenic drive to Pahalgam valley",,,,,',
   ]
   return new NextResponse(lines.join('\n'), {
     status: 200,
@@ -158,6 +158,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     day_number: number
     destination: string | null
     hotel_name: string | null
+    meal_plan?: string | null
     itinerary_text: string | null
   }>()
 
@@ -188,6 +189,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         day_number:     dayNum,
         destination:    row['destination']     || null,
         hotel_name:     row['hotel_name']      || null,
+        meal_plan:      row['meal_plan']       || null,
         itinerary_text: row['itinerary_text']  || null,
       })
     }
@@ -205,6 +207,11 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
     if (endTime && !TIME_RE.test(endTime)) {
       errors.push({ row: rowNum, error: 'end_time must be HH:MM or HH:MM:SS' })
+      skipped++
+      continue
+    }
+    if (startTime && endTime && endTime < startTime) {
+      errors.push({ row: rowNum, error: 'end_time must be after or equal to start_time' })
       skipped++
       continue
     }
@@ -238,9 +245,20 @@ export async function POST(req: NextRequest, { params }: Params) {
   const dayInserts = Array.from(dayData.values()).map(d => ({ ...d, trip_id }))
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: upsertedDays, error: daysError } = await (admin.from('itinerary_days') as any)
+  let { data: upsertedDays, error: daysError } = await (admin.from('itinerary_days') as any)
     .upsert(dayInserts, { onConflict: 'trip_id,day_number', ignoreDuplicates: false })
     .select('id, day_number')
+
+  if (daysError && daysError.message.includes('meal_plan')) {
+    // Fallback if meal_plan column is not yet migrated in database
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const fallbackInserts = dayInserts.map(({ meal_plan, ...rest }) => rest)
+    const retry = await (admin.from('itinerary_days') as any)
+      .upsert(fallbackInserts, { onConflict: 'trip_id,day_number', ignoreDuplicates: false })
+      .select('id, day_number')
+    upsertedDays = retry.data
+    daysError = retry.error
+  }
 
   if (daysError) {
     return NextResponse.json({ error: 'Failed to upsert days: ' + daysError.message }, { status: 500 })

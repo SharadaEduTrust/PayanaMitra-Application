@@ -10,6 +10,7 @@ export type Profile = {
   role: UserRole;
   is_active: boolean;
   must_change_password: boolean;
+  leader_id: string | null;
   date_of_joining: string | null;
   last_active_at: string | null;
   location: string | null;
@@ -31,6 +32,7 @@ export type TravellerDetails = {
   travel_insurance_no: string | null;
   insurance_company: string | null;
   insurance_expiry: string | null;
+  passport_issued_location: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -85,6 +87,7 @@ export type ItineraryDay = {
   destination: string | null;
   itinerary_text: string | null;
   hotel_name: string | null;
+  meal_plan?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -157,6 +160,10 @@ export type GuestDocument = {
   auth_tag: string;
   expiry_date: string | null;
   issued_country: string | null;
+  storage_path?: string | null;
+  file_name?: string | null;
+  file_size?: number | null;
+  mime_type?: string | null;
   created_at: string;
   updated_at: string;
 };

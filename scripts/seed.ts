@@ -60,8 +60,7 @@ interface UserSpec {
   pin: string
   firstName: string
   lastName: string
-  role: 'admin' | 'traveller'
-  isLeader?: boolean
+  role: 'admin' | 'traveller' | 'leader'
   location?: string
 }
 
@@ -117,7 +116,7 @@ async function upsertProfile(userId: string, spec: UserSpec) {
 
 const USERS: UserSpec[] = [
   { phone: '9000000001', pin: '0001', firstName: 'Arjun', lastName: 'Sharma', role: 'admin', location: 'Mumbai' },
-  { phone: '9000000002', pin: '0002', firstName: 'Priya', lastName: 'Patel', role: 'traveller', isLeader: true, location: 'Pune' },
+  { phone: '9000000002', pin: '0002', firstName: 'Priya', lastName: 'Patel', role: 'leader', location: 'Pune' },
   { phone: '9000000003', pin: '0003', firstName: 'Rahul', lastName: 'Mehta', role: 'traveller', location: 'Delhi' },
   { phone: '9000000004', pin: '0004', firstName: 'Sunita', lastName: 'Kapoor', role: 'traveller', location: 'Bangalore' },
   { phone: '9000000005', pin: '0005', firstName: 'Vikram', lastName: 'Singh', role: 'traveller', location: 'Jaipur' },
@@ -194,6 +193,21 @@ async function main() {
   }
 
   const leaderId = userIds['9000000002']
+
+  // 1b. Assign guests to the leader
+  console.log('\n[1b/6] Assigning guests to leader...')
+  const guestPhones = ['9000000003', '9000000004', '9000000005']
+  for (const guestPhone of guestPhones) {
+    const guestId = userIds[guestPhone]
+    if (guestId) {
+      const { error } = await admin
+        .from('profiles')
+        .update({ leader_id: leaderId })
+        .eq('id', guestId)
+      if (error) console.warn(`  ⚠  leader assignment for ${guestPhone}: ${error.message}`)
+      else console.log(`  ✓  Assigned ${guestPhone} → leader 9000000002`)
+    }
+  }
 
   // 2. Create or update the trip
   console.log('\n[2/5] Creating trip...')
@@ -278,7 +292,7 @@ async function main() {
   console.log('├─────────────────┼──────┼──────────────────┼──────────┤')
   for (const u of USERS) {
     const name = `${u.firstName} ${u.lastName}`.padEnd(16)
-    const role = u.isLeader ? 'leader  ' : u.role.padEnd(8)
+    const role = u.role.padEnd(8)
     console.log(`│ ${u.phone}   │ ${u.pin} │ ${name} │ ${role} │`)
   }
   console.log('└─────────────────┴──────┴──────────────────┴──────────┘\n')

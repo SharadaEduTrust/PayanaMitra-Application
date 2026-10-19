@@ -4,9 +4,19 @@
  * Never add fields not present in the migrations.
  */
 
-export type UserRole = 'traveller' | 'admin' | 'leader'
+export type UserRoleEnum = 'traveller' | 'admin' | 'leader'
 export type TripStatus = 'draft' | 'published' | 'archived'
 export type FoodPref = 'veg' | 'non_veg'
+export type RoleStatus = 'active' | 'inactive'
+
+// ─── user_roles ──────────────────────────────────────────────
+export interface UserRoleRecord {
+  id: number
+  role_name: string
+  status: RoleStatus
+  created_at: string
+  updated_at: string
+}
 
 // ─── profiles ────────────────────────────────────────────────
 export interface Profile {
@@ -14,14 +24,16 @@ export interface Profile {
   phone: string
   first_name: string
   last_name: string
-  role: UserRole
+  role: UserRoleEnum
   is_active: boolean
   must_change_password: boolean
+  leader_id: string | null         // FK to profiles.id (assigned leader)
   date_of_joining: string | null   // ISO date
   last_active_at: string | null    // ISO timestamptz
   location: string | null
   email: string | null
   remarks: string | null
+  avatar_url: string | null
   created_at: string
   updated_at: string
 }
@@ -38,6 +50,7 @@ export interface TravellerDetails {
   travel_insurance_no: string | null
   insurance_company: string | null
   insurance_expiry: string | null
+  passport_issued_location: string | null
   created_at: string
   updated_at: string
 }
@@ -105,6 +118,7 @@ export interface ItineraryDay {
   destination: string | null
   itinerary_text: string | null
   hotel_name: string | null
+  meal_plan?: string | null
   created_at: string
   updated_at: string
 }
@@ -153,6 +167,10 @@ export interface GuestDocument {
   auth_tag: string
   expiry_date: string | null
   issued_country: string | null
+  storage_path?: string | null
+  file_name?: string | null
+  file_size?: number | null
+  mime_type?: string | null
   created_at: string
   updated_at: string
 }
@@ -214,10 +232,42 @@ export interface TrailLeaderView {
   leader_email: string | null
 }
 
+// ─── leader_guests_view ───────────────────────────────────────
+export interface LeaderGuestsView {
+  leader_id: string
+  leader_first_name: string
+  leader_last_name: string
+  leader_phone: string
+  guest_id: string
+  guest_first_name: string
+  guest_last_name: string
+  guest_phone: string
+  guest_email: string | null
+  guest_is_active: boolean
+}
+
+// ─── trip_summary_view ────────────────────────────────────────
+export interface TripSummaryView {
+  trip_id: string
+  trip_code: string
+  trip_name: string
+  destination: string | null
+  start_date: string | null
+  end_date: string | null
+  status: TripStatus
+  is_active: boolean
+  leader_id: string | null
+  leader_first_name: string | null
+  leader_last_name: string | null
+  leader_phone: string | null
+  member_count: number
+}
+
 // ─── Database helper type ─────────────────────────────────────
 export interface Database {
   public: {
     Tables: {
+      user_roles: { Row: UserRoleRecord; Insert: Omit<UserRoleRecord, 'id' | 'created_at' | 'updated_at'>; Update: Partial<Omit<UserRoleRecord, 'id'>> }
       profiles: { Row: Profile; Insert: Omit<Profile, 'created_at' | 'updated_at'>; Update: Partial<Omit<Profile, 'id'>> }
       traveller_details: { Row: TravellerDetails; Insert: Omit<TravellerDetails, 'id' | 'created_at' | 'updated_at'>; Update: Partial<Omit<TravellerDetails, 'id'>> }
       trips: { Row: Trip; Insert: Omit<Trip, 'id' | 'created_at' | 'updated_at'>; Update: Partial<Omit<Trip, 'id'>> }
@@ -237,6 +287,8 @@ export interface Database {
     }
     Views: {
       trail_leader_view: { Row: TrailLeaderView }
+      leader_guests_view: { Row: LeaderGuestsView }
+      trip_summary_view: { Row: TripSummaryView }
     }
     Functions: {
       copy_trip: {
@@ -246,6 +298,7 @@ export interface Database {
       is_admin: { Args: Record<never, never>; Returns: boolean }
       is_trip_member: { Args: { trip: string }; Returns: boolean }
       is_leader_of_trip: { Args: { trip: string }; Returns: boolean }
+      is_leader_of_user: { Args: { target_user_id: string }; Returns: boolean }
     }
   }
 }

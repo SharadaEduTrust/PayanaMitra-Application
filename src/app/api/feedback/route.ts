@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createClient } from '@/lib/supabase/server'
+import { getSession } from '@/lib/server/auth'
 
 /**
  * POST /api/feedback
@@ -22,9 +22,8 @@ const FeedbackSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const profile = await getSession()
+  if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let body: unknown
   try { body = await req.json() } catch {
@@ -47,7 +46,7 @@ export async function POST(req: NextRequest) {
     .from('trip_members')
     .select('id', { count: 'exact', head: true })
     .eq('trip_id', trip_id)
-    .eq('user_id', user.id)
+    .eq('user_id', profile.id)
 
   if ((memberCount ?? 0) === 0) {
     return NextResponse.json({ error: 'Not a member of this trip' }, { status: 403 })
@@ -58,7 +57,7 @@ export async function POST(req: NextRequest) {
     .from('feedback')
     .select('id', { count: 'exact', head: true })
     .eq('trip_id', trip_id)
-    .eq('user_id', user.id)
+    .eq('user_id', profile.id)
 
   if ((existing ?? 0) > 0) {
     return NextResponse.json({ error: 'You have already submitted feedback for this trip.' }, { status: 409 })
@@ -66,7 +65,7 @@ export async function POST(req: NextRequest) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (admin.from('feedback') as any)
-    .insert({ trip_id, user_id: user.id, rating: rating ?? null, comment: comment ?? null })
+    .insert({ trip_id, user_id: profile.id, rating: rating ?? null, comment: comment ?? null })
     .select('id, trip_id, rating, comment, created_at')
     .single()
 

@@ -16,7 +16,15 @@ const UpdateActivitySchema = z.object({
   start_time:     z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional().nullable(),
   end_time:       z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional().nullable(),
   activity_order: z.number().int().min(1).optional().nullable(),
-}).strict()
+}).strict().refine(data => {
+  if (data.start_time && data.end_time) {
+    return data.end_time >= data.start_time
+  }
+  return true
+}, {
+  message: 'End time must be after or equal to start time',
+  path: ['end_time'],
+})
 
 async function requireAdmin() {
   const profile = await getSession()

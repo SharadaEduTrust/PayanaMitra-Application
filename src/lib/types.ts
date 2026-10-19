@@ -87,6 +87,7 @@ export type ItineraryDay = {
   destination: string | null;
   itinerary_text: string | null;
   hotel_name: string | null;
+  meal_plan?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -159,6 +160,10 @@ export type GuestDocument = {
   auth_tag: string;
   expiry_date: string | null;
   issued_country: string | null;
+  storage_path?: string | null;
+  file_name?: string | null;
+  file_size?: number | null;
+  mime_type?: string | null;
   created_at: string;
   updated_at: string;
 };

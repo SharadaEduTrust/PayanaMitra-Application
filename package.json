@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "npx tsx scripts/seed.ts",
-    "rls-test": "npx tsx scripts/rls-test.ts"
+    "rls-test": "npx tsx scripts/rls-test.ts",
+    "test": "npx tsx scripts/backend-test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

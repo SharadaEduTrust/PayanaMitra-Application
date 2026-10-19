@@ -9,13 +9,21 @@ import { getSession } from '@/lib/server/auth'
  */
 
 const CreateTripSchema = z.object({
-  trip_code:   z.string().min(1, 'Trip code is required').max(50),
-  name:        z.string().min(1, 'Name is required').max(200),
-  destination: z.string().max(200).optional().nullable(),
+  trip_code:   z.string().min(1, 'Trip code is required').max(50, 'Trip code cannot exceed 50 characters'),
+  name:        z.string().min(1, 'Name is required').max(100, 'Name cannot exceed 100 characters'),
+  destination: z.string().max(100, 'Destination cannot exceed 100 characters').optional().nullable(),
   start_date:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').optional().nullable(),
   end_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').optional().nullable(),
-  leader_id:   z.string().uuid().optional().nullable(),
-  remarks:     z.string().max(2000).optional().nullable(),
+  leader_id:   z.string().uuid('Invalid leader ID').optional().nullable(),
+  remarks:     z.string().max(2000, 'Remarks cannot exceed 2000 characters').optional().nullable(),
+}).refine(data => {
+  if (data.start_date && data.end_date) {
+    return new Date(data.end_date) >= new Date(data.start_date)
+  }
+  return true
+}, {
+  message: 'End date must be on or after start date',
+  path: ['end_date'],
 })
 
 // ─── Auth guard helper ─────────────────────────────────────────────────────────
@@ -36,6 +44,7 @@ export async function GET(req: NextRequest) {
   const limit  = Math.min(100, parseInt(searchParams.get('limit') ?? '20', 10))
   const status = searchParams.get('status') // draft | published | archived
   const search = searchParams.get('q') ?? ''
+  const active = searchParams.get('active')
   const from   = (page - 1) * limit
 
   const admin = createAdminClient()
@@ -49,6 +58,13 @@ export async function GET(req: NextRequest) {
   if (status && ['draft', 'published', 'archived'].includes(status)) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     query = (query as any).eq('status', status)
+  }
+  if (active === 'true') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query = (query as any).eq('is_active', true)
+  } else if (active === 'false') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query = (query as any).eq('is_active', false)
   }
   if (search) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -79,6 +95,22 @@ export async function POST(req: NextRequest) {
 
   const admin = createAdminClient()
 
+  // Verify leader_id if provided
+  if (parsed.data.leader_id) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: leaderProfile } = await (admin.from('profiles') as any)
+      .select('id, role')
+      .eq('id', parsed.data.leader_id)
+      .single()
+
+    if (!leaderProfile || !['leader', 'admin'].includes(leaderProfile.role)) {
+      return NextResponse.json(
+        { error: 'Validation failed', fieldErrors: { leader_id: ['Selected user is not an active leader or admin.'] } },
+        { status: 422 },
+      )
+    }
+  }
+
   // Check trip_code uniqueness
   const { count } = await admin.from('trips').select('id', { count: 'exact', head: true }).eq('trip_code', parsed.data.trip_code)
   if ((count ?? 0) > 0) {
@@ -90,7 +122,7 @@ export async function POST(req: NextRequest) {
     ...parsed.data,
     status: 'draft',
     is_active: true,
-  }).select().single()
+  }).select('*, profiles!trips_leader_id_fkey(id, first_name, last_name, phone)').single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

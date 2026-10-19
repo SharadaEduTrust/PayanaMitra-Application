@@ -64,7 +64,12 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'))
 
-  // Redirect unauthenticated users to /login
+  // API routes handle their own auth responses (401/403 JSON) rather than HTML redirects
+  if (pathname.startsWith('/api/')) {
+    return response
+  }
+
+  // Redirect unauthenticated users to /login for page requests
   if (!user && !isPublic) {
     const loginUrl = request.nextUrl.clone()
     loginUrl.pathname = '/login'

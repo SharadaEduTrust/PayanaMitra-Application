@@ -36,17 +36,6 @@ async function requireAdmin() {
   return { profile }
 }
 
-interface ImportUser {
-  phone: string
-  first_name: string
-  last_name: string
-  role: string
-  email?: string | null
-  location?: string | null
-  date_of_joining?: string | null
-  remarks?: string | null
-}
-
 export async function POST(req: NextRequest) {
   const guard = await requireAdmin()
   if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })

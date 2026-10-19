@@ -1,22 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { loginWithPhonePin } from '@/lib/server/auth'
-
-/**
- * POST /api/login
- *
- * Body: { phone: string, pin: string }
- *
- * On success: sets session cookies (via @supabase/ssr) and returns the
- * user's role so the client can redirect to the right dashboard.
- *
- * On failure: returns a generic 401 — no information about whether the
- * phone exists or the PIN is wrong.
- */
+import { loginWithPhonePin, PHONE_REGEX, PIN_REGEX } from '@/lib/server/auth'
 
 const LoginSchema = z.object({
-  phone: z.string().regex(/^\d{10}$/, 'Phone must be 10 digits'),
-  pin: z.string().regex(/^\d{4}$/, 'PIN must be 4 digits'),
+  phone: z.string().regex(PHONE_REGEX, 'Phone must be a valid 10-15 digit number'),
+  pin: z.string().regex(PIN_REGEX, 'PIN must be 4 digits'),
 })
 
 export async function POST(req: NextRequest) {

@@ -49,8 +49,8 @@ export default async function AdminUsersPage() {
     <>
       <header className="topbar">
         <div>
-          <h1>Travellers</h1>
-          <small>Accounts, roles and access.</small>
+          <h1>Guests</h1>
+          <small>Guest accounts, roles and access.</small>
         </div>
       </header>
       <div className="admin-body">

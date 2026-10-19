@@ -78,20 +78,20 @@ export default function ProfileSummary({
 
       <section className="panel">
         <h2 className="serif">At a glance</h2>
-        <p className="panel-note">Your trips, documents and account history.</p>
+        <p className="panel-note">Your trails, documents and account history.</p>
 
         <div className="stat-grid">
           <StatTile
             value={String(trips.current + trips.upcoming + trips.past)}
-            label="Trips joined"
+            label="Trails joined"
             note={`${trips.current} now · ${trips.upcoming} upcoming · ${trips.past} past`}
             href="/dashboard"
-            cta="View trips"
+            cta="View trails"
           />
           <StatTile
             value={String(documents)}
             label={documents === 1 ? "Document saved" : "Documents saved"}
-            note="PAN, passport, visa and anything else your trip needs"
+            note="PAN, passport, visa and anything else your trail needs"
             href="/dashboard/documents"
             cta="Manage documents"
           />

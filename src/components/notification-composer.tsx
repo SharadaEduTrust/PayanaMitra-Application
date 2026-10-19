@@ -18,7 +18,7 @@ export default function NotificationComposer({ travellers }: { travellers: { id:
     setStatus("");
 
     if (recipients.length === 0) {
-      setError("Choose at least one traveller.");
+      setError("Choose at least one guest.");
       return;
     }
     if (!title.trim()) {
@@ -47,7 +47,7 @@ export default function NotificationComposer({ travellers }: { travellers: { id:
         return;
       }
 
-      setStatus(`Sent to ${recipients.length} traveller${recipients.length > 1 ? "s" : ""}.`);
+      setStatus(`Sent to ${recipients.length} guest${recipients.length > 1 ? "s" : ""}.`);
       setTitle("");
       setBody("");
       setRecipients([]);
@@ -67,14 +67,14 @@ export default function NotificationComposer({ travellers }: { travellers: { id:
   return (
     <section className="admin-card">
       <h2 className="serif">Send a notification</h2>
-      <p className="admin-hint">Travellers see these in their notifications list.</p>
+      <p className="admin-hint">Guests see these in their notifications list.</p>
 
       <form onSubmit={send}>
         <div className="form-field">
           <span className="form-label">Recipients ({recipients.length} selected)</span>
           <div className="recipient-grid">
             {travellers.length === 0 ? (
-              <p className="panel-note">No travellers yet.</p>
+              <p className="panel-note">No guests yet.</p>
             ) : (
               travellers.map((traveller) => (
                 <label className="recipient" key={traveller.id}>
@@ -92,7 +92,7 @@ export default function NotificationComposer({ travellers }: { travellers: { id:
 
         <label className="form-field">
           Title
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Trip schedule changed" />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Trail schedule changed" />
         </label>
 
         <label className="form-field">

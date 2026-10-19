@@ -16,7 +16,7 @@ export default async function AdminDestinationsPage() {
       <header className="topbar">
         <div>
           <h1>Destinations</h1>
-          <small>The catalogue travellers can browse.</small>
+          <small>The catalogue guests can browse.</small>
         </div>
       </header>
       <div className="admin-body">

@@ -59,25 +59,25 @@ export default function TripListAdmin({ trips }: { trips: TrailLeaderView[] }) {
       setLoadingTripId(null);
 
       if (!res.ok) {
-        setError(json?.error ?? "Failed to update trip status.");
+        setError(json?.error ?? "Failed to update trail status.");
         return;
       }
 
       setRows((current) =>
         current.map((t) => (t.trip_id === tripId ? { ...t, status: newStatus } : t)),
       );
-      setNotice(`Trip status set to ${newStatus}.`);
+      setNotice(`Trail status set to ${newStatus}.`);
       router.refresh();
     } catch {
       setLoadingTripId(null);
-      setError("Network error while updating trip status.");
+      setError("Network error while updating trail status.");
     }
   }
 
   async function duplicate(trip: TrailLeaderView) {
-    const newCode = window.prompt("New trip code (must be unique):", `${trip.trip_code}-COPY`);
+    const newCode = window.prompt("New trail code (must be unique):", `${trip.trip_code}-COPY`);
     if (!newCode || !newCode.trim()) return;
-    const newName = window.prompt("New trip name:", trip.trip_name);
+    const newName = window.prompt("New trail name:", trip.trip_name);
     if (!newName || !newName.trim()) return;
 
     setError("");
@@ -100,9 +100,9 @@ export default function TripListAdmin({ trips }: { trips: TrailLeaderView[] }) {
       if (!res.ok) {
         if (data?.fieldErrors) {
           const firstErr = Object.values(data.fieldErrors).flat()[0];
-          setError(String(firstErr || data?.error || "Could not duplicate the trip."));
+          setError(String(firstErr || data?.error || "Could not duplicate the trail."));
         } else {
-          setError(data?.error ?? "Could not duplicate the trip.");
+          setError(data?.error ?? "Could not duplicate the trail.");
         }
         return;
       }
@@ -115,17 +115,17 @@ export default function TripListAdmin({ trips }: { trips: TrailLeaderView[] }) {
       }
     } catch {
       setLoadingTripId(null);
-      setError("Network error while duplicating trip.");
+      setError("Network error while duplicating trail.");
     }
   }
 
   if (trips.length === 0) {
     return (
       <div className="panel-empty">
-        <h2 className="serif">No trips yet</h2>
-        <p>Create your first trip, add days and activities, then publish it to your members.</p>
+        <h2 className="serif">No trails yet</h2>
+        <p>Create your first trail, add days and activities, then publish it to your members.</p>
         <Link className="btn btn-primary" href="/admin/trips/new">
-          Create a trip
+          Create a trail
         </Link>
       </div>
     );
@@ -134,7 +134,7 @@ export default function TripListAdmin({ trips }: { trips: TrailLeaderView[] }) {
   return (
     <div className="admin-card">
       <div className="admin-card-head" style={{ flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
-        <h2 className="serif">All Trips ({filtered.length})</h2>
+        <h2 className="serif">All Trails ({filtered.length})</h2>
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
           <input
             className="admin-search"
@@ -165,14 +165,14 @@ export default function TripListAdmin({ trips }: { trips: TrailLeaderView[] }) {
       {notice && <p className="form-notice" role="status" style={{ marginBottom: "12px" }}>{notice}</p>}
 
       {filtered.length === 0 ? (
-        <p className="panel-note">No trips match that filter.</p>
+        <p className="panel-note">No trails match that filter.</p>
       ) : (
         <>
           <table className="admin-table">
             <thead>
               <tr>
                 <th>Code</th>
-                <th>Trip Name</th>
+                <th>Trail Name</th>
                 <th>Dates</th>
                 <th>Leader</th>
                 <th>Status</th>

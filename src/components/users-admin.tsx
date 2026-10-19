@@ -407,7 +407,7 @@ export default function UsersAdmin({
               style={{ padding: "6px 12px", borderRadius: "6px" }}
             >
               <option value="all">All roles</option>
-              <option value="traveller">Traveller</option>
+              <option value="traveller">Guest</option>
               <option value="leader">Trail leader</option>
               <option value="admin">Administrator</option>
             </select>
@@ -436,13 +436,13 @@ export default function UsersAdmin({
         {showImport && (
           <div style={{ margin: "16px 0", padding: "16px", background: "var(--color-surface, #1e293b)", borderRadius: "8px", border: "1px dashed var(--color-border, #334155)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-              <h3 className="serif" style={{ margin: 0 }}>Bulk Import Travellers</h3>
+              <h3 className="serif" style={{ margin: 0 }}>Bulk Import Guests</h3>
               <button type="button" className="link-btn" onClick={downloadSampleCsv}>
                 Download CSV Template
               </button>
             </div>
             <p className="admin-hint">
-              Upload a UTF-8 CSV with phone numbers and traveller details. Duplicates are automatically skipped.
+              Upload a UTF-8 CSV with phone numbers and guest details. Duplicates are automatically skipped.
             </p>
             <input
               type="file"
@@ -477,7 +477,7 @@ export default function UsersAdmin({
                   <th>Name</th>
                   <th>Phone</th>
                   <th>Role</th>
-                  <th>Travel details</th>
+                  <th>Guest details</th>
                   <th>Last active</th>
                   <th>Status</th>
                   <th aria-label="Actions" />
@@ -493,7 +493,7 @@ export default function UsersAdmin({
                       {row.email && <div className="muted small">{row.email}</div>}
                     </td>
                     <td className="mono">{row.phone}</td>
-                    <td style={{ textTransform: "capitalize" }}>{row.role}</td>
+                    <td style={{ textTransform: "capitalize" }}>{row.role === "traveller" ? "Guest" : row.role}</td>
                     <td className="muted small">
                       {row.foodPreference ? `${row.foodPreference.replace("_", " ")}` : "—"}
                       {row.emergencyContact ? ` · ${row.emergencyContact}` : ""}
@@ -584,7 +584,7 @@ export default function UsersAdmin({
               <label className="form-field">
                 Role
                 <select value={editForm.role} onChange={(e) => setEditForm({ ...editForm, role: e.target.value as UserRow["role"] })}>
-                  <option value="traveller">Traveller</option>
+                  <option value="traveller">Guest</option>
                   <option value="leader">Trail leader</option>
                   <option value="admin">Administrator</option>
                 </select>
@@ -689,7 +689,7 @@ export default function UsersAdmin({
             <label className="form-field">
               Role
               <select value={draft.role} onChange={(e) => setDraft({ ...draft, role: e.target.value as UserRow["role"] })}>
-                <option value="traveller">Traveller</option>
+                <option value="traveller">Guest</option>
                 <option value="leader">Trail leader</option>
                 <option value="admin">Administrator</option>
               </select>

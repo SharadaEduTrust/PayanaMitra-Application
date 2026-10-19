@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const links = [
-  { href: "/dashboard", label: "All trips" },
+  { href: "/dashboard", label: "All trails" },
   { href: "/dashboard/profile", label: "My profile" },
   { href: "/dashboard/documents", label: "My documents" },
   { href: "/dashboard/notifications", label: "Notifications" },
@@ -19,7 +19,7 @@ export default function DashboardNav({ role }: { role: string }) {
 
   return (
     <>
-      <div className="side-label">Your trips</div>
+      <div className="side-label">Your trails</div>
       {links.map((link) => (
         <Link
           key={link.href}

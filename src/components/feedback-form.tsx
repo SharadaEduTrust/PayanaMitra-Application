@@ -48,7 +48,7 @@ export default function FeedbackForm({
     if (insertError) {
       setError(
         insertError.message.includes("row-level security")
-          ? "You can only leave feedback for trips you are part of."
+          ? "You can only leave feedback for trails you are part of."
           : insertError.message,
       );
       return;
@@ -62,7 +62,7 @@ export default function FeedbackForm({
     return (
       <div className="panel-empty">
         <h2 className="serif">Thank you</h2>
-        <p>Your feedback for this trip has been recorded.</p>
+        <p>Your feedback for this trail has been recorded.</p>
         <Link className="btn btn-primary" href={`/dashboard/trips/${tripId}`}>
           Back to itinerary
         </Link>

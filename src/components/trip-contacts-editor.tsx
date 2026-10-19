@@ -103,7 +103,7 @@ export default function TripContactsEditor({
   return (
     <section className="admin-card">
       <h2 className="serif">Contacts</h2>
-      <p className="admin-hint">Local guides, hotel managers and transport operators for this trip.</p>
+      <p className="admin-hint">Local guides, hotel managers and transport operators for this trail.</p>
 
       {rows.length === 0 ? (
         <p className="panel-note">No contacts yet.</p>

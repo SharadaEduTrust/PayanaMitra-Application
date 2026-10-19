@@ -17,9 +17,9 @@ export default async function AdminOverviewPage() {
     ]);
 
   const stats = [
-    { label: "Travellers", value: travellers ?? 0, href: "/admin/users" },
-    { label: "Trips", value: trips ?? 0, href: "/admin/trips" },
-    { label: "Published", value: published ?? 0, href: "/admin/trips" },
+    { label: "Guests", value: travellers ?? 0, href: "/admin/users" },
+    { label: "Trails", value: trips ?? 0, href: "/admin/trips" },
+    { label: "Published trails", value: published ?? 0, href: "/admin/trips" },
     { label: "Unread notifications", value: unread ?? 0, href: "/admin/notifications" },
   ];
 
@@ -44,11 +44,11 @@ export default async function AdminOverviewPage() {
         <section className="admin-card">
           <h2 className="serif">Getting started</h2>
           <ol className="admin-steps">
-            <li>Create traveller accounts in <Link href="/admin/users">Travellers</Link>.</li>
-            <li>Create a trip in <Link href="/admin/trips">Trips</Link> and give it a unique code.</li>
+            <li>Create guest accounts in <Link href="/admin/users">Guests</Link>.</li>
+            <li>Create a trail in <Link href="/admin/trips">Trails</Link> and give it a unique code.</li>
             <li>Add day plans and activities to the itinerary.</li>
-            <li>Add the travellers as members.</li>
-            <li>Set the trip status to <strong>published</strong> so members can see it.</li>
+            <li>Add the guests as members.</li>
+            <li>Set the trail status to <strong>published</strong> so members can see it.</li>
           </ol>
         </section>
       </div>

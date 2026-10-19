@@ -19,9 +19,9 @@ export default async function AdminTripPage({ params }: Params) {
   if (!tripData) {
     return (
       <div className="admin-body">
-        <p className="form-error">That trip could not be found.</p>
+        <p className="form-error">That trail could not be found.</p>
         <Link className="btn btn-secondary" href="/admin/trips">
-          Back to trips
+          Back to trails
         </Link>
       </div>
     );
@@ -50,7 +50,7 @@ export default async function AdminTripPage({ params }: Params) {
   return (
     <div className="admin-body">
       <Link className="back-link" href="/admin/trips">
-        ← All trips
+        ← All trails
       </Link>
 
       <TripEditor

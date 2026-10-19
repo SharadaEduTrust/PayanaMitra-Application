@@ -116,7 +116,7 @@ export default function TravellerDetailsForm({ details }: { details: TravellerDe
       {status && <p className="form-notice" role="status">{status}</p>}
 
       <button className="btn btn-primary" type="submit" disabled={loading}>
-        {loading ? "Saving…" : "Save travel details"}
+        {loading ? "Saving…" : "Save guest details"}
       </button>
     </form>
   );

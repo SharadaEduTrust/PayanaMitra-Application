@@ -26,7 +26,7 @@ export default async function AdminNotificationsPage() {
       <header className="topbar">
         <div>
           <h1>Notifications</h1>
-          <small>Send updates to travellers.</small>
+          <small>Send updates to guests.</small>
         </div>
       </header>
       <div className="admin-body">

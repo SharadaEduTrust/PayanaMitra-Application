@@ -54,7 +54,7 @@ export default function ProfileForm({
         </div>
         <div>
           <dt>Role</dt>
-          <dd style={{ textTransform: "capitalize" }}>{role}</dd>
+          <dd style={{ textTransform: "capitalize" }}>{role === "traveller" ? "Guest" : role}</dd>
         </div>
       </dl>
 

@@ -11,8 +11,8 @@ export default function SignupPage() {
           <div className="eyebrow" style={{ color: "#D4A373" }}>
             Start your journey
           </div>
-          <h1>Tell us who is travelling.</h1>
-          <p>Your phone number identifies your bookings across every trip.</p>
+          <h1>Tell us who is joining.</h1>
+          <p>Your phone number identifies your bookings across every trail.</p>
         </div>
         <small style={{ color: "#D4A373", fontSize: "11px" }}>© 2026 Payana Trails</small>
       </section>
@@ -21,7 +21,7 @@ export default function SignupPage() {
           <Brand size={36} />
           <h2>Create your account.</h2>
           <p>
-            Your phone number must match the one your trip coordinator holds. After registering you
+            Your phone number must match the one your trail coordinator holds. After registering you
             sign in with that number and a PIN made from its last four digits.
           </p>
           <SignupForm />

@@ -23,11 +23,11 @@ export default async function AdminTripsPage() {
     <>
       <header className="topbar">
         <div>
-          <h1>Trips</h1>
+          <h1>Trails</h1>
           <small>Create, publish and manage itineraries.</small>
         </div>
         <Link className="btn btn-primary" href="/admin/trips/new">
-          New trip
+          New trail
         </Link>
       </header>
       <div className="admin-body">

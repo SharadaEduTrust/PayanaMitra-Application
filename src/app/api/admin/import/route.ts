@@ -68,7 +68,8 @@ export async function POST(req: NextRequest) {
     const phone = String(raw.phone ?? '').trim()
     const first_name = String(raw.first_name ?? '').trim()
     const last_name = String(raw.last_name ?? '').trim()
-    const role = String(raw.role ?? 'traveller').trim().toLowerCase()
+    const rawRole = String(raw.role ?? 'traveller').trim().toLowerCase()
+    const role = rawRole === 'guest' ? 'traveller' : rawRole
 
     // Row-level validation
     if (!PHONE_REGEX.test(phone)) {
@@ -84,7 +85,7 @@ export async function POST(req: NextRequest) {
       continue
     }
     if (!VALID_ROLES.includes(role as typeof VALID_ROLES[number])) {
-      results.push({ row, phone, status: 'error', error: `Invalid role: ${role}` })
+      results.push({ row, phone, status: 'error', error: `Invalid role: ${rawRole}` })
       continue
     }
 

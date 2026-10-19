@@ -13,8 +13,8 @@ export default function AdminLoginPage() {
           <div className="eyebrow" style={{ color: "#D4A373" }}>
             Restricted access
           </div>
-          <h1>Manage travellers, trips and itineraries.</h1>
-          <p>Everything a coordinator needs to publish a trip and support the people on it.</p>
+          <h1>Manage guests, trails and itineraries.</h1>
+          <p>Everything a coordinator needs to publish a trail and support the people on it.</p>
         </div>
         <small style={{ color: "#D4A373", fontSize: "11px" }}>© 2026 Payana Trails</small>
       </section>
@@ -28,7 +28,7 @@ export default function AdminLoginPage() {
           </p>
           <AdminLoginForm />
           <div className="auth-switch">
-            Traveller? <Link href="/login">Go to traveller sign in</Link>
+            Guest? <Link href="/login">Go to guest sign in</Link>
           </div>
         </div>
       </section>

@@ -35,8 +35,8 @@ export default async function AdminPanelLayout({ children }: { children: React.R
         <AdminNav
           links={[
             { href: "/admin", label: "Overview" },
-            { href: "/admin/users", label: "Travellers" },
-            { href: "/admin/trips", label: "Trips" },
+            { href: "/admin/users", label: "Guests" },
+            { href: "/admin/trips", label: "Trails" },
             { href: "/admin/destinations", label: "Destinations" },
             { href: "/admin/notifications", label: `Notifications${count ? ` (${count})` : ""}` },
             { href: "/admin/audit-log", label: "Audit log" },
@@ -54,7 +54,7 @@ export default async function AdminPanelLayout({ children }: { children: React.R
             </p>
           </div>
           <Link className="side-link" href="/dashboard">
-            View as traveller
+            View as guest
           </Link>
         </div>
       </aside>

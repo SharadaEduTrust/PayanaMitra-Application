@@ -979,6 +979,116 @@ async function main() {
           itinImportRes.status === 200 && itinImportJson.days_upserted >= 1 && (itinImportJson.skipped >= 1 || itinImportJson.errors?.length >= 1),
           `Days upserted: ${itinImportJson.days_upserted}, Activities: ${itinImportJson.activities_inserted}, Skipped: ${itinImportJson.skipped}`
         )
+
+        // C. Itinerary CSV Import with All Supported Meal-Plan Values and Empty Meal-Plan
+        const supportedMealPlanCsv = [
+          'day_number,destination,hotel_name,meal_plan,itinerary_text,activity_title,activity_description,start_time,end_time,activity_order',
+          '10,Coorg,Plantation Stay,"Breakfast","Morning walk",Coffee Tour,"Walk through coffee estate",09:00,11:00,1',
+          '11,Coorg,Hilltop Resort,"Breakfast & Dinner","Sightseeing",Viewpoint Visit,"Trek to peak",10:00,13:00,1',
+          '12,Kabini,River Lodge,"Breakfast, Lunch & Dinner","Full board stay",Boat Safari,"River wildlife tour",15:00,18:00,1',
+          '13,Mysore,Palace Hotel,"","Day at leisure",Palace Visit,"Heritage walk",10:00,12:00,1',
+        ].join('\n')
+
+        const suppFormData = new FormData()
+        suppFormData.append('file', new Blob([supportedMealPlanCsv], { type: 'text/csv' }), 'supported_meal_plans.csv')
+
+        const suppImportRes = await fetch(`${API_BASE}/api/admin/trips/${testTripId}/itinerary/import`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${adminToken}` },
+          body: suppFormData,
+        })
+        const suppImportJson = await suppImportRes.json()
+        check(
+          sec,
+          'Itinerary CSV import accepts all supported meal-plan values and empty meal-plan',
+          suppImportRes.status === 200 && suppImportJson.days_upserted === 4 && suppImportJson.skipped === 0,
+          `Days upserted: ${suppImportJson.days_upserted}, Skipped: ${suppImportJson.skipped}`
+        )
+
+        // Verify database records contain exact meal_plan values
+        const { data: dbDays } = await adminClient
+          .from('itinerary_days')
+          .select('day_number, meal_plan')
+          .eq('trip_id', testTripId)
+          .in('day_number', [10, 11, 12, 13])
+          .order('day_number', { ascending: true })
+
+        const mealPlansMatch =
+          dbDays?.find(d => d.day_number === 10)?.meal_plan === 'Breakfast' &&
+          dbDays?.find(d => d.day_number === 11)?.meal_plan === 'Breakfast & Dinner' &&
+          dbDays?.find(d => d.day_number === 12)?.meal_plan === 'Breakfast, Lunch & Dinner' &&
+          dbDays?.find(d => d.day_number === 13)?.meal_plan === null
+
+        check(
+          sec,
+          'Database stores exact imported meal_plan values without alteration',
+          mealPlansMatch,
+          `DB values: ${JSON.stringify(dbDays?.map(d => ({ day: d.day_number, meal: d.meal_plan })))}`
+        )
+
+        // D. Itinerary CSV Import with Invalid Meal-Plan Value (Rejection & No Silent Data-Loss)
+        const invalidMealPlanCsv = [
+          'day_number,destination,hotel_name,meal_plan,itinerary_text,activity_title,activity_description,start_time,end_time,activity_order',
+          '20,Wayanad,Resort A,"Invalid Plan Pizza","Trip day",Tea Walk,"Walk",09:00,10:00,1',
+          '21,Wayanad,Resort B,"Breakfast","Valid trip day",Cave Trek,"Trek",11:00,13:00,1',
+        ].join('\n')
+
+        const invFormData = new FormData()
+        invFormData.append('file', new Blob([invalidMealPlanCsv], { type: 'text/csv' }), 'invalid_meal_plan.csv')
+
+        const invImportRes = await fetch(`${API_BASE}/api/admin/trips/${testTripId}/itinerary/import`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${adminToken}` },
+          body: invFormData,
+        })
+        const invImportJson = await invImportRes.json()
+        const hasMealPlanError = (invImportJson.errors ?? []).some(
+          (e: { row: number; error: string }) => e.row === 2 && e.error.includes('Invalid meal_plan')
+        )
+
+        check(
+          sec,
+          'Invalid meal_plan row rejected with row number and validation error',
+          invImportRes.status === 200 && invImportJson.skipped === 1 && hasMealPlanError,
+          `Skipped: ${invImportJson.skipped}, Errors: ${JSON.stringify(invImportJson.errors)}`
+        )
+
+        // Verify valid row (day 21) was preserved and invalid row (day 20) was NOT inserted
+        const { data: checkDay20 } = await adminClient
+          .from('itinerary_days')
+          .select('id, meal_plan')
+          .eq('trip_id', testTripId)
+          .eq('day_number', 20)
+          .maybeSingle()
+
+        const { data: checkDay21 } = await adminClient
+          .from('itinerary_days')
+          .select('id, meal_plan')
+          .eq('trip_id', testTripId)
+          .eq('day_number', 21)
+          .maybeSingle()
+
+        check(
+          sec,
+          'Partial import preserves valid row and does not insert rejected row',
+          checkDay20 === null && checkDay21 !== null && checkDay21.meal_plan === 'Breakfast',
+          `Day 20 (rejected) in DB: ${!!checkDay20}, Day 21 (valid) in DB: ${!!checkDay21}`
+        )
+
+        // E. Database failure handling on non-existent trip
+        const badTripFormData = new FormData()
+        badTripFormData.append('file', new Blob([supportedMealPlanCsv], { type: 'text/csv' }), 'test.csv')
+        const badTripRes = await fetch(`${API_BASE}/api/admin/trips/00000000-0000-0000-0000-000000000000/itinerary/import`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${adminToken}` },
+          body: badTripFormData,
+        })
+        check(
+          sec,
+          'Database errors distinguishable (non-existent trip returns 404)',
+          badTripRes.status === 404,
+          `Status: ${badTripRes.status}`
+        )
       }
     }
 
@@ -1033,6 +1143,24 @@ async function main() {
         // Cleanup doc
         await adminClient.from('guest_documents').delete().eq('id', createdDocId)
       }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 10. DEFENSE-IN-DEPTH SECURITY HEADERS
+    // ──────────────────────────────────────────────────────────────────────────
+    console.log('\n[10] Defense-In-Depth Security Headers')
+    {
+      const sec = 'Security Headers'
+      const headersRes = await fetch(`${API_BASE}/`, { method: 'HEAD' })
+      const xfo = headersRes.headers.get('x-frame-options')
+      const xcto = headersRes.headers.get('x-content-type-options')
+      const rp = headersRes.headers.get('referrer-policy')
+      const pp = headersRes.headers.get('permissions-policy')
+
+      check(sec, 'X-Frame-Options is SAMEORIGIN', xfo === 'SAMEORIGIN', `Value: ${xfo}`)
+      check(sec, 'X-Content-Type-Options is nosniff', xcto === 'nosniff', `Value: ${xcto}`)
+      check(sec, 'Referrer-Policy is strict-origin-when-cross-origin', rp === 'strict-origin-when-cross-origin', `Value: ${rp}`)
+      check(sec, 'Permissions-Policy restricts sensitive browser features', !!pp && pp.includes('camera=()'), `Value: ${pp}`)
     }
 
   } finally {

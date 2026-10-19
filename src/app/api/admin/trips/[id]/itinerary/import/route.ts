@@ -39,6 +39,12 @@ interface Params { params: Promise<{ id: string }> }
 
 const TIME_RE = /^\d{2}:\d{2}(:\d{2})?$/
 
+const VALID_MEAL_PLANS = new Set([
+  'Breakfast',
+  'Breakfast & Dinner',
+  'Breakfast, Lunch & Dinner',
+])
+
 async function requireAdmin() {
   const profile = await getSession()
   if (!profile) return { error: 'Unauthorized', status: 401 } as const
@@ -184,12 +190,26 @@ export async function POST(req: NextRequest, { params }: Params) {
       continue
     }
 
+    const rawMealPlan = (row['meal_plan'] ?? '').trim()
+    let mealPlan: string | null = null
+    if (rawMealPlan) {
+      if (!VALID_MEAL_PLANS.has(rawMealPlan)) {
+        errors.push({
+          row: rowNum,
+          error: `Invalid meal_plan: "${rawMealPlan}". Supported values are: "Breakfast", "Breakfast & Dinner", "Breakfast, Lunch & Dinner"`,
+        })
+        skipped++
+        continue
+      }
+      mealPlan = rawMealPlan
+    }
+
     if (!dayData.has(dayNum)) {
       dayData.set(dayNum, {
         day_number:     dayNum,
         destination:    row['destination']     || null,
         hotel_name:     row['hotel_name']      || null,
-        meal_plan:      row['meal_plan']       || null,
+        meal_plan:      mealPlan,
         itinerary_text: row['itinerary_text']  || null,
       })
     }
@@ -237,7 +257,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   if (dayData.size === 0) {
     return NextResponse.json(
-      { days_upserted: 0, activities_inserted: 0, skipped, errors, message: 'No valid days found in CSV' },
+      { error: 'No valid days found in CSV', days_upserted: 0, activities_inserted: 0, skipped, errors, message: 'No valid days found in CSV' },
       { status: 422 },
     )
   }
@@ -245,21 +265,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   const dayInserts = Array.from(dayData.values()).map(d => ({ ...d, trip_id }))
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let { data: upsertedDays, error: daysError } = await (admin.from('itinerary_days') as any)
+  const { data: upsertedDays, error: daysError } = await (admin.from('itinerary_days') as any)
     .upsert(dayInserts, { onConflict: 'trip_id,day_number', ignoreDuplicates: false })
     .select('id, day_number')
-
-  if (daysError && daysError.message.includes('meal_plan')) {
-    // Fallback if meal_plan column is not yet migrated in database
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const fallbackInserts = dayInserts.map(({ meal_plan, ...rest }) => rest)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const retry = await (admin.from('itinerary_days') as any)
-      .upsert(fallbackInserts, { onConflict: 'trip_id,day_number', ignoreDuplicates: false })
-      .select('id, day_number')
-    upsertedDays = retry.data
-    daysError = retry.error
-  }
 
   if (daysError) {
     return NextResponse.json({ error: 'Failed to upsert days: ' + daysError.message }, { status: 500 })

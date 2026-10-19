@@ -4,8 +4,7 @@ import { verifyPinLogin } from "@/lib/pin-login";
 export const runtime = "nodejs";
 
 /**
- * Traveller sign-in: phone number plus the last four digits of that number.
- * Any role may use this route; the dashboard is what enforces the traveller view.
+ * Traveller sign-in: phone number plus the last four digits of that phone number.
  */
 export async function POST(request: Request) {
   const result = await verifyPinLogin(request);
@@ -14,5 +13,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  return NextResponse.json({ tokenHash: result.tokenHash, firstName: result.firstName });
+  return NextResponse.json({
+    ok: true,
+    tokenHash: result.tokenHash,
+    firstName: result.firstName,
+    role: result.role,
+    session: result.session,
+  });
 }

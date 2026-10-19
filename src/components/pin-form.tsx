@@ -34,7 +34,7 @@ export default function PinForm() {
     }
 
     setLoading(true);
-    const response = await fetch("/api/auth/pin", {
+    const response = await fetch("/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone, pin: fullPin }),
@@ -42,26 +42,29 @@ export default function PinForm() {
 
     const data = await response.json().catch(() => null);
 
-    if (!response.ok) {
+    if (!response.ok || !data?.ok) {
       setError(data?.error ?? "We could not sign you in.");
       setLoading(false);
       return;
     }
 
-    // Exchange the one-time token for a real session so RLS applies from here.
     const supabase = createClient();
-    const { error: verifyError } = await supabase.auth.verifyOtp({
-      token_hash: data.tokenHash,
-      type: "email",
-    });
+    if (data.session) {
+      await supabase.auth.setSession(data.session);
+    } else if (data.tokenHash) {
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        token_hash: data.tokenHash,
+        type: "email",
+      });
 
-    if (verifyError) {
-      setError("Your sign-in expired. Please try again.");
-      setLoading(false);
-      return;
+      if (verifyError) {
+        setError("Your sign-in expired. Please try again.");
+        setLoading(false);
+        return;
+      }
     }
 
-    router.push("/dashboard");
+    router.push(data.role === "admin" ? "/admin" : "/dashboard");
     router.refresh();
   }
 

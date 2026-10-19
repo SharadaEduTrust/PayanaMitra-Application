@@ -7,9 +7,8 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import SupabaseSetupNotice from "@/components/supabase-setup-notice";
 
 /**
- * Administrator sign-in, matching the backend: a phone number and the last four
- * digits of it. The role check happens server-side in /api/auth/admin-pin, so
- * this form has no privileged logic of its own.
+ * Administrator sign-in: phone number and the last four digits of it.
+ * Enforces phone-suffix login and admin role verification on the server.
  */
 export default function AdminLoginForm() {
   const router = useRouter();
@@ -46,23 +45,26 @@ export default function AdminLoginForm() {
 
     const data = await response.json().catch(() => null);
 
-    if (!response.ok) {
+    if (!response.ok || !data?.ok) {
       setError(data?.error ?? "We could not sign you in.");
       setLoading(false);
       return;
     }
 
-    // Exchange the one-time token for a real session so RLS applies from here.
     const supabase = createClient();
-    const { error: verifyError } = await supabase.auth.verifyOtp({
-      token_hash: data.tokenHash,
-      type: "email",
-    });
+    if (data.session) {
+      await supabase.auth.setSession(data.session);
+    } else if (data.tokenHash) {
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        token_hash: data.tokenHash,
+        type: "email",
+      });
 
-    if (verifyError) {
-      setError("Your sign-in expired. Please try again.");
-      setLoading(false);
-      return;
+      if (verifyError) {
+        setError("Your sign-in expired. Please try again.");
+        setLoading(false);
+        return;
+      }
     }
 
     router.push("/admin");

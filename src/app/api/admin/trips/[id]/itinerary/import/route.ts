@@ -253,6 +253,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     // Fallback if meal_plan column is not yet migrated in database
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const fallbackInserts = dayInserts.map(({ meal_plan, ...rest }) => rest)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const retry = await (admin.from('itinerary_days') as any)
       .upsert(fallbackInserts, { onConflict: 'trip_id,day_number', ignoreDuplicates: false })
       .select('id, day_number')

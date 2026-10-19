@@ -4,11 +4,8 @@ import { verifyPinLogin } from "@/lib/pin-login";
 export const runtime = "nodejs";
 
 /**
- * Administrator sign-in: the same phone number plus PIN the backend uses for
- * every account, but restricted to `role = 'admin'`.
- *
- * A traveller number gets the same response as an unknown number, so this route
- * cannot be used to discover which numbers are registered as admins.
+ * Administrator sign-in: phone number plus the last four digits of that phone number,
+ * restricted to role = 'admin'.
  */
 export async function POST(request: Request) {
   const result = await verifyPinLogin(request, { requireRole: "admin" });
@@ -17,5 +14,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  return NextResponse.json({ tokenHash: result.tokenHash, firstName: result.firstName });
+  return NextResponse.json({
+    ok: true,
+    tokenHash: result.tokenHash,
+    firstName: result.firstName,
+    role: "admin",
+    session: result.session,
+  });
 }

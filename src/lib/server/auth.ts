@@ -1,15 +1,13 @@
 /**
  * Authentication utilities for Payana Mitra.
  *
- * Login ID  : 10-digit phone number
- * Credential: last 4 digits of phone (initial PIN)
+ * Phone-Suffix Login Requirement:
+ *   Every user logs in using their phone number and the last four digits of that phone number.
+ *   Users are not required or prompted to change their password.
  *
- * Supabase auth uses a synthetic email because phone+password sign-in
- * requires an SMS provider (which we don't have).
- *   auth email = "<phone>@payana.app"
- *   auth password = HMAC-SHA256(AUTH_PEPPER, "<phone>:<pin>") → base64url
- *
- * The synthetic email is NEVER shown to users.
+ * Supabase auth uses a synthetic email:
+ *   auth email    = "<phone>@payana.app"
+ *   auth password = HMAC-SHA256(AUTH_PEPPER, "<phone>:<last_4_digits>") → base64url
  *
  * SERVER ONLY — never import in client components.
  */
@@ -17,6 +15,8 @@
 import { headers } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { expectedPin, normalisePhone, phoneCandidates, pinMatches } from '@/lib/pin'
+export { expectedPin, normalisePhone, phoneCandidates, pinMatches }
 import type { Profile } from '@/types/database'
 
 export const PHONE_REGEX = /^\+?[0-9]{10,15}$/
@@ -33,7 +33,7 @@ export function phoneToEmail(phone: string): string {
 
 /**
  * Derive the Supabase auth password for a given phone+pin pair.
- * Uses HMAC-SHA256 with AUTH_PEPPER so the raw PIN is never stored.
+ * Uses HMAC-SHA256 with AUTH_PEPPER so raw credentials are never stored.
  */
 export async function derivePassword(phone: string, pin: string): Promise<string> {
   const pepper = process.env.AUTH_PEPPER
@@ -50,7 +50,6 @@ export async function derivePassword(phone: string, pin: string): Promise<string
 
   const message = enc.encode(`${phone}:${pin}`)
   const signature = await crypto.subtle.sign('HMAC', keyMaterial, message)
-  // base64url encode (URL-safe, no padding issues)
   return Buffer.from(signature).toString('base64url')
 }
 
@@ -63,12 +62,15 @@ interface RateLimitCheck {
 async function checkRateLimit(phone: string, ip: string): Promise<RateLimitCheck> {
   const admin = createAdminClient()
   const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60_000).toISOString()
+  const candidates = phoneCandidates(phone)
+  if (!candidates.includes(phone)) candidates.push(phone)
 
+  // Check rate limit across all candidate phone representations and ip
   const [phoneResult, ipResult] = await Promise.all([
     admin
       .from('login_attempts')
       .select('id', { count: 'exact', head: true })
-      .eq('phone', phone)
+      .in('phone', candidates)
       .eq('succeeded', false)
       .gte('attempted_at', windowStart),
     admin
@@ -89,105 +91,199 @@ async function checkRateLimit(phone: string, ip: string): Promise<RateLimitCheck
 
 async function recordAttempt(phone: string, ip: string, succeeded: boolean) {
   const admin = createAdminClient()
+  const canonical = normalisePhone(phone) ?? phone
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await admin.from('login_attempts').insert({ phone, ip, succeeded } as any)
+  await (admin.from('login_attempts') as any).insert({ phone: canonical, ip, succeeded })
 }
 
 // ─── Login ────────────────────────────────────────────────────
 
+export interface LoginOptions {
+  requireRole?: 'admin' | 'leader' | 'traveller'
+}
+
 export type LoginResult =
-  | { ok: true; profile: Profile }
-  | { ok: false; error: string }
+  | {
+      ok: true
+      profile: Profile
+      session?: {
+        access_token: string
+        refresh_token: string
+      } | null
+      tokenHash?: string | null
+    }
+  | { ok: false; error: string; status: number }
 
 /**
- * Validate credentials, enforce rate limiting, sign in via Supabase auth,
- * and return the user's profile on success.
+ * Single authoritative server-side login function.
  *
- * Always returns a generic error message on failure — never reveal
- * whether the phone exists or the PIN is wrong.
+ * Requirements enforced:
+ *   1. Normalizes phone and validates that submitted PIN matches the last 4 digits.
+ *   2. Rejects invalid credentials before or during lookup with generic message.
+ *   3. Enforces server-side rate-limiting using login_attempts table across formatting variants.
+ *   4. Rejects inactive accounts immediately.
+ *   5. Validates profile.phone suffix before derivation or credential reconciliation.
+ *   6. Supports safe server-side credential reconciliation for existing accounts.
+ *   7. Neutralizes must_change_password flag so users are never trapped.
  */
 export async function loginWithPhonePin(
   phoneInput: string,
-  pin: string,
+  pinInput: string,
   ip: string,
+  options?: LoginOptions,
 ): Promise<LoginResult> {
   const GENERIC_ERROR = 'Invalid phone number or PIN.'
-  const phone = phoneInput.trim().replace(/\s+/g, '')
+  const rawPhone = phoneInput.trim().replace(/\s+/g, '')
+  const pin = pinInput.trim()
 
-  // 1. Validate input format
-  if (!PHONE_REGEX.test(phone) || !PIN_REGEX.test(pin)) {
-    return { ok: false, error: GENERIC_ERROR }
+  // 1. Validate basic format
+  if (!PHONE_REGEX.test(rawPhone) || !PIN_REGEX.test(pin)) {
+    return { ok: false, error: GENERIC_ERROR, status: 400 }
   }
 
   // 2. Check rate limit
-  const { blocked } = await checkRateLimit(phone, ip)
+  const { blocked } = await checkRateLimit(rawPhone, ip)
   if (blocked) {
     return {
       ok: false,
       error: 'Too many login attempts. Please try again in 15 minutes.',
+      status: 429,
     }
+  }
+
+  // 3. Validate submitted PIN matches the last 4 digits of the phone number
+  if (!pinMatches(rawPhone, pin)) {
+    await recordAttempt(rawPhone, ip, false)
+    return { ok: false, error: GENERIC_ERROR, status: 401 }
   }
 
   const admin = createAdminClient()
 
-  // 3. Find the profile matching this phone (handles +91, stripped, or exact)
-  const variants = [
-    phone,
-    phone.startsWith('+91') ? phone.replace(/^\+91/, '') : `+91${phone}`,
-    phone.replace(/^\+/, ''),
-  ]
+  // 4. Find profile matching candidate variants
+  const candidates = phoneCandidates(rawPhone)
+  if (!candidates.includes(rawPhone)) candidates.push(rawPhone)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: matchedProfiles } = await (admin.from('profiles') as any)
     .select('*')
-    .in('phone', variants)
+    .in('phone', candidates)
     .limit(1) as { data: Profile[] | null }
 
   const profile = matchedProfiles && matchedProfiles.length > 0 ? matchedProfiles[0] : null
 
-  if (!profile || !profile.is_active) {
-    await recordAttempt(phone, ip, false)
-    return { ok: false, error: GENERIC_ERROR }
+  // Reject if profile does not exist, is inactive, or submitted pin does not match profile's phone suffix
+  if (!profile || !profile.is_active || !pinMatches(profile.phone, pin)) {
+    await recordAttempt(rawPhone, ip, false)
+    return { ok: false, error: GENERIC_ERROR, status: 401 }
   }
 
-  // 4. Determine auth email
-  const { data: authUserData } = await admin.auth.admin.getUserById(profile.id)
-  const authEmail = authUserData?.user?.email || phoneToEmail(profile.phone)
+  // 5. Check role requirement if requested
+  if (options?.requireRole && profile.role !== options.requireRole) {
+    await recordAttempt(rawPhone, ip, false)
+    return { ok: false, error: GENERIC_ERROR, status: 401 }
+  }
 
-  // 5. Try signing in with derived password
+  // 6. Supabase Auth credential derivation
+  const expectedFour = expectedPin(profile.phone)
+  const authEmail = phoneToEmail(profile.phone)
+  const expectedPassword = await derivePassword(profile.phone, expectedFour)
+
   const supabase = await createServerClient()
-  let signInError: unknown = null
+  let session: { access_token: string; refresh_token: string } | null = null
 
-  // Try password derived from profile phone
-  const password = await derivePassword(profile.phone, pin)
-  const { error: err1 } = await supabase.auth.signInWithPassword({
+  // Attempt standard password sign-in
+  const res1 = await supabase.auth.signInWithPassword({
     email: authEmail,
-    password,
+    password: expectedPassword,
   })
 
-  if (err1) {
-    signInError = err1
-    // Fallback try with phone input as entered
-    if (phone !== profile.phone) {
-      const altPassword = await derivePassword(phone, pin)
-      const { error: err2 } = await supabase.auth.signInWithPassword({
+  if (!res1.error && res1.data?.session) {
+    session = {
+      access_token: res1.data.session.access_token,
+      refresh_token: res1.data.session.refresh_token,
+    }
+  } else {
+    // Check if derived using cleanPhone without plus prefix
+    const cleanPhone = profile.phone.replace(/^\+/, '')
+    if (cleanPhone !== profile.phone) {
+      const altPassword = await derivePassword(cleanPhone, expectedFour)
+      const res2 = await supabase.auth.signInWithPassword({
         email: authEmail,
         password: altPassword,
       })
-      if (!err2) {
-        signInError = null
+      if (!res2.error && res2.data?.session) {
+        session = {
+          access_token: res2.data.session.access_token,
+          refresh_token: res2.data.session.refresh_token,
+        }
       }
     }
   }
 
-  if (signInError) {
-    await recordAttempt(phone, ip, false)
-    return { ok: false, error: GENERIC_ERROR }
+  // Safe server-side credential reconciliation:
+  // If the user entered their valid phone-suffix PIN, but Supabase Auth credentials
+  // are out of sync (e.g. user set custom password in legacy form or old seed),
+  // synchronize the password with the admin API and complete the login.
+  if (!session) {
+    try {
+      await admin.auth.admin.updateUserById(profile.id, {
+        password: expectedPassword,
+        email: authEmail,
+        email_confirm: true,
+      })
+      const retry = await supabase.auth.signInWithPassword({
+        email: authEmail,
+        password: expectedPassword,
+      })
+      if (!retry.error && retry.data?.session) {
+        session = {
+          access_token: retry.data.session.access_token,
+          refresh_token: retry.data.session.refresh_token,
+        }
+      }
+    } catch (syncErr) {
+      console.error('[auth] Credential reconciliation failed:', syncErr)
+    }
   }
 
-  // 6. Record success
-  await recordAttempt(phone, ip, true)
-  return { ok: true, profile }
+  if (!session) {
+    await recordAttempt(rawPhone, ip, false)
+    return { ok: false, error: GENERIC_ERROR, status: 401 }
+  }
+
+  // 7. Generate one-time magiclink tokenHash for callers utilizing verifyOtp
+  let tokenHash: string | null = null
+  try {
+    const { data: link } = await admin.auth.admin.generateLink({
+      type: 'magiclink',
+      email: authEmail,
+    })
+    tokenHash = link?.properties?.hashed_token ?? null
+  } catch {
+    // Non-fatal fallback
+  }
+
+  // 8. Neutralize must_change_password and update last_active_at
+  const profileUpdates: Record<string, unknown> = {
+    last_active_at: new Date().toISOString(),
+  }
+  if (profile.must_change_password) {
+    profileUpdates.must_change_password = false
+    profile.must_change_password = false
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (admin.from('profiles') as any).update(profileUpdates).eq('id', profile.id)
+
+  // 9. Record success
+  await recordAttempt(rawPhone, ip, true)
+
+  return {
+    ok: true,
+    profile,
+    session,
+    tokenHash,
+  }
 }
 
 /**
@@ -201,10 +297,10 @@ export async function logout() {
 /**
  * Get the current session's profile, or null if not authenticated.
  * Supports both Cookie session and Authorization: Bearer <jwt> header.
- * Safe to call in Server Components, Route Handlers, and Server Actions.
+ *
+ * Security: Checks is_active so deactivated accounts lose API access immediately.
  */
 export async function getSession(): Promise<Profile | null> {
-  // Check for Authorization header first
   let token: string | null = null
   try {
     const h = await headers()
@@ -221,12 +317,13 @@ export async function getSession(): Promise<Profile | null> {
   if (token) {
     const { data: { user }, error } = await admin.auth.getUser(token)
     if (!error && user) {
-      const { data } = await admin
-        .from('profiles')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (admin.from('profiles') as any)
         .select('*')
         .eq('id', user.id)
         .single()
-      return (data as Profile | null) ?? null
+      if (!data || !data.is_active) return null
+      return (data as Profile) ?? null
     }
   }
 
@@ -236,11 +333,13 @@ export async function getSession(): Promise<Profile | null> {
 
   if (!user) return null
 
-  const { data } = await admin
-    .from('profiles')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (admin.from('profiles') as any)
     .select('*')
     .eq('id', user.id)
     .single()
 
-  return (data as Profile | null) ?? null
+  if (!data || !data.is_active) return null
+
+  return (data as Profile) ?? null
 }

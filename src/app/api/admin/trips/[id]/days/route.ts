@@ -119,6 +119,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (dayErr && dayErr.message.includes('meal_plan')) {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { meal_plan, ...fallbackFields } = dayFields
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const retry = await (admin.from('itinerary_days') as any)
       .insert({ ...fallbackFields, trip_id })
       .select()

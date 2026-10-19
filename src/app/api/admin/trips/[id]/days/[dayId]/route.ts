@@ -86,6 +86,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (error && error.message.includes('meal_plan')) {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { meal_plan, ...fallbackData } = parsed.data
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const retry = await (admin.from('itinerary_days') as any)
       .update({ ...fallbackData, updated_at: new Date().toISOString() })
       .eq('id', dayId)

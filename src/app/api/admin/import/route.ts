@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
           location: raw.location ? String(raw.location).trim() || null : null,
           date_of_joining: raw.date_of_joining ? String(raw.date_of_joining).trim() || null : null,
           remarks: raw.remarks ? String(raw.remarks).trim() || null : null,
-          must_change_password: true,
+          must_change_password: false,
           is_active: true,
         })
         .select('id')

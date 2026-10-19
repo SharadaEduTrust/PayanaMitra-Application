@@ -263,6 +263,314 @@ async function main() {
         headers: { Authorization: `Bearer ${adminToken}` },
       })
       check(sec, 'Admin accessing /api/admin/users receives 200 OK', adminUsersRes.status === 200, `Status: ${adminUsersRes.status}`)
+
+      // Reset login_attempts for test phones & localhost so testing is never pre-throttled by prior test runs
+      await adminClient.from('login_attempts').delete().in('phone', [
+        testPhoneAdmin,
+        `+91${testPhoneAdmin}`,
+        testPhoneLeader1,
+        `+91${testPhoneLeader1}`,
+        testPhoneGuest1,
+        `+91${testPhoneGuest1}`,
+      ])
+      await adminClient.from('login_attempts').delete().eq('ip', '127.0.0.1')
+
+      // ── Phone-Suffix Login & Authentication Suite ──────────────────────────
+      // 1. Admin login with correct phone-suffix PIN
+      const adminLoginRes = await fetch(`${API_BASE}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: testPhoneAdmin, pin: '0001' }),
+      })
+      const adminLoginJson = await adminLoginRes.json()
+      check(sec, 'Admin login with correct phone-suffix PIN succeeds (200)', adminLoginRes.status === 200 && adminLoginJson.role === 'admin', `Status: ${adminLoginRes.status}`)
+
+      // 2. Leader login with correct phone-suffix PIN
+      const leaderLoginRes = await fetch(`${API_BASE}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: testPhoneLeader1, pin: '0002' }),
+      })
+      const leaderLoginJson = await leaderLoginRes.json()
+      check(sec, 'Leader login with correct phone-suffix PIN succeeds (200)', leaderLoginRes.status === 200 && leaderLoginJson.role === 'leader', `Status: ${leaderLoginRes.status}`)
+
+      // 3. Guest login with correct phone-suffix PIN
+      const guestLoginRes = await fetch(`${API_BASE}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: testPhoneGuest1, pin: '0003' }),
+      })
+      const guestLoginJson = await guestLoginRes.json()
+      check(sec, 'Guest login with correct phone-suffix PIN succeeds (200)', guestLoginRes.status === 200 && guestLoginJson.role === 'traveller', `Status: ${guestLoginRes.status}`)
+
+      // 4. Incorrect phone-suffix PIN rejected with generic error
+      const wrongPinRes = await fetch(`${API_BASE}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: testPhoneGuest1, pin: '9999' }),
+      })
+      const wrongPinJson = await wrongPinRes.json()
+      check(sec, 'Incorrect PIN rejected with generic error (401)', wrongPinRes.status === 401 && wrongPinJson.error === 'Invalid phone number or PIN.', `Status: ${wrongPinRes.status}, Error: ${wrongPinJson.error}`)
+      await adminClient.from('login_attempts').delete().in('phone', [testPhoneGuest1, `+91${testPhoneGuest1}`])
+
+      // 5. Phone number normalization (+91 prefix, spaces)
+      const normLoginRes1 = await fetch(`${API_BASE}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: `+91${testPhoneGuest1}`, pin: '0003' }),
+      })
+      check(sec, 'Login normalizes +91 prefix phone number (200)', normLoginRes1.status === 200, `Status: ${normLoginRes1.status}`)
+
+      const normLoginRes2 = await fetch(`${API_BASE}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: `  ${testPhoneGuest1}  `, pin: '0003' }),
+      })
+      check(sec, 'Login normalizes phone number with surrounding whitespace (200)', normLoginRes2.status === 200, `Status: ${normLoginRes2.status}`)
+
+      // 6. Non-existent phone number returns generic error (never leaks registration status)
+      const nonExistentPhone = `+9199${uniqueSuffix.slice(0, 4)}0000`
+      const nonExistentPin = '0000'
+      const nonExistentRes = await fetch(`${API_BASE}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: nonExistentPhone, pin: nonExistentPin }),
+      })
+      const nonExistentJson = await nonExistentRes.json()
+      check(sec, 'Non-existent account receives identical generic error (401)', nonExistentRes.status === 401 && nonExistentJson.error === 'Invalid phone number or PIN.', `Status: ${nonExistentRes.status}`)
+      await adminClient.from('login_attempts').delete().eq('phone', nonExistentPhone)
+
+      // 7. Inactive account rejection
+      const inactiveDummyPhone = `+9197${uniqueSuffix.slice(0, 4)}0001`
+      const inactiveDummyPin = inactiveDummyPhone.slice(-4)
+      const inactiveEmail = `${inactiveDummyPhone.replace(/^\+/, '')}@payana.app`
+      const inactivePass = await derivePassword(inactiveDummyPhone, inactiveDummyPin)
+      const { data: inactAuth } = await adminClient.auth.admin.createUser({
+        email: inactiveEmail,
+        password: inactivePass,
+        email_confirm: true,
+      })
+      if (inactAuth?.user) {
+        createdAuthUserIds.push(inactAuth.user.id)
+        await adminClient.from('profiles').insert({
+          id: inactAuth.user.id,
+          phone: inactiveDummyPhone,
+          first_name: 'Suspended',
+          last_name: 'User',
+          role: 'traveller',
+          is_active: false,
+          must_change_password: false,
+        })
+        const inactLoginRes = await fetch(`${API_BASE}/api/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: inactiveDummyPhone, pin: inactiveDummyPin }),
+        })
+        check(sec, 'Inactive/suspended account rejected on login (401)', inactLoginRes.status === 401, `Status: ${inactLoginRes.status}`)
+      }
+
+      // 8. Immediate API access denial after deactivation
+      const dynamicLivePhone = `+9197${uniqueSuffix.slice(0, 4)}0002`
+      const dynamicLivePin = dynamicLivePhone.slice(-4)
+      const dynamicLiveEmail = `${dynamicLivePhone.replace(/^\+/, '')}@payana.app`
+      const dynamicLivePass = await derivePassword(dynamicLivePhone, dynamicLivePin)
+      const { data: liveAuth } = await adminClient.auth.admin.createUser({
+        email: dynamicLiveEmail,
+        password: dynamicLivePass,
+        email_confirm: true,
+      })
+      if (liveAuth?.user) {
+        createdAuthUserIds.push(liveAuth.user.id)
+        await adminClient.from('profiles').insert({
+          id: liveAuth.user.id,
+          phone: dynamicLivePhone,
+          first_name: 'DeactTest',
+          last_name: 'User',
+          role: 'traveller',
+          is_active: true,
+          must_change_password: false,
+        })
+        const liveToken = await loginAndGetToken(dynamicLivePhone, dynamicLivePin)
+        const beforeDeactRes = await fetch(`${API_BASE}/api/profile/details`, {
+          headers: { Authorization: `Bearer ${liveToken}` },
+        })
+        check(sec, 'Active user can access /api/profile/details (200)', beforeDeactRes.status === 200, `Status: ${beforeDeactRes.status}`)
+
+        // Now deactivate user in database
+        await adminClient.from('profiles').update({ is_active: false }).eq('id', liveAuth.user.id)
+
+        // Same token immediately receives 401 Unauthorized
+        const afterDeactRes = await fetch(`${API_BASE}/api/profile/details`, {
+          headers: { Authorization: `Bearer ${liveToken}` },
+        })
+        check(sec, 'Deactivated user immediately denied API access (401)', afterDeactRes.status === 401, `Status: ${afterDeactRes.status}`)
+      }
+
+      // 9. Existing account with out-of-sync credentials reconciles safely on login
+      const outOfSyncPhone = `+9197${uniqueSuffix.slice(0, 4)}0003`
+      const outOfSyncPin = outOfSyncPhone.slice(-4)
+      const outOfSyncEmail = `${outOfSyncPhone.replace(/^\+/, '')}@payana.app`
+      // Create with a custom old password that differs from derived HMAC
+      const { data: outOfSyncAuth } = await adminClient.auth.admin.createUser({
+        email: outOfSyncEmail,
+        password: 'LegacyCustomPassword123!',
+        email_confirm: true,
+      })
+      if (outOfSyncAuth?.user) {
+        createdAuthUserIds.push(outOfSyncAuth.user.id)
+        await adminClient.from('profiles').insert({
+          id: outOfSyncAuth.user.id,
+          phone: outOfSyncPhone,
+          first_name: 'Legacy',
+          last_name: 'User',
+          role: 'traveller',
+          is_active: true,
+          must_change_password: true, // Also test flag neutralization
+        })
+
+        const reconcileLoginRes = await fetch(`${API_BASE}/api/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: outOfSyncPhone, pin: outOfSyncPin }),
+        })
+        const reconcileJson = await reconcileLoginRes.json()
+        check(sec, 'Existing account with mismatched password reconciles and logs in (200)', reconcileLoginRes.status === 200 && reconcileJson.ok === true, `Status: ${reconcileLoginRes.status}`)
+        check(sec, 'Login response neutralizes mustChangePassword to false', reconcileJson.mustChangePassword === false, `mustChangePassword: ${reconcileJson.mustChangePassword}`)
+
+        // Confirm database flag was cleared
+        const { data: reconciledProfile } = await adminClient.from('profiles').select('must_change_password').eq('id', outOfSyncAuth.user.id).single()
+        check(sec, 'Database must_change_password flag is cleared to false', reconciledProfile?.must_change_password === false, `Flag: ${reconciledProfile?.must_change_password}`)
+      }
+
+      // 9b. Unauthorized credential reconciliation regression test:
+      // Incorrect PIN on an out-of-sync account MUST NOT trigger reconciliation or change password.
+      const unauthReconPhone = `+9197${uniqueSuffix.slice(0, 4)}0008`
+      const unauthReconPin = '9999' // incorrect pin
+      const legacySecretPassword = 'MySecretLegacyPassword999!'
+      const { data: unauthAuth } = await adminClient.auth.admin.createUser({
+        email: `${unauthReconPhone.replace(/^\+/, '')}@payana.app`,
+        password: legacySecretPassword,
+        email_confirm: true,
+      })
+      if (unauthAuth?.user) {
+        createdAuthUserIds.push(unauthAuth.user.id)
+        await adminClient.from('profiles').insert({
+          id: unauthAuth.user.id,
+          phone: unauthReconPhone,
+          first_name: 'UnauthRecon',
+          last_name: 'Test',
+          role: 'traveller',
+          is_active: true,
+          must_change_password: true,
+        })
+
+        // Attempt login with incorrect PIN
+        const failReconRes = await fetch(`${API_BASE}/api/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: unauthReconPhone, pin: unauthReconPin }),
+        })
+        check(sec, 'Incorrect PIN on out-of-sync account rejected (401)', failReconRes.status === 401, `Status: ${failReconRes.status}`)
+
+        // Verify that Supabase Auth password was NOT updated to derived HMAC password
+        const client = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } })
+        const { error: directLoginErr } = await client.auth.signInWithPassword({
+          email: `${unauthReconPhone.replace(/^\+/, '')}@payana.app`,
+          password: legacySecretPassword,
+        })
+        check(sec, 'Supabase Auth password remains untouched after failed login attempt', directLoginErr === null, 'Original password preserved')
+
+        // Clean up login attempt for this test phone
+        await adminClient.from('login_attempts').delete().eq('phone', unauthReconPhone)
+      }
+
+      // 10. Login Rate Limiting (threshold = 5 failures per phone)
+      const rateLimitTestPhone = `+9197${uniqueSuffix.slice(0, 4)}0004`
+      const rateLimitTestIp = `198.51.100.${uniqueSuffix.slice(-2)}`
+      let rateLimitReached = false
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const rlRes = await fetch(`${API_BASE}/api/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-forwarded-for': rateLimitTestIp },
+          body: JSON.stringify({ phone: rateLimitTestPhone, pin: '9999' }),
+        })
+        const rlJson = await rlRes.json()
+        if (rlRes.status === 429 && rlJson.error?.includes('Too many login attempts')) {
+          rateLimitReached = true
+          break
+        }
+      }
+      check(sec, 'Rate limiting blocks after 5 failed attempts with 429', rateLimitReached, 'Expected 429 status on threshold exceeded')
+      await adminClient.from('login_attempts').delete().eq('phone', rateLimitTestPhone)
+      await adminClient.from('login_attempts').delete().eq('ip', rateLimitTestIp)
+
+      // 10b. Concurrent login attempts & rate-limit race condition resistance
+      const concurrentTestPhone = `+9197${uniqueSuffix.slice(0, 4)}0009`
+      const concurrentIp = `198.51.100.${(parseInt(uniqueSuffix.slice(-2), 10) + 1).toString().padStart(2, '0')}`
+      const concurrentResponses = await Promise.all(
+        Array.from({ length: 10 }).map(() =>
+          fetch(`${API_BASE}/api/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-forwarded-for': concurrentIp },
+            body: JSON.stringify({ phone: concurrentTestPhone, pin: '0000' }),
+          })
+        )
+      )
+      const statuses = concurrentResponses.map(r => r.status)
+      const no500 = statuses.every(s => s === 401 || s === 429)
+
+      // Post-barrage attempt MUST be blocked by rate limit (429)
+      const postBarrageRes = await fetch(`${API_BASE}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-forwarded-for': concurrentIp },
+        body: JSON.stringify({ phone: concurrentTestPhone, pin: '0000' }),
+      })
+      check(sec, 'Concurrent login barrage triggers 429 on subsequent attempt with zero 500 server crashes', no500 && postBarrageRes.status === 429, `Statuses: ${statuses.join(',')}, Post-barrage: ${postBarrageRes.status}`)
+      await adminClient.from('login_attempts').delete().eq('phone', concurrentTestPhone)
+      await adminClient.from('login_attempts').delete().eq('ip', concurrentIp)
+
+      // 10c. Phone rate limit cannot be bypassed by formatting variations (+91 vs bare)
+      const formatBypassPhoneBare = `97${uniqueSuffix.slice(0, 4)}0010`
+      const formatBypassPhoneE164 = `+91${formatBypassPhoneBare}`
+      const formatTestIp = `198.51.100.${(parseInt(uniqueSuffix.slice(-2), 10) + 2).toString().padStart(2, '0')}`
+      for (let i = 0; i < 3; i++) {
+        await fetch(`${API_BASE}/api/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-forwarded-for': formatTestIp },
+          body: JSON.stringify({ phone: formatBypassPhoneBare, pin: '0000' }),
+        })
+      }
+      let formatBlocked = false
+      for (let i = 0; i < 3; i++) {
+        const res = await fetch(`${API_BASE}/api/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-forwarded-for': formatTestIp },
+          body: JSON.stringify({ phone: formatBypassPhoneE164, pin: '0000' }),
+        })
+        if (res.status === 429) {
+          formatBlocked = true
+          break
+        }
+      }
+      check(sec, 'Rate limit aggregates failed attempts across phone formatting variations (429)', formatBlocked, 'Cross-format rate limit enforced')
+      await adminClient.from('login_attempts').delete().in('phone', [formatBypassPhoneBare, formatBypassPhoneE164])
+      await adminClient.from('login_attempts').delete().eq('ip', formatTestIp)
+
+      // 11. Role boundary on admin login endpoint (/api/auth/admin-pin)
+      const guestOnAdminRes = await fetch(`${API_BASE}/api/auth/admin-pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: testPhoneGuest1, pin: '0003' }),
+      })
+      check(sec, 'Guest cannot log in via /api/auth/admin-pin (401)', guestOnAdminRes.status === 401, `Status: ${guestOnAdminRes.status}`)
+
+      const adminOnAdminRes = await fetch(`${API_BASE}/api/auth/admin-pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: testPhoneAdmin, pin: '0001' }),
+      })
+      const adminOnAdminJson = await adminOnAdminRes.json()
+      check(sec, 'Admin successfully logs in via /api/auth/admin-pin (200)', adminOnAdminRes.status === 200 && adminOnAdminJson.role === 'admin', `Status: ${adminOnAdminRes.status}`)
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -355,7 +663,7 @@ async function main() {
           }),
         })
         const patchJson = await patchRes.json()
-        check(sec, 'Admin updates user profile and triggers PIN reset (200)', patchRes.status === 200 && patchJson.data?.first_name === 'AuditUpdated' && patchJson.data?.must_change_password === true, `Status: ${patchRes.status}`)
+        check(sec, 'Admin updates user profile and triggers PIN reset (200)', patchRes.status === 200 && patchJson.data?.first_name === 'AuditUpdated', `Status: ${patchRes.status}`)
       }
 
       // F. User deactivation (DELETE /api/admin/users/[id])

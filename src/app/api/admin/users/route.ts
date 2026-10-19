@@ -241,7 +241,7 @@ export async function POST(req: NextRequest) {
       location: data.location ?? null,
       date_of_joining: data.date_of_joining ?? null,
       remarks: data.remarks ?? null,
-      must_change_password: true,
+      must_change_password: false,
       is_active: true,
     })
     .select('*, leader:profiles!leader_id(id, first_name, last_name, phone)')
@@ -363,7 +363,7 @@ export async function PATCH(req: NextRequest) {
   for (const key of profileKeys) {
     if (fields[key] !== undefined) profileUpdatePayload[key] = fields[key]
   }
-  if (reset_pin) profileUpdatePayload['must_change_password'] = true
+  if (reset_pin) profileUpdatePayload['must_change_password'] = false
 
   let updatedProfile = current
   if (Object.keys(profileUpdatePayload).length > 0) {

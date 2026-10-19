@@ -258,7 +258,7 @@ export async function POST(req: NextRequest) {
           location,
           date_of_joining,
           remarks: raw['remarks'] ? raw['remarks'].trim() || null : null,
-          must_change_password: true,
+          must_change_password: false,
           is_active: true,
         })
         .select('id')

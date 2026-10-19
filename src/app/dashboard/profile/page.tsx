@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { TravellerDetails } from "@/lib/types";
@@ -124,9 +123,6 @@ export default async function ProfilePage() {
             </p>
           </div>
         </div>
-        <Link className="btn btn-secondary" href="/change-password">
-          Change password
-        </Link>
       </header>
 
       <div className="trip-columns">

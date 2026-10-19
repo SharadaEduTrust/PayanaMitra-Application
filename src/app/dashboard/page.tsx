@@ -1,5 +1,3 @@
-import Link from "next/link";
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import type { Trip, TripMember } from "@/lib/types";
@@ -17,8 +15,6 @@ function tripStatus(trip: Trip) {
 
 export default async function DashboardPage() {
   const profile = await requireProfile();
-
-  if (profile.must_change_password) redirect("/change-password");
 
   const supabase = await createClient();
 

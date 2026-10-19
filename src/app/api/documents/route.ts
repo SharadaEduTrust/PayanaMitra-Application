@@ -125,10 +125,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid multipart form data' }, { status: 400 })
     }
 
-    doc_type = String(formData.get('doc_type') ?? '').trim()
-    doc_number = (formData.get('doc_number') as string)?.trim() || null
+    doc_type = String(formData.get('doc_type') ?? formData.get('type') ?? '').trim()
+    doc_number = (formData.get('doc_number') as string)?.trim() || (formData.get('document_number') as string)?.trim() || null
     expiry_date = (formData.get('expiry_date') as string)?.trim() || null
-    issued_country = (formData.get('issued_country') as string)?.trim() || null
+    issued_country = (formData.get('issued_country') as string)?.trim() || (formData.get('country') as string)?.trim() || null
     trip_id = (formData.get('trip_id') as string)?.trim() || null
 
     if (!doc_type) {
@@ -138,31 +138,33 @@ export async function POST(req: NextRequest) {
     const fileEntry = formData.get('file')
     if (fileEntry && typeof fileEntry === 'object' && 'arrayBuffer' in fileEntry) {
       const file = fileEntry as File
-      if (file.size > MAX_FILE_SIZE) {
-        return NextResponse.json({ error: 'File size exceeds maximum allowed limit (10MB)' }, { status: 422 })
-      }
-      if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-        return NextResponse.json({ error: 'Invalid file type. Allowed types: PDF, JPEG, PNG, WebP' }, { status: 422 })
-      }
+      if (file.size > 0) {
+        if (file.size > MAX_FILE_SIZE) {
+          return NextResponse.json({ error: 'File size exceeds maximum allowed limit (10MB)' }, { status: 422 })
+        }
+        if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+          return NextResponse.json({ error: 'Invalid file type. Allowed types: PDF, JPEG, PNG, WebP' }, { status: 422 })
+        }
 
-      file_name = file.name
-      file_size = file.size
-      mime_type = file.type
+        file_name = file.name
+        file_size = file.size
+        mime_type = file.type
 
-      const ext = file.name.split('.').pop() || 'bin'
-      const safeDocType = doc_type.toLowerCase().replace(/[^a-z0-9]/g, '_')
-      storage_path = `${profile.id}/${safeDocType}_${Date.now()}_${crypto.randomUUID()}.${ext}`
+        const ext = file.name.split('.').pop() || 'bin'
+        const safeDocType = doc_type.toLowerCase().replace(/[^a-z0-9]/g, '_')
+        storage_path = `${profile.id}/${safeDocType}_${Date.now()}_${crypto.randomUUID()}.${ext}`
 
-      const buffer = Buffer.from(await file.arrayBuffer())
-      const { error: uploadErr } = await admin.storage
-        .from('guest-documents')
-        .upload(storage_path, buffer, {
-          contentType: file.type,
-          upsert: true,
-        })
+        const buffer = Buffer.from(await file.arrayBuffer())
+        const { error: uploadErr } = await admin.storage
+          .from('guest-documents')
+          .upload(storage_path, buffer, {
+            contentType: file.type,
+            upsert: true,
+          })
 
-      if (uploadErr) {
-        return NextResponse.json({ error: `File upload failed: ${uploadErr.message}` }, { status: 500 })
+        if (uploadErr) {
+          return NextResponse.json({ error: `File upload failed: ${uploadErr.message}` }, { status: 500 })
+        }
       }
     }
   } else {

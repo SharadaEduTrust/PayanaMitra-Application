@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import DashboardNav from "@/components/dashboard-nav";
 
+import MobileNav from "@/components/mobile-nav";
+
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const profile = await requireProfile();
   if (profile.must_change_password) redirect("/change-password");
@@ -33,7 +35,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </Link>
         </div>
       </aside>
-      <section className="main">{children}</section>
+      <section className="main">
+        <MobileNav title="Menu" />
+        {children}
+      </section>
     </div>
   );
 }

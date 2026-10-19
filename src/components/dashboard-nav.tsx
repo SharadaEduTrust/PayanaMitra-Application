@@ -30,6 +30,15 @@ export default function DashboardNav({ role }: { role: string }) {
         </Link>
       ))}
 
+      {(role === "leader" || role === "admin") && (
+        <>
+          <div className="side-label">Trail Lead</div>
+          <Link className={`side-link ${isActive("/dashboard/guests") ? "active" : ""}`} href="/dashboard/guests">
+            Assigned guests
+          </Link>
+        </>
+      )}
+
       {role === "admin" && (
         <>
           <div className="side-label">Administration</div>

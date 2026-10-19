@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 type Contact = {
   id: string;
@@ -24,6 +23,7 @@ export default function TripContactsEditor({
   const [draft, setDraft] = useState(blank);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function addContact() {
     if (!draft.name.trim()) {
@@ -32,38 +32,72 @@ export default function TripContactsEditor({
     }
     setError("");
     setStatus("");
+    setLoading(true);
 
-    const supabase = createClient();
-    const { data, error: insertError } = await supabase
-      .from("trip_contacts")
-      .insert({
-        trip_id: tripId,
-        name: draft.name.trim(),
-        role: draft.role || null,
-        phone: draft.phone || null,
-        email: draft.email || null,
-      })
-      .select()
-      .single();
+    try {
+      const res = await fetch(`/api/admin/trips/${tripId}/contacts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: draft.name.trim(),
+          role: draft.role?.trim() || "Guide",
+          custom_role: ["Guide", "Hotel Manager", "Transport Provider"].includes(draft.role?.trim()) ? null : draft.role?.trim(),
+          phone: draft.phone?.trim() || null,
+          email: draft.email?.trim() || null,
+        }),
+      });
 
-    if (insertError) {
-      setError(insertError.message);
-      return;
+      const json = await res.json().catch(() => null);
+      setLoading(false);
+
+      if (!res.ok) {
+        if (json?.fieldErrors) {
+          const firstErr = Object.values(json.fieldErrors).flat()[0];
+          setError(String(firstErr || json.error || "Failed to add contact."));
+        } else {
+          setError(json?.error ?? "Failed to add contact.");
+        }
+        return;
+      }
+
+      setRows((current) => [
+        ...current,
+        {
+          id: json.data.id,
+          name: json.data.name,
+          role: json.data.role ?? draft.role,
+          phone: json.data.phone ?? draft.phone,
+          email: json.data.email ?? draft.email,
+        },
+      ]);
+      setDraft(blank);
+      setStatus("Contact added.");
+    } catch {
+      setLoading(false);
+      setError("Network error while adding contact.");
     }
-
-    setRows((current) => [...current, { ...(data as Contact), role: draft.role, phone: draft.phone, email: draft.email }]);
-    setDraft(blank);
-    setStatus("Contact added.");
   }
 
   async function removeContact(id: string) {
-    const supabase = createClient();
-    const { error: deleteError } = await supabase.from("trip_contacts").delete().eq("id", id);
-    if (deleteError) {
-      setError(deleteError.message);
-      return;
+    setError("");
+    setStatus("");
+
+    try {
+      const res = await fetch(`/api/admin/trips/${tripId}/contacts/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        setError(json?.error ?? "Failed to delete contact.");
+        return;
+      }
+
+      setRows((current) => current.filter((row) => row.id !== id));
+      setStatus("Contact removed.");
+    } catch {
+      setError("Network error while deleting contact.");
     }
-    setRows((current) => current.filter((row) => row.id !== id));
   }
 
   return (
@@ -129,8 +163,8 @@ export default function TripContactsEditor({
       {error && <p className="form-error" role="alert">{error}</p>}
       {status && <p className="form-notice" role="status">{status}</p>}
 
-      <button type="button" className="btn btn-primary" onClick={addContact}>
-        Add contact
+      <button type="button" className="btn btn-primary" onClick={addContact} disabled={loading || !draft.name.trim()}>
+        {loading ? "Adding…" : "Add contact"}
       </button>
     </section>
   );

@@ -1,10 +1,12 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 const docTypes = ["pan", "passport", "visa", "aadhaar", "driving_licence", "other"];
 
 export default function DocumentForm() {
+  const router = useRouter();
   const [docType, setDocType] = useState("pan");
   const [expiry, setExpiry] = useState("");
   const [country, setCountry] = useState("India");
@@ -19,30 +21,32 @@ export default function DocumentForm() {
     setLoading(true);
 
     const form = new FormData(event.currentTarget);
-    const docNumber = String(form.get("doc_number") || "");
+    form.set("doc_type", docType);
+    if (expiry) form.set("expiry_date", expiry);
+    if (country) form.set("issued_country", country);
 
-    const response = await fetch("/api/documents", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        doc_type: docType,
-        doc_number: docNumber,
-        expiry_date: expiry || undefined,
-        issued_country: country || undefined,
-      }),
-    });
+    try {
+      const response = await fetch("/api/documents", {
+        method: "POST",
+        body: form,
+      });
 
-    // Clear the field from component state immediately after submit.
-    event.currentTarget.reset();
-    setLoading(false);
-
-    if (!response.ok) {
       const data = await response.json().catch(() => null);
-      setError(data?.error ?? "Could not save that document.");
-      return;
+      setLoading(false);
+
+      if (!response.ok) {
+        setError(data?.error ?? "Could not save that document.");
+        return;
+      }
+
+      event.currentTarget.reset();
+      setStatus("Document saved and securely encrypted.");
+      setExpiry("");
+      router.refresh();
+    } catch {
+      setLoading(false);
+      setError("Network error while saving document.");
     }
-    setStatus("Saved and encrypted. The number cannot be displayed again.");
-    setExpiry("");
   }
 
   return (
@@ -80,11 +84,16 @@ export default function DocumentForm() {
         </label>
       </div>
 
+      <label className="form-field">
+        Attachment (Optional PDF or Image, max 10MB)
+        <input type="file" name="file" accept=".pdf,image/jpeg,image/png,image/webp" />
+      </label>
+
       {error && <p className="form-error" role="alert">{error}</p>}
       {status && <p className="form-notice" role="status">{status}</p>}
 
       <button className="btn btn-primary" type="submit" disabled={loading}>
-        {loading ? "Encrypting…" : "Save document"}
+        {loading ? "Encrypting & Uploading…" : "Save document"}
       </button>
     </form>
   );

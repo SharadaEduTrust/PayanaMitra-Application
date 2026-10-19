@@ -1,41 +1,33 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getSession, derivePassword, phoneToEmail } from '@/lib/server/auth'
+import { getSession, derivePassword, phoneToEmail, PHONE_REGEX } from '@/lib/server/auth'
 
 /**
- * GET  /api/admin/users/import
- *   Returns a downloadable CSV template with all supported columns.
+ * GET  /api/admin/users/import — Returns a downloadable CSV template with all supported columns.
+ * POST /api/admin/users/import — Accepts multipart/form-data with a single `file` field (UTF-8 CSV).
+ *                               Bulk-creates up to 500 users server-side with leader assignment support.
  *
- * POST /api/admin/users/import
- *   Accepts multipart/form-data with a single `file` field (UTF-8 CSV).
- *   Parses and bulk-creates up to 500 users server-side.
- *
- * CSV columns (header row required, column order does not matter):
- *   phone           — 10-digit Indian mobile number (required)
- *   first_name      — string (required)
- *   last_name       — string (required)
- *   role            — traveller | leader | admin  (default: traveller)
+ * CSV columns:
+ *   phone           — 10-15 digit phone number (required)
+ *   first_name      — string max 50 (required)
+ *   last_name       — string max 50 (required)
+ *   role            — guest | traveller | leader | admin (default: traveller)
+ *   leader_phone    — optional phone number of assigned leader
  *   email           — optional contact e-mail
- *   location        — optional home location / city
+ *   location        — optional home location / city (max 50)
  *   date_of_joining — YYYY-MM-DD (optional)
  *   remarks         — freeform notes (optional)
- *
- * Behaviour:
- *   - Phone numbers already in the system are SKIPPED (not an error).
- *   - Duplicate phones within the same CSV are skipped after the first.
- *   - Initial PIN = last 4 digits of phone; must_change_password = true.
- *   - Max 500 rows per upload.
- *   - No external npm dependencies — includes a built-in RFC-4180 CSV parser.
- *
- * Returns:
- *   { created, skipped, errorCount, results: [{ row, phone, status, id?, error? }] }
  */
 
-const PHONE_REGEX = /^\d{10}$/
-const VALID_ROLES = ['traveller', 'leader', 'admin'] as const
-const DATE_REGEX  = /^\d{4}-\d{2}-\d{2}$/
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
 
-// ─── Auth guard ───────────────────────────────────────────────────────────────
+const ROLE_MAP: Record<string, 'traveller' | 'leader' | 'admin'> = {
+  traveller: 'traveller',
+  guest: 'traveller',
+  leader: 'leader',
+  admin: 'admin',
+}
+
 async function requireAdmin() {
   const profile = await getSession()
   if (!profile) return { error: 'Unauthorized', status: 401 } as const
@@ -43,7 +35,6 @@ async function requireAdmin() {
   return { profile }
 }
 
-// ─── Minimal RFC-4180 CSV parser (no external deps) ──────────────────────────
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
   const headerLine = lines.find(l => l.trim().length > 0)
@@ -83,16 +74,16 @@ function splitCSVRow(line: string): string[] {
 }
 
 // ─── GET — download CSV template ─────────────────────────────────────────────
-export async function GET(_req: NextRequest) {
+export async function GET() {
   const guard = await requireAdmin()
   if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })
 
   const lines = [
-    'phone,first_name,last_name,role,email,location,date_of_joining,remarks',
-    '9876543210,Amit,Sharma,traveller,amit.sharma@example.com,Mumbai,2024-01-15,Group A',
-    '9876543211,Priya,Mehta,leader,priya.mehta@example.com,Delhi,2024-02-01,',
-    '9876543212,Rahul,Verma,traveller,,,2024-03-10,VIP guest',
-    '9876543213,Sunita,Nair,traveller,,Bangalore,,',
+    'phone,first_name,last_name,role,leader_phone,email,location,date_of_joining,remarks',
+    '9876543210,Amit,Sharma,guest,9000000002,amit.sharma@example.com,Mumbai,2024-01-15,Group A',
+    '9876543211,Priya,Mehta,leader,,priya.mehta@example.com,Delhi,2024-02-01,Trail Leader',
+    '9876543212,Rahul,Verma,guest,9000000002,,Delhi,2024-03-10,VIP guest',
+    '9876543213,Sunita,Nair,traveller,,,Bangalore,,',
   ]
   return new NextResponse(lines.join('\n'), {
     status: 200,
@@ -108,7 +99,6 @@ export async function POST(req: NextRequest) {
   const guard = await requireAdmin()
   if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })
 
-  // ── Parse multipart form ──────────────────────────────────────────────────
   let formData: FormData
   try { formData = await req.formData() } catch {
     return NextResponse.json({ error: 'Expected multipart/form-data' }, { status: 400 })
@@ -138,11 +128,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Maximum 500 users per import batch' }, { status: 422 })
   }
 
-  // ── Pre-load existing phones for fast duplicate detection ─────────────────
   const admin = createAdminClient()
+
+  // Pre-load all existing profiles for phone duplicate detection and leader lookup
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: existingProfiles } = await (admin.from('profiles') as any).select('phone') as { data: { phone: string }[] | null }
-  const existingPhones = new Set((existingProfiles ?? []).map((p: { phone: string }) => p.phone))
+  const { data: existingProfiles } = await (admin.from('profiles') as any)
+    .select('id, phone, role') as { data: { id: string; phone: string; role: string }[] | null }
+
+  const existingPhoneMap = new Map<string, string>()
+  const leaderPhoneToIdMap = new Map<string, string>()
+
+  for (const p of (existingProfiles ?? [])) {
+    const clean = p.phone.replace(/\s+/g, '')
+    existingPhoneMap.set(clean, p.id)
+    if (clean.startsWith('+91')) {
+      existingPhoneMap.set(clean.replace(/^\+91/, ''), p.id)
+    } else {
+      existingPhoneMap.set(`+91${clean}`, p.id)
+    }
+
+    if (['leader', 'admin'].includes(p.role)) {
+      leaderPhoneToIdMap.set(clean, p.id)
+      if (clean.startsWith('+91')) {
+        leaderPhoneToIdMap.set(clean.replace(/^\+91/, ''), p.id)
+      } else {
+        leaderPhoneToIdMap.set(`+91${clean}`, p.id)
+      }
+    }
+  }
 
   type RowResult = {
     row: number
@@ -155,53 +168,71 @@ export async function POST(req: NextRequest) {
 
   for (let i = 0; i < rows.length; i++) {
     const raw = rows[i]
-    const rowNum = i + 2  // 1-indexed, account for header row
+    const rowNum = i + 2
 
-    // ── Required fields ────────────────────────────────────────────────────
-    const phone      = (raw['phone']      ?? '').trim()
+    const rawPhone   = (raw['phone'] ?? '').trim().replace(/\s+/g, '')
     const first_name = (raw['first_name'] ?? '').trim()
-    const last_name  = (raw['last_name']  ?? '').trim()
-    const role       = (raw['role']       ?? 'traveller').trim().toLowerCase()
+    const last_name  = (raw['last_name'] ?? '').trim()
+    const rawRole    = (raw['role'] ?? 'traveller').trim().toLowerCase()
+    const leaderPhone = (raw['leader_phone'] ?? raw['leader_id'] ?? '').trim().replace(/\s+/g, '')
 
-    if (!PHONE_REGEX.test(phone)) {
-      results.push({ row: rowNum, phone, status: 'error', error: 'phone must be exactly 10 digits' })
+    // Field validation
+    if (!PHONE_REGEX.test(rawPhone)) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'Phone must be a valid 10-15 digit number' })
       continue
     }
-    if (!first_name) {
-      results.push({ row: rowNum, phone, status: 'error', error: 'first_name is required' })
+    if (!first_name || first_name.length > 50) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'first_name is required (max 50 chars)' })
       continue
     }
-    if (!last_name) {
-      results.push({ row: rowNum, phone, status: 'error', error: 'last_name is required' })
-      continue
-    }
-    if (!VALID_ROLES.includes(role as typeof VALID_ROLES[number])) {
-      results.push({ row: rowNum, phone, status: 'error', error: `Invalid role "${role}" — must be traveller | leader | admin` })
+    if (!last_name || last_name.length > 50) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'last_name is required (max 50 chars)' })
       continue
     }
 
-    // ── Optional fields ────────────────────────────────────────────────────
-    const email           = raw['email']           ? raw['email'].trim()           || null : null
-    const location        = raw['location']        ? raw['location'].trim()        || null : null
-    const date_of_joining = raw['date_of_joining'] ? raw['date_of_joining'].trim() || null : null
-    const remarks         = raw['remarks']         ? raw['remarks'].trim()         || null : null
+    const mappedRole = ROLE_MAP[rawRole]
+    if (!mappedRole) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: `Invalid role "${rawRole}" — must be guest, traveller, leader, or admin` })
+      continue
+    }
 
+    const location = (raw['location'] ?? '').trim() || null
+    if (location && location.length > 50) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'Location cannot exceed 50 characters' })
+      continue
+    }
+
+    const date_of_joining = (raw['date_of_joining'] ?? '').trim() || null
     if (date_of_joining && !DATE_REGEX.test(date_of_joining)) {
-      results.push({ row: rowNum, phone, status: 'error', error: 'date_of_joining must be YYYY-MM-DD' })
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'date_of_joining must be YYYY-MM-DD' })
       continue
     }
 
-    // ── Duplicate detection ────────────────────────────────────────────────
-    if (existingPhones.has(phone)) {
-      results.push({ row: rowNum, phone, status: 'skipped', error: 'Phone already registered' })
+    // Leader lookup
+    let leader_id: string | null = null
+    if (leaderPhone) {
+      if (['leader', 'admin'].includes(mappedRole)) {
+        results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'Leaders and admins cannot be assigned a leader' })
+        continue
+      }
+      leader_id = leaderPhoneToIdMap.get(leaderPhone) ?? null
+      if (!leader_id) {
+        results.push({ row: rowNum, phone: rawPhone, status: 'error', error: `Assigned leader with phone "${leaderPhone}" not found or not an active leader` })
+        continue
+      }
+    }
+
+    // Duplicate detection
+    if (existingPhoneMap.has(rawPhone)) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'skipped', error: 'Phone already registered' })
       continue
     }
 
-    // ── Create auth user + profile ─────────────────────────────────────────
+    // Create auth user + profile
     try {
-      const initialPin   = phone.slice(-4)
-      const email_auth   = phoneToEmail(phone)
-      const password     = await derivePassword(phone, initialPin)
+      const initialPin = rawPhone.slice(-4)
+      const email_auth = phoneToEmail(rawPhone)
+      const password   = await derivePassword(rawPhone, initialPin)
 
       const { data: authData, error: authErr } = await admin.auth.admin.createUser({
         email: email_auth,
@@ -210,7 +241,7 @@ export async function POST(req: NextRequest) {
       })
 
       if (authErr || !authData.user) {
-        results.push({ row: rowNum, phone, status: 'error', error: authErr?.message ?? 'Auth creation failed' })
+        results.push({ row: rowNum, phone: rawPhone, status: 'error', error: authErr?.message ?? 'Auth user creation failed' })
         continue
       }
 
@@ -218,14 +249,15 @@ export async function POST(req: NextRequest) {
       const { data: profileData, error: profileErr } = await (admin.from('profiles') as any)
         .insert({
           id: authData.user.id,
-          phone,
+          phone: rawPhone,
           first_name,
           last_name,
-          role,
-          email,
+          role: mappedRole,
+          leader_id,
+          email: raw['email'] ? raw['email'].trim() || null : null,
           location,
           date_of_joining,
-          remarks,
+          remarks: raw['remarks'] ? raw['remarks'].trim() || null : null,
           must_change_password: true,
           is_active: true,
         })
@@ -234,14 +266,29 @@ export async function POST(req: NextRequest) {
 
       if (profileErr) {
         await admin.auth.admin.deleteUser(authData.user.id)
-        results.push({ row: rowNum, phone, status: 'error', error: profileErr.message })
+        results.push({ row: rowNum, phone: rawPhone, status: 'error', error: profileErr.message })
         continue
       }
 
-      existingPhones.add(phone)  // prevent duplicates within same CSV
-      results.push({ row: rowNum, phone, status: 'created', id: profileData?.id })
+      // Record in map to prevent duplicate inserts within the same batch
+      existingPhoneMap.set(rawPhone, profileData.id)
+      if (rawPhone.startsWith('+91')) {
+        existingPhoneMap.set(rawPhone.replace(/^\+91/, ''), profileData.id)
+      } else {
+        existingPhoneMap.set(`+91${rawPhone}`, profileData.id)
+      }
+      if (['leader', 'admin'].includes(mappedRole)) {
+        leaderPhoneToIdMap.set(rawPhone, profileData.id)
+        if (rawPhone.startsWith('+91')) {
+          leaderPhoneToIdMap.set(rawPhone.replace(/^\+91/, ''), profileData.id)
+        } else {
+          leaderPhoneToIdMap.set(`+91${rawPhone}`, profileData.id)
+        }
+      }
+
+      results.push({ row: rowNum, phone: rawPhone, status: 'created', id: profileData.id })
     } catch (err) {
-      results.push({ row: rowNum, phone, status: 'error', error: String(err) })
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: String(err) })
     }
   }
 
@@ -249,5 +296,10 @@ export async function POST(req: NextRequest) {
   const skipped    = results.filter(r => r.status === 'skipped').length
   const errorCount = results.filter(r => r.status === 'error').length
 
-  return NextResponse.json({ created, skipped, errorCount, results })
+  return NextResponse.json({
+    created,
+    skipped,
+    errorCount,
+    results,
+  })
 }

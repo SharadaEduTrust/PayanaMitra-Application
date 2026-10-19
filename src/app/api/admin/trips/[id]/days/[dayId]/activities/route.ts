@@ -16,6 +16,14 @@ const CreateActivitySchema = z.object({
   start_time:     z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Must be HH:MM or HH:MM:SS').optional().nullable(),
   end_time:       z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Must be HH:MM or HH:MM:SS').optional().nullable(),
   activity_order: z.number().int().min(1).optional().nullable(),
+}).refine(data => {
+  if (data.start_time && data.end_time) {
+    return data.end_time >= data.start_time
+  }
+  return true
+}, {
+  message: 'End time must be after or equal to start time',
+  path: ['end_time'],
 })
 
 async function requireAdmin() {
@@ -25,7 +33,6 @@ async function requireAdmin() {
   return { profile }
 }
 
-// ─── GET ──────────────────────────────────────────────────────────────────────
 export async function GET(_req: NextRequest, { params }: Params) {
   const guard = await requireAdmin()
   if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })
@@ -44,7 +51,6 @@ export async function GET(_req: NextRequest, { params }: Params) {
   return NextResponse.json({ data })
 }
 
-// ─── POST ─────────────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest, { params }: Params) {
   const guard = await requireAdmin()
   if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })
@@ -65,6 +71,12 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   const admin = createAdminClient()
+
+  // Verify day exists
+  const { count } = await admin.from('itinerary_days').select('id', { count: 'exact', head: true }).eq('id', dayId)
+  if ((count ?? 0) === 0) {
+    return NextResponse.json({ error: 'Itinerary day not found' }, { status: 404 })
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (admin.from('activities') as any)

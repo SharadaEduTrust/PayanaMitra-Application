@@ -14,19 +14,21 @@
  * SERVER ONLY — never import in client components.
  */
 
+import { headers } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import type { Profile } from '@/types/database'
 
-const PHONE_REGEX = /^\d{10}$/
-const PIN_REGEX = /^\d{4}$/
+export const PHONE_REGEX = /^\+?[0-9]{10,15}$/
+export const PIN_REGEX = /^\d{4}$/
 const RATE_LIMIT_PER_PHONE = 5   // max failed attempts per phone per window
 const RATE_LIMIT_PER_IP = 20     // max failed attempts per IP per window
 const RATE_LIMIT_WINDOW_MINUTES = 15
 
 /** Convert a phone number to the synthetic Supabase auth email. */
 export function phoneToEmail(phone: string): string {
-  return `${phone}@payana.app`
+  const clean = phone.replace(/^\+/, '')
+  return `${clean}@payana.app`
 }
 
 /**
@@ -105,18 +107,19 @@ export type LoginResult =
  * whether the phone exists or the PIN is wrong.
  */
 export async function loginWithPhonePin(
-  phone: string,
+  phoneInput: string,
   pin: string,
   ip: string,
 ): Promise<LoginResult> {
   const GENERIC_ERROR = 'Invalid phone number or PIN.'
+  const phone = phoneInput.trim().replace(/\s+/g, '')
 
   // 1. Validate input format
   if (!PHONE_REGEX.test(phone) || !PIN_REGEX.test(pin)) {
     return { ok: false, error: GENERIC_ERROR }
   }
 
-  // 2. Check rate limit (uses service role — no RLS bypass needed for reads)
+  // 2. Check rate limit
   const { blocked } = await checkRateLimit(phone, ip)
   if (blocked) {
     return {
@@ -125,45 +128,65 @@ export async function loginWithPhonePin(
     }
   }
 
-  // 3. Derive credentials
-  const email = phoneToEmail(phone)
-  const password = await derivePassword(phone, pin)
+  const admin = createAdminClient()
 
-  // 4. Attempt Supabase sign-in (via server client — sets session cookie)
+  // 3. Find the profile matching this phone (handles +91, stripped, or exact)
+  const variants = [
+    phone,
+    phone.startsWith('+91') ? phone.replace(/^\+91/, '') : `+91${phone}`,
+    phone.replace(/^\+/, ''),
+  ]
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: matchedProfiles } = await (admin.from('profiles') as any)
+    .select('*')
+    .in('phone', variants)
+    .limit(1) as { data: Profile[] | null }
+
+  const profile = matchedProfiles && matchedProfiles.length > 0 ? matchedProfiles[0] : null
+
+  if (!profile || !profile.is_active) {
+    await recordAttempt(phone, ip, false)
+    return { ok: false, error: GENERIC_ERROR }
+  }
+
+  // 4. Determine auth email
+  const { data: authUserData } = await admin.auth.admin.getUserById(profile.id)
+  const authEmail = authUserData?.user?.email || phoneToEmail(profile.phone)
+
+  // 5. Try signing in with derived password
   const supabase = await createServerClient()
-  const { error: signInError } = await supabase.auth.signInWithPassword({
-    email,
+  let signInError: unknown = null
+
+  // Try password derived from profile phone
+  const password = await derivePassword(profile.phone, pin)
+  const { error: err1 } = await supabase.auth.signInWithPassword({
+    email: authEmail,
     password,
   })
+
+  if (err1) {
+    signInError = err1
+    // Fallback try with phone input as entered
+    if (phone !== profile.phone) {
+      const altPassword = await derivePassword(phone, pin)
+      const { error: err2 } = await supabase.auth.signInWithPassword({
+        email: authEmail,
+        password: altPassword,
+      })
+      if (!err2) {
+        signInError = null
+      }
+    }
+  }
 
   if (signInError) {
     await recordAttempt(phone, ip, false)
     return { ok: false, error: GENERIC_ERROR }
   }
 
-  // 5. Record success + fetch profile
+  // 6. Record success
   await recordAttempt(phone, ip, true)
-
-  const { data: profileData, error: profileError } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('phone', phone)
-    .single()
-
-  if (profileError || !profileData) {
-    // Auth succeeded but profile missing — sign out and fail gracefully
-    await supabase.auth.signOut()
-    return { ok: false, error: GENERIC_ERROR }
-  }
-
-  const profile = profileData as Profile
-
-  // 6. Check account is active
-  if (!profile.is_active) {
-    await supabase.auth.signOut()
-    return { ok: false, error: GENERIC_ERROR }
-  }
-
   return { ok: true, profile }
 }
 
@@ -177,15 +200,43 @@ export async function logout() {
 
 /**
  * Get the current session's profile, or null if not authenticated.
- * Safe to call in Server Components.
+ * Supports both Cookie session and Authorization: Bearer <jwt> header.
+ * Safe to call in Server Components, Route Handlers, and Server Actions.
  */
 export async function getSession(): Promise<Profile | null> {
+  // Check for Authorization header first
+  let token: string | null = null
+  try {
+    const h = await headers()
+    const authHeader = h.get('authorization')
+    if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.substring(7).trim()
+    }
+  } catch {
+    // headers() might throw in non-request contexts
+  }
+
+  const admin = createAdminClient()
+
+  if (token) {
+    const { data: { user }, error } = await admin.auth.getUser(token)
+    if (!error && user) {
+      const { data } = await admin
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+      return (data as Profile | null) ?? null
+    }
+  }
+
+  // Fallback to cookie-based session
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) return null
 
-  const { data } = await supabase
+  const { data } = await admin
     .from('profiles')
     .select('*')
     .eq('id', user.id)

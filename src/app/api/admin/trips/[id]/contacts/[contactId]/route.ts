@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getSession } from '@/lib/server/auth'
+import { getSession, PHONE_REGEX } from '@/lib/server/auth'
 
 /**
  * PATCH  /api/admin/trips/[id]/contacts/[contactId]  — update a contact
@@ -11,10 +11,11 @@ import { getSession } from '@/lib/server/auth'
 interface Params { params: Promise<{ id: string; contactId: string }> }
 
 const UpdateContactSchema = z.object({
-  name:  z.string().min(1).max(200).optional(),
-  role:  z.string().max(100).optional().nullable(),
-  phone: z.string().max(20).optional().nullable(),
-  email: z.string().email().optional().nullable().or(z.literal('')),
+  name:        z.string().min(1).max(100).optional(),
+  role:        z.string().max(100).optional().nullable(),
+  custom_role: z.string().max(100).optional().nullable(),
+  phone:       z.string().regex(PHONE_REGEX).optional().nullable(),
+  email:       z.string().email().optional().nullable().or(z.literal('')),
 }).strict()
 
 async function requireAdmin() {
@@ -44,20 +45,55 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     )
   }
 
+  const { name, role, custom_role, phone, email } = parsed.data
+  const updatePayload: Record<string, unknown> = {}
+
+  if (name !== undefined) updatePayload.name = name
+  if (phone !== undefined) updatePayload.phone = phone || null
+  if (email !== undefined) updatePayload.email = email || null
+
+  if (role !== undefined) {
+    if (role && role.toLowerCase() === 'others') {
+      if (custom_role && custom_role.trim()) {
+        updatePayload.role = custom_role.trim()
+      } else {
+        return NextResponse.json(
+          { error: 'Validation failed', fieldErrors: { custom_role: ['Custom role name required when role is "Others"'] } },
+          { status: 422 },
+        )
+      }
+    } else {
+      updatePayload.role = role || null
+    }
+  } else if (custom_role !== undefined) {
+    updatePayload.role = custom_role ? custom_role.trim() : null
+  }
+
+  if (Object.keys(updatePayload).length === 0) {
+    return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
+  }
+
   const admin = createAdminClient()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (admin.from('trip_contacts') as any)
-    .update({ ...parsed.data, email: parsed.data.email || null })
+    .update(updatePayload)
     .eq('id', contactId)
-    .eq('trip_id', trip_id)   // scoped to this trip
+    .eq('trip_id', trip_id)
     .select()
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
 
-  return NextResponse.json({ data })
+  const isStandard = data.role && ['Guide', 'Hotel Manager', 'Transport Provider'].includes(data.role)
+  return NextResponse.json({
+    data: {
+      ...data,
+      standard_role: isStandard ? data.role : (data.role ? 'Others' : null),
+      custom_role: isStandard ? null : data.role,
+    },
+  })
 }
 
 // ─── DELETE ──────────────────────────────────────────────────────────────────

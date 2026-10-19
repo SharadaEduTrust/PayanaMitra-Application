@@ -2,7 +2,6 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import type { Destination } from "@/lib/types";
 
 const blank = { name: "", region: "", country: "India", description: "", image_url: "" };
@@ -13,44 +12,71 @@ export default function DestinationsAdmin({ destinations }: { destinations: Dest
   const [draft, setDraft] = useState(blank);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function create(event: FormEvent) {
     event.preventDefault();
     setError("");
     setStatus("");
+    setLoading(true);
 
-    const supabase = createClient();
-    const { data, error: insertError } = await supabase
-      .from("destinations")
-      .insert({
-        name: draft.name.trim(),
-        region: draft.region || null,
-        country: draft.country || null,
-        description: draft.description || null,
-        image_url: draft.image_url || null,
-      })
-      .select()
-      .single();
+    try {
+      const res = await fetch("/api/admin/destinations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: draft.name.trim(),
+          region: draft.region?.trim() || null,
+          country: draft.country?.trim() || null,
+          description: draft.description?.trim() || null,
+          image_url: draft.image_url?.trim() || null,
+        }),
+      });
 
-    if (insertError) {
-      setError(insertError.message);
-      return;
+      const json = await res.json().catch(() => null);
+      setLoading(false);
+
+      if (!res.ok) {
+        if (json?.fieldErrors) {
+          const firstErr = Object.values(json.fieldErrors).flat()[0];
+          setError(String(firstErr || json.error || "Failed to create destination."));
+        } else {
+          setError(json?.error ?? "Failed to create destination.");
+        }
+        return;
+      }
+
+      setRows((current) => [...current, json.data as Destination]);
+      setDraft(blank);
+      setStatus("Destination added.");
+      router.refresh();
+    } catch {
+      setLoading(false);
+      setError("Network error while adding destination.");
     }
-
-    setRows((current) => [...current, data as Destination]);
-    setDraft(blank);
-    setStatus("Destination added.");
-    router.refresh();
   }
 
   async function remove(id: string) {
-    const supabase = createClient();
-    const { error: deleteError } = await supabase.from("destinations").delete().eq("id", id);
-    if (deleteError) {
-      setError(deleteError.message);
-      return;
+    if (!window.confirm("Are you sure you want to delete this destination?")) return;
+    setError("");
+    setStatus("");
+
+    try {
+      const res = await fetch(`/api/admin/destinations/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        setError(json?.error ?? "Failed to delete destination.");
+        return;
+      }
+
+      setRows((current) => current.filter((row) => row.id !== id));
+      setStatus("Destination removed.");
+    } catch {
+      setError("Network error while deleting destination.");
     }
-    setRows((current) => current.filter((row) => row.id !== id));
   }
 
   return (
@@ -123,8 +149,8 @@ export default function DestinationsAdmin({ destinations }: { destinations: Dest
           {error && <p className="form-error" role="alert">{error}</p>}
           {status && <p className="form-notice" role="status">{status}</p>}
 
-          <button className="btn btn-primary" type="submit">
-            Add destination
+          <button className="btn btn-primary" type="submit" disabled={loading}>
+            {loading ? "Adding…" : "Add destination"}
           </button>
         </form>
       </section>

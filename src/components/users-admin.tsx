@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 type UserRow = {
   id: string;
@@ -19,6 +18,13 @@ type UserRow = {
   lastActiveAt: string | null;
   foodPreference: string | null;
   emergencyContact: string | null;
+  leaderId?: string | null;
+};
+
+type LeaderOption = {
+  id: string;
+  first_name: string;
+  last_name: string;
 };
 
 const blank = {
@@ -26,32 +32,176 @@ const blank = {
   lastName: "",
   phone: "",
   email: "",
-  password: "",
   role: "traveller" as UserRow["role"],
+  leaderId: "",
   location: "",
   remarks: "",
 };
 
-export default function UsersAdmin({ users }: { users: UserRow[] }) {
+export default function UsersAdmin({
+  users,
+  leaders = [],
+}: {
+  users: UserRow[];
+  leaders?: LeaderOption[];
+}) {
   const router = useRouter();
   const [rows, setRows] = useState(users);
   const [draft, setDraft] = useState(blank);
   const [query, setQuery] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Edit modal state
+  const [editingUser, setEditingUser] = useState<UserRow | null>(null);
+  const [editForm, setEditForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    role: "traveller" as UserRow["role"],
+    leaderId: "",
+    location: "",
+    remarks: "",
+    foodPreference: "",
+    foodAllergy: "",
+    emergencyContactName: "",
+    emergencyContactNo: "",
+    travelInsuranceNo: "",
+    insuranceCompany: "",
+  });
+
+  // CSV import modal state
+  const [showImport, setShowImport] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importReport, setImportReport] = useState<{
+    created: number;
+    skipped: number;
+    errors?: Array<{ row: number; phone: string; error: string }>;
+  } | null>(null);
+
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const pageSize = 15;
+
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter(
-      (row) =>
+    return rows.filter((row) => {
+      const matchesSearch =
+        !term ||
         `${row.firstName} ${row.lastName}`.toLowerCase().includes(term) ||
         row.phone.includes(term) ||
-        (row.email ?? "").toLowerCase().includes(term),
-    );
-  }, [rows, query]);
+        (row.email ?? "").toLowerCase().includes(term);
+
+      const matchesRole = roleFilter === "all" || row.role === roleFilter;
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active" && row.isActive) ||
+        (statusFilter === "suspended" && !row.isActive);
+
+      return matchesSearch && matchesRole && matchesStatus;
+    });
+  }, [rows, query, roleFilter, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginatedRows = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+
+  function startEdit(user: UserRow) {
+    setEditingUser(user);
+    const emergencyParts = (user.emergencyContact ?? "").split(" · ");
+    setEditForm({
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email ?? "",
+      role: user.role,
+      leaderId: user.leaderId ?? "",
+      location: user.location ?? "",
+      remarks: user.remarks ?? "",
+      foodPreference: user.foodPreference ?? "",
+      foodAllergy: "",
+      emergencyContactName: emergencyParts[0] ?? "",
+      emergencyContactNo: emergencyParts[1] ?? "",
+      travelInsuranceNo: "",
+      insuranceCompany: "",
+    });
+  }
+
+  async function saveEdit(e: FormEvent) {
+    e.preventDefault();
+    if (!editingUser) return;
+    setError("");
+    setStatus("");
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingUser.id,
+          first_name: editForm.firstName.trim(),
+          last_name: editForm.lastName.trim(),
+          role: editForm.role,
+          leader_id: editForm.leaderId || null,
+          email: editForm.email.trim() || null,
+          location: editForm.location.trim() || null,
+          remarks: editForm.remarks.trim() || null,
+          food_preference: editForm.foodPreference || null,
+          food_allergy: editForm.foodAllergy.trim() || null,
+          emergency_contact_name: editForm.emergencyContactName.trim() || null,
+          emergency_contact_no: editForm.emergencyContactNo.trim() || null,
+          travel_insurance_no: editForm.travelInsuranceNo.trim() || null,
+          insurance_company: editForm.insuranceCompany.trim() || null,
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+      setLoading(false);
+
+      if (!response.ok) {
+        if (data?.fieldErrors) {
+          const firstErr = Object.values(data.fieldErrors).flat()[0];
+          setError(String(firstErr || data?.error || "Could not update user."));
+        } else {
+          setError(data?.error ?? "Could not update user.");
+        }
+        return;
+      }
+
+      setRows((current) =>
+        current.map((r) =>
+          r.id === editingUser.id
+            ? {
+                ...r,
+                firstName: editForm.firstName.trim(),
+                lastName: editForm.lastName.trim(),
+                email: editForm.email.trim() || null,
+                role: editForm.role,
+                location: editForm.location.trim() || null,
+                remarks: editForm.remarks.trim() || null,
+                foodPreference: editForm.foodPreference || null,
+                emergencyContact:
+                  editForm.emergencyContactName.trim() && editForm.emergencyContactNo.trim()
+                    ? `${editForm.emergencyContactName.trim()} · ${editForm.emergencyContactNo.trim()}`
+                    : r.emergencyContact,
+              }
+            : r,
+        ),
+      );
+
+      setStatus(`Updated account for ${editForm.firstName}.`);
+      setEditingUser(null);
+      router.refresh();
+    } catch {
+      setLoading(false);
+      setError("Network error while updating user.");
+    }
+  }
 
   async function createUser(event: FormEvent) {
     event.preventDefault();
@@ -59,139 +209,448 @@ export default function UsersAdmin({ users }: { users: UserRow[] }) {
     setStatus("");
     setLoading(true);
 
-    const response = await fetch("/api/admin/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...draft, mustChangePassword: true }),
-    });
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: draft.phone.trim(),
+          first_name: draft.firstName.trim(),
+          last_name: draft.lastName.trim(),
+          role: draft.role,
+          leader_id: draft.leaderId || null,
+          email: draft.email.trim() || null,
+          location: draft.location.trim() || null,
+          remarks: draft.remarks.trim() || null,
+        }),
+      });
 
-    const data = await response.json().catch(() => null);
-    setLoading(false);
+      const data = await response.json().catch(() => null);
+      setLoading(false);
 
-    if (!response.ok) {
-      setError(data?.error ?? "Could not create that account.");
-      return;
+      if (!response.ok) {
+        if (data?.fieldErrors) {
+          const firstErr = Object.values(data.fieldErrors).flat()[0];
+          setError(String(firstErr || data?.error || "Could not create that account."));
+        } else {
+          setError(data?.error ?? "Could not create that account.");
+        }
+        return;
+      }
+
+      setStatus(`Account created. Initial PIN is the last 4 digits of their phone (${draft.phone.trim().slice(-4)}).`);
+      setDraft(blank);
+      router.refresh();
+    } catch {
+      setLoading(false);
+      setError("Network error while creating account.");
     }
-
-    setStatus("Account created. They must change this password on first sign in.");
-    setDraft(blank);
-    router.refresh();
   }
 
   async function updateUser(id: string, patch: Record<string, unknown>, message: string) {
     setError("");
-    const response = await fetch("/api/admin/users", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, ...patch }),
-    });
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...patch }),
+      });
 
-    if (!response.ok) {
-      const data = await response.json().catch(() => null);
-      setError(data?.error ?? "Update failed.");
-      return;
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        setError(data?.error ?? "Update failed.");
+        return;
+      }
+
+      setRows((current) =>
+        current.map((row) =>
+          row.id === id
+            ? ({
+                ...row,
+                ...patch,
+                isActive: patch.is_active !== undefined ? Boolean(patch.is_active) : row.isActive,
+              } as UserRow)
+            : row,
+        ),
+      );
+      setStatus(message);
+      router.refresh();
+    } catch {
+      setError("Network error while updating user.");
     }
-
-    setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } as UserRow : row)));
-    setStatus(message);
-    router.refresh();
   }
 
   async function resetPassword(row: UserRow) {
-    const password = window.prompt(`Temporary password for ${row.firstName} ${row.lastName} (min 8 characters):`);
-    if (!password) return;
-    if (password.length < 8) {
-      setError("Use at least 8 characters.");
+    if (!window.confirm(`Reset PIN for ${row.firstName} ${row.lastName}? Their temporary PIN will become the last 4 digits of their phone (${row.phone.slice(-4)}).`)) {
       return;
     }
+    setError("");
+    setStatus("");
 
-    const response = await fetch("/api/admin/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: row.id, newPassword: password }),
-    });
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: row.id, reset_pin: true }),
+      });
 
-    if (!response.ok) {
       const data = await response.json().catch(() => null);
-      setError(data?.error ?? "Could not reset the password.");
-      return;
-    }
+      if (!response.ok) {
+        setError(data?.error ?? "Could not reset the PIN.");
+        return;
+      }
 
-    setStatus(`Password reset for ${row.firstName}. They must change it at next sign in.`);
-    router.refresh();
+      setStatus(`PIN reset for ${row.firstName}. Their temporary PIN is the last 4 digits of their phone (${row.phone.slice(-4)}).`);
+      router.refresh();
+    } catch {
+      setError("Network error while resetting PIN.");
+    }
+  }
+
+  async function handleCsvUpload(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    setImportReport(null);
+    setError("");
+
+    try {
+      const text = await file.text();
+      const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").filter((l) => l.trim().length > 0);
+      if (lines.length < 2) {
+        setError("CSV must contain a header row and at least one user record.");
+        setImporting(false);
+        return;
+      }
+
+      const headers = lines[0].split(",").map((h) => h.trim().toLowerCase().replace(/["']/g, ""));
+      const usersToImport: Record<string, string>[] = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(",").map((v) => v.trim().replace(/^["']|["']$/g, ""));
+        const rowObj: Record<string, string> = {};
+        headers.forEach((h, idx) => {
+          rowObj[h] = values[idx] ?? "";
+        });
+        if (rowObj.phone) {
+          usersToImport.push({
+            phone: rowObj.phone,
+            first_name: rowObj.first_name || rowObj.firstname || "Guest",
+            last_name: rowObj.last_name || rowObj.lastname || "",
+            role: rowObj.role || "traveller",
+            email: rowObj.email || "",
+            location: rowObj.location || "",
+            remarks: rowObj.remarks || "",
+          });
+        }
+      }
+
+      const res = await fetch("/api/admin/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ users: usersToImport }),
+      });
+
+      const json = await res.json().catch(() => null);
+      setImporting(false);
+
+      if (!res.ok) {
+        setError(json?.error ?? "Failed to process CSV import.");
+        return;
+      }
+
+      setImportReport(json);
+      router.refresh();
+    } catch {
+      setImporting(false);
+      setError("Error parsing or sending CSV.");
+    }
+  }
+
+  function downloadSampleCsv() {
+    const csvContent =
+      "phone,first_name,last_name,role,email,location,remarks\n" +
+      "9876543210,Aarav,Patel,traveller,aarav@example.com,Bengaluru,Enjoys trekking\n" +
+      "9876543211,Sunita,Sharma,traveller,sunita@example.com,Mysuru,Vegetarian\n";
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "payana_users_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 
   return (
     <>
       <section className="admin-card">
-        <div className="admin-card-head">
+        <div className="admin-card-head" style={{ flexWrap: "wrap", gap: "12px" }}>
           <h2 className="serif">Accounts</h2>
-          <input
-            className="admin-search"
-            placeholder="Search name, phone or email"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+            <input
+              className="admin-search"
+              placeholder="Search name, phone or email"
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPage(1);
+              }}
+            />
+            <select
+              value={roleFilter}
+              onChange={(e) => {
+                setRoleFilter(e.target.value);
+                setPage(1);
+              }}
+              style={{ padding: "6px 12px", borderRadius: "6px" }}
+            >
+              <option value="all">All roles</option>
+              <option value="traveller">Traveller</option>
+              <option value="leader">Trail leader</option>
+              <option value="admin">Administrator</option>
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(1);
+              }}
+              style={{ padding: "6px 12px", borderRadius: "6px" }}
+            >
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="suspended">Suspended</option>
+            </select>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setShowImport(!showImport)}
+            >
+              {showImport ? "Close CSV Import" : "Import CSV"}
+            </button>
+          </div>
         </div>
 
+        {showImport && (
+          <div style={{ margin: "16px 0", padding: "16px", background: "var(--color-surface, #1e293b)", borderRadius: "8px", border: "1px dashed var(--color-border, #334155)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <h3 className="serif" style={{ margin: 0 }}>Bulk Import Travellers</h3>
+              <button type="button" className="link-btn" onClick={downloadSampleCsv}>
+                Download CSV Template
+              </button>
+            </div>
+            <p className="admin-hint">
+              Upload a UTF-8 CSV with phone numbers and traveller details. Duplicates are automatically skipped.
+            </p>
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleCsvUpload}
+              disabled={importing}
+              style={{ marginTop: "8px" }}
+            />
+            {importing && <p className="muted small" style={{ marginTop: "8px" }}>Processing CSV import batch…</p>}
+            {importReport && (
+              <div style={{ marginTop: "12px", padding: "10px", background: "rgba(0,0,0,0.2)", borderRadius: "6px" }}>
+                <strong>Import Results:</strong> Created: {importReport.created} · Skipped (duplicates): {importReport.skipped}
+                {importReport.errors && importReport.errors.length > 0 && (
+                  <div style={{ marginTop: "8px", color: "var(--color-danger, #ef4444)" }}>
+                    {importReport.errors.map((err, i) => (
+                      <div key={i} className="small">Row {err.row} ({err.phone}): {err.error}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {filtered.length === 0 ? (
-          <p className="panel-note">No accounts match that search.</p>
+          <p className="panel-note">No accounts match that filter.</p>
         ) : (
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Phone</th>
-                <th>Role</th>
-                <th>Travel details</th>
-                <th>Last active</th>
-                <th>Status</th>
-                <th aria-label="Actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row) => (
-                <tr key={row.id}>
-                  <td>
-                    <strong>
-                      {row.firstName} {row.lastName}
-                    </strong>
-                    {row.email && <div className="muted small">{row.email}</div>}
-                  </td>
-                  <td className="mono">{row.phone}</td>
-                  <td style={{ textTransform: "capitalize" }}>{row.role}</td>
-                  <td className="muted small">
-                    {row.foodPreference ? `${row.foodPreference.replace("_", " ")}` : "—"}
-                    {row.emergencyContact ? ` · ${row.emergencyContact}` : ""}
-                  </td>
-                  <td>
-                    {row.lastActiveAt ? new Date(row.lastActiveAt).toLocaleDateString("en-IN") : "Never"}
-                  </td>
-                  <td>
-                    <span className={`pill ${row.isActive ? "on" : "off"}`}>
-                      {row.isActive ? "Active" : "Suspended"}
-                    </span>
-                  </td>
-                  <td className="row-actions">
-                    <button className="link-btn" onClick={() => resetPassword(row)}>
-                      Reset password
-                    </button>
-                    <button className="link-btn" onClick={() => updateUser(row.id, { is_active: !row.isActive }, row.isActive ? "Account suspended." : "Account restored.")}>
-                      {row.isActive ? "Suspend" : "Restore"}
-                    </button>
-                  </td>
+          <>
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Phone</th>
+                  <th>Role</th>
+                  <th>Travel details</th>
+                  <th>Last active</th>
+                  <th>Status</th>
+                  <th aria-label="Actions" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {paginatedRows.map((row) => (
+                  <tr key={row.id}>
+                    <td>
+                      <strong>
+                        {row.firstName} {row.lastName}
+                      </strong>
+                      {row.email && <div className="muted small">{row.email}</div>}
+                    </td>
+                    <td className="mono">{row.phone}</td>
+                    <td style={{ textTransform: "capitalize" }}>{row.role}</td>
+                    <td className="muted small">
+                      {row.foodPreference ? `${row.foodPreference.replace("_", " ")}` : "—"}
+                      {row.emergencyContact ? ` · ${row.emergencyContact}` : ""}
+                    </td>
+                    <td>
+                      {row.lastActiveAt ? new Date(row.lastActiveAt).toLocaleDateString("en-IN") : "Never"}
+                    </td>
+                    <td>
+                      <span className={`pill ${row.isActive ? "on" : "off"}`}>
+                        {row.isActive ? "Active" : "Suspended"}
+                      </span>
+                    </td>
+                    <td className="row-actions">
+                      <button className="link-btn" onClick={() => startEdit(row)}>
+                        Edit
+                      </button>
+                      <button className="link-btn" onClick={() => resetPassword(row)}>
+                        Reset PIN
+                      </button>
+                      <button className="link-btn" onClick={() => updateUser(row.id, { is_active: !row.isActive }, row.isActive ? "Account suspended." : "Account restored.")}>
+                        {row.isActive ? "Suspend" : "Restore"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {totalPages > 1 && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "16px" }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  ← Previous
+                </button>
+                <span className="muted small">
+                  Page {page} of {totalPages} ({filtered.length} total)
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+          </>
         )}
       </section>
 
+      {/* Edit User Modal */}
+      {editingUser && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+          <form className="admin-card" onSubmit={saveEdit} style={{ maxWidth: "600px", width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+            <div className="admin-card-head">
+              <h2 className="serif">Edit {editingUser.firstName} {editingUser.lastName}</h2>
+              <button type="button" className="link-btn" onClick={() => setEditingUser(null)}>✕ Cancel</button>
+            </div>
+
+            <div className="field-row">
+              <label className="form-field">
+                First name
+                <input required value={editForm.firstName} onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })} />
+              </label>
+              <label className="form-field">
+                Last name
+                <input required value={editForm.lastName} onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })} />
+              </label>
+            </div>
+
+            <div className="field-row">
+              <label className="form-field">
+                Phone number
+                <input disabled value={editingUser.phone} className="muted mono" />
+              </label>
+              <label className="form-field">
+                Email
+                <input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+              </label>
+            </div>
+
+            <div className="field-row">
+              <label className="form-field">
+                Role
+                <select value={editForm.role} onChange={(e) => setEditForm({ ...editForm, role: e.target.value as UserRow["role"] })}>
+                  <option value="traveller">Traveller</option>
+                  <option value="leader">Trail leader</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </label>
+              <label className="form-field">
+                Assigned Trail Leader
+                <select value={editForm.leaderId} onChange={(e) => setEditForm({ ...editForm, leaderId: e.target.value })}>
+                  <option value="">No leader assigned</option>
+                  {leaders.map((ldr) => (
+                    <option key={ldr.id} value={ldr.id}>
+                      {ldr.first_name} {ldr.last_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="field-row">
+              <label className="form-field">
+                Home city
+                <input value={editForm.location} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} />
+              </label>
+              <label className="form-field">
+                Food preference
+                <select value={editForm.foodPreference} onChange={(e) => setEditForm({ ...editForm, foodPreference: e.target.value })}>
+                  <option value="">None selected</option>
+                  <option value="veg">Vegetarian</option>
+                  <option value="non_veg">Non-Vegetarian</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="field-row">
+              <label className="form-field">
+                Emergency contact name
+                <input value={editForm.emergencyContactName} onChange={(e) => setEditForm({ ...editForm, emergencyContactName: e.target.value })} />
+              </label>
+              <label className="form-field">
+                Emergency contact number
+                <input type="tel" value={editForm.emergencyContactNo} onChange={(e) => setEditForm({ ...editForm, emergencyContactNo: e.target.value })} />
+              </label>
+            </div>
+
+            <label className="form-field">
+              Remarks
+              <textarea rows={2} value={editForm.remarks} onChange={(e) => setEditForm({ ...editForm, remarks: e.target.value })} />
+            </label>
+
+            <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
+              <button className="btn btn-primary" type="submit" disabled={loading}>
+                {loading ? "Saving…" : "Save changes"}
+              </button>
+              <button className="btn btn-secondary" type="button" onClick={() => setEditingUser(null)}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* New Account Form */}
       <section className="admin-card">
         <h2 className="serif">New account</h2>
         <p className="admin-hint">
-          Creates a sign-in immediately with a temporary password. The traveller is forced to change
-          it the first time they sign in.
+          Creates an account immediately with an initial PIN (last 4 digits of their phone number).
+          The user is required to set a new PIN on first sign in.
         </p>
 
         <form onSubmit={createUser}>
@@ -219,25 +678,13 @@ export default function UsersAdmin({ users }: { users: UserRow[] }) {
 
           <div className="field-row">
             <label className="form-field">
-              Temporary password
-              <span className="password-input">
-                <input
-                  required
-                  minLength={8}
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="new-password"
-                  value={draft.password}
-                  onChange={(e) => setDraft({ ...draft, password: e.target.value })}
-                />
-                <button
-                  type="button"
-                  className="password-toggle"
-                  onClick={() => setShowPassword((current) => !current)}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? "Hide" : "Show"}
-                </button>
-              </span>
+              Initial PIN
+              <input
+                readOnly
+                disabled
+                value={draft.phone.trim().length >= 4 ? `Last 4 digits (${draft.phone.trim().slice(-4)})` : "Auto-set to last 4 digits of phone"}
+                className="muted"
+              />
             </label>
             <label className="form-field">
               Role
@@ -251,14 +698,26 @@ export default function UsersAdmin({ users }: { users: UserRow[] }) {
 
           <div className="field-row">
             <label className="form-field">
+              Assigned Trail Leader (Optional)
+              <select value={draft.leaderId} onChange={(e) => setDraft({ ...draft, leaderId: e.target.value })}>
+                <option value="">No leader assigned</option>
+                {leaders.map((ldr) => (
+                  <option key={ldr.id} value={ldr.id}>
+                    {ldr.first_name} {ldr.last_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="form-field">
               Home city
               <input value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} />
             </label>
-            <label className="form-field">
-              Remarks
-              <input value={draft.remarks} onChange={(e) => setDraft({ ...draft, remarks: e.target.value })} />
-            </label>
           </div>
+
+          <label className="form-field">
+            Remarks
+            <input value={draft.remarks} onChange={(e) => setDraft({ ...draft, remarks: e.target.value })} />
+          </label>
 
           {error && <p className="form-error" role="alert">{error}</p>}
           {status && <p className="form-notice" role="status">{status}</p>}

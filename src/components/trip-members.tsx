@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
 
 export default function TripMembers({ tripId }: { tripId: string }) {
@@ -10,76 +9,112 @@ export default function TripMembers({ tripId }: { tripId: string }) {
   const [selected, setSelected] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const supabase = createClient();
-    void (async () => {
-      const { data: people } = await supabase
-        .from("profiles")
-        .select("id, first_name, last_name, phone, role, is_active")
-        .eq("role", "traveller")
-        .order("first_name");
+    let ignore = false;
+    async function load() {
+      try {
+        const [usersRes, membersRes] = await Promise.all([
+          fetch("/api/admin/users?role=traveller&limit=100"),
+          fetch(`/api/admin/trips/${tripId}/members`),
+        ]);
 
-      const { data: existing } = await supabase.from("trip_members").select("user_id").eq("trip_id", tripId);
-      const memberIds = new Set((existing ?? []).map((row) => row.user_id as string));
+        const usersJson = await usersRes.json().catch(() => ({ data: [] }));
+        const membersJson = await membersRes.json().catch(() => ({ data: [] }));
 
-      setCandidates((people ?? []) as Profile[]);
-      setMembers(
-        (people ?? [])
-          .filter((person) => memberIds.has(person.id))
-          .map((person) => ({
-            userId: person.id,
-            name: `${person.first_name} ${person.last_name}`,
-            phone: person.phone,
-          })),
-      );
-    })();
+        if (ignore) return;
+
+        const people: Profile[] = (usersJson.data ?? []).map((u: Record<string, unknown>) => ({
+          id: u.id as string,
+          phone: (u.phone as string) ?? "",
+          role: (u.role as "traveller" | "leader" | "admin") ?? "traveller",
+          first_name: (u.first_name as string) ?? "",
+          last_name: (u.last_name as string) ?? "",
+          email: (u.email as string) ?? null,
+          is_active: (u.is_active as boolean) ?? true,
+          created_at: (u.created_at as string) ?? new Date().toISOString(),
+          updated_at: (u.updated_at as string) ?? new Date().toISOString(),
+        }));
+
+        setCandidates(people);
+
+        const enrolled = (membersJson.data ?? []).map((m: { profiles?: { id: string; first_name: string; last_name: string; phone: string } }) => ({
+          userId: m.profiles?.id ?? "",
+          name: m.profiles ? `${m.profiles.first_name} ${m.profiles.last_name}` : "Unknown",
+          phone: m.profiles?.phone ?? "",
+        })).filter((m: { userId: string }) => Boolean(m.userId));
+
+        setMembers(enrolled);
+      } catch {
+        if (!ignore) setError("Failed to load members or traveller list.");
+      }
+    }
+
+    void load();
+    return () => {
+      ignore = true;
+    };
   }, [tripId]);
 
   async function addMember() {
     if (!selected) return;
     setError("");
     setStatus("");
+    setLoading(true);
 
-    const supabase = createClient();
-    const { error: insertError } = await supabase
-      .from("trip_members")
-      .insert({ trip_id: tripId, user_id: selected });
+    try {
+      const res = await fetch(`/api/admin/trips/${tripId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_ids: [selected] }),
+      });
 
-    if (insertError) {
-      setError(
-        insertError.code === "23505"
-          ? "That traveller is already on this trip."
-          : insertError.message,
-      );
-      return;
+      const json = await res.json().catch(() => null);
+      setLoading(false);
+
+      if (!res.ok) {
+        setError(json?.error ?? "Failed to add traveller to trip.");
+        return;
+      }
+
+      const person = candidates.find((candidate) => candidate.id === selected);
+      if (person) {
+        setMembers((current) => [
+          ...current,
+          { userId: person.id, name: `${person.first_name} ${person.last_name}`, phone: person.phone },
+        ]);
+      }
+      setSelected("");
+      setStatus("Member added.");
+    } catch {
+      setLoading(false);
+      setError("Network error while adding member.");
     }
-
-    const person = candidates.find((candidate) => candidate.id === selected);
-    if (person) {
-      setMembers((current) => [
-        ...current,
-        { userId: person.id, name: `${person.first_name} ${person.last_name}`, phone: person.phone },
-      ]);
-    }
-    setSelected("");
-    setStatus("Member added.");
   }
 
   async function removeMember(userId: string) {
-    const supabase = createClient();
-    const { error: deleteError } = await supabase
-      .from("trip_members")
-      .delete()
-      .eq("trip_id", tripId)
-      .eq("user_id", userId);
+    setError("");
+    setStatus("");
 
-    if (deleteError) {
-      setError(deleteError.message);
-      return;
+    try {
+      const res = await fetch(`/api/admin/trips/${tripId}/members`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_ids: [userId] }),
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        setError(json?.error ?? "Failed to remove traveller from trip.");
+        return;
+      }
+
+      setMembers((current) => current.filter((member) => member.userId !== userId));
+      setStatus("Member removed.");
+    } catch {
+      setError("Network error while removing member.");
     }
-    setMembers((current) => current.filter((member) => member.userId !== userId));
-    setStatus("Member removed.");
   }
 
   return (
@@ -103,8 +138,8 @@ export default function TripMembers({ tripId }: { tripId: string }) {
               ))}
           </select>
         </label>
-        <button type="button" className="btn btn-primary" onClick={addMember} disabled={!selected}>
-          Add to trip
+        <button type="button" className="btn btn-primary" onClick={addMember} disabled={!selected || loading}>
+          {loading ? "Adding…" : "Add to trip"}
         </button>
       </div>
 

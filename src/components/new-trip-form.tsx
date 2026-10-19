@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 export default function NewTripForm() {
   const router = useRouter();
@@ -15,34 +14,39 @@ export default function NewTripForm() {
     setError("");
 
     const form = new FormData(event.currentTarget);
-    const supabase = createClient();
+    const payload = {
+      trip_code: String(form.get("trip_code") || "").trim(),
+      name: String(form.get("name") || "").trim(),
+      destination: String(form.get("destination") || "").trim() || null,
+      start_date: String(form.get("start_date") || "").trim() || null,
+      end_date: String(form.get("end_date") || "").trim() || null,
+    };
 
-    const { data, error: insertError } = await supabase
-      .from("trips")
-      .insert({
-        trip_code: String(form.get("trip_code") || ""),
-        name: String(form.get("name") || ""),
-        destination: String(form.get("destination") || "") || null,
-        start_date: String(form.get("start_date") || "") || null,
-        end_date: String(form.get("end_date") || "") || null,
-        status: "draft",
-        is_active: true,
-      })
-      .select("id")
-      .single();
+    try {
+      const res = await fetch("/api/admin/trips", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    setLoading(false);
+      const json = await res.json().catch(() => null);
+      setLoading(false);
 
-    if (insertError) {
-      setError(
-        insertError.code === "23505"
-          ? "That trip code already exists. Codes must be unique."
-          : insertError.message,
-      );
-      return;
+      if (!res.ok) {
+        if (json?.fieldErrors) {
+          const firstErr = Object.values(json.fieldErrors).flat()[0];
+          setError(String(firstErr || json.error || "Failed to create trip."));
+        } else {
+          setError(json?.error ?? "Failed to create trip.");
+        }
+        return;
+      }
+
+      router.push(`/admin/trips/${json.data.id}`);
+    } catch {
+      setLoading(false);
+      setError("Network error while creating trip.");
     }
-
-    router.push(`/admin/trips/${data.id}`);
   }
 
   return (

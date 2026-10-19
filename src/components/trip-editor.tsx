@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 export type EditableDay = {
   id: string;
@@ -46,6 +45,18 @@ export default function TripEditor({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Itinerary CSV import state
+  const [showItineraryImport, setShowItineraryImport] = useState(false);
+  const [itineraryImporting, setItineraryImporting] = useState(false);
+  const [itineraryReport, setItineraryReport] = useState<string | null>(null);
+
+  // Broadcast state
+  const [broadcastTitle, setBroadcastTitle] = useState("");
+  const [broadcastBody, setBroadcastBody] = useState("");
+  const [sendWhatsapp, setSendWhatsapp] = useState(false);
+  const [broadcasting, setBroadcasting] = useState(false);
+  const [broadcastStatus, setBroadcastStatus] = useState("");
+
   function set(key: keyof typeof form, value: string | boolean) {
     setForm((current) => ({ ...current, [key]: value }));
   }
@@ -68,7 +79,24 @@ export default function TripEditor({
     ]);
   }
 
-  function removeDay(index: number) {
+  async function removeDay(index: number) {
+    const day = rows[index];
+    if (!day) return;
+    if (day.id) {
+      if (!window.confirm(`Are you sure you want to delete Day ${day.dayNumber}?`)) return;
+      try {
+        const res = await fetch(`/api/admin/trips/${trip.id}/days/${day.id}`, { method: "DELETE" });
+        if (!res.ok) {
+          const json = await res.json().catch(() => null);
+          setError(json?.error ?? "Failed to delete day.");
+          return;
+        }
+        setStatus(`Day ${day.dayNumber} deleted.`);
+      } catch {
+        setError("Network error while deleting day.");
+        return;
+      }
+    }
     setRows((current) => current.filter((_, i) => i !== index));
   }
 
@@ -113,109 +141,307 @@ export default function TripEditor({
     setError("");
     setStatus("");
 
-    const supabase = createClient();
-    const { error: updateError } = await supabase
-      .from("trips")
-      .update({
-        trip_code: form.tripCode,
-        name: form.name,
-        destination: form.destination || null,
-        start_date: form.startDate || null,
-        end_date: form.endDate || null,
-        leader_id: form.leaderId || null,
-        status: form.status,
-        is_active: form.isActive,
-        remarks: form.remarks || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", form.id);
+    try {
+      const res = await fetch(`/api/admin/trips/${form.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name.trim(),
+          destination: form.destination?.trim() || null,
+          start_date: form.startDate || null,
+          end_date: form.endDate || null,
+          leader_id: form.leaderId || null,
+          status: form.status,
+          is_active: form.isActive,
+          remarks: form.remarks?.trim() || null,
+        }),
+      });
 
-    setSaving(false);
+      const json = await res.json().catch(() => null);
+      setSaving(false);
 
-    if (updateError) {
-      setError(
-        updateError.message.includes("row-level security")
-          ? "Only admins can edit trips."
-          : updateError.message,
-      );
-      return;
+      if (!res.ok) {
+        if (json?.fieldErrors) {
+          const firstErr = Object.values(json.fieldErrors).flat()[0];
+          setError(String(firstErr || json.error || "Failed to update trip."));
+        } else {
+          setError(json?.error ?? "Failed to update trip.");
+        }
+        return;
+      }
+
+      setStatus("Trip saved.");
+      router.refresh();
+    } catch {
+      setSaving(false);
+      setError("Network error while saving trip.");
     }
-
-    setStatus("Trip saved.");
-    router.refresh();
   }
 
   async function saveDay(day: EditableDay) {
-    const supabase = createClient();
+    setError("");
+    setStatus("");
 
-    const payload = {
-      trip_id: trip.id,
-      day_number: day.dayNumber,
-      destination: day.destination || null,
-      itinerary_text: day.itineraryText || null,
-      hotel_name: day.hotelName || null,
-    };
+    try {
+      const formatTime = (t: string) => {
+        if (!t) return null;
+        return t.length === 5 ? `${t}:00` : t;
+      };
 
-    let dayId = day.id;
-    if (dayId) {
-      const { error } = await supabase.from("itinerary_days").update(payload).eq("id", dayId);
-      if (error) {
-        setError(error.message);
-        return;
+      const validActivities = day.activities
+        .filter((a) => a.title.trim())
+        .map((a, idx) => ({
+          id: a.id,
+          title: a.title.trim(),
+          description: a.description?.trim() || null,
+          start_time: formatTime(a.startTime),
+          end_time: formatTime(a.endTime),
+          activity_order: idx + 1,
+        }));
+
+      let dayId = day.id;
+
+      if (!dayId) {
+        // Create new day with nested activities
+        const res = await fetch(`/api/admin/trips/${trip.id}/days`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            day_number: day.dayNumber,
+            destination: day.destination?.trim() || null,
+            itinerary_text: day.itineraryText?.trim() || null,
+            hotel_name: day.hotelName?.trim() || null,
+            activities: validActivities.map(({ id: _ignored, ...act }) => act),
+          }),
+        });
+
+        const json = await res.json().catch(() => null);
+        if (!res.ok) {
+          setError(json?.error ?? "Failed to create itinerary day.");
+          return;
+        }
+
+        dayId = json.data.id;
+        const savedActs = (json.data.activities ?? []).map((sa: { id: string; title: string; description?: string; start_time?: string; end_time?: string }) => ({
+          id: sa.id,
+          title: sa.title,
+          description: sa.description ?? "",
+          startTime: (sa.start_time ?? "").slice(0, 5),
+          endTime: (sa.end_time ?? "").slice(0, 5),
+        }));
+
+        setRows((current) =>
+          current.map((row) => (row === day ? { ...row, id: dayId, activities: savedActs.length > 0 ? savedActs : row.activities } : row)),
+        );
+      } else {
+        // Update existing day
+        const dayRes = await fetch(`/api/admin/trips/${trip.id}/days/${dayId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            day_number: day.dayNumber,
+            destination: day.destination?.trim() || null,
+            itinerary_text: day.itineraryText?.trim() || null,
+            hotel_name: day.hotelName?.trim() || null,
+          }),
+        });
+
+        if (!dayRes.ok) {
+          const json = await dayRes.json().catch(() => null);
+          setError(json?.error ?? "Failed to update day details.");
+          return;
+        }
+
+        // Fetch existing activities on server to synchronize
+        const actsRes = await fetch(`/api/admin/trips/${trip.id}/days/${dayId}/activities`);
+        const existingActsJson = await actsRes.json().catch(() => ({ data: [] }));
+        const serverActs: { id: string }[] = existingActsJson.data ?? [];
+
+        // Delete activities no longer in rows
+        const keepIds = new Set(validActivities.map((a) => a.id).filter(Boolean));
+        for (const sa of serverActs) {
+          if (!keepIds.has(sa.id)) {
+            await fetch(`/api/admin/trips/${trip.id}/days/${dayId}/activities/${sa.id}`, { method: "DELETE" });
+          }
+        }
+
+        // Create or update current activities
+        const updatedActivities: typeof validActivities = [];
+        for (const act of validActivities) {
+          if (act.id) {
+            await fetch(`/api/admin/trips/${trip.id}/days/${dayId}/activities/${act.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                title: act.title,
+                description: act.description,
+                start_time: act.start_time,
+                end_time: act.end_time,
+                activity_order: act.activity_order,
+              }),
+            });
+            updatedActivities.push(act);
+          } else {
+            const createRes = await fetch(`/api/admin/trips/${trip.id}/days/${dayId}/activities`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                title: act.title,
+                description: act.description,
+                start_time: act.start_time,
+                end_time: act.end_time,
+                activity_order: act.activity_order,
+              }),
+            });
+            const createdJson = await createRes.json().catch(() => null);
+            updatedActivities.push({
+              ...act,
+              id: createdJson?.data?.id ?? "",
+            });
+          }
+        }
+
+        setRows((current) =>
+          current.map((row) =>
+            row === day
+              ? {
+                  ...row,
+                  activities: updatedActivities.map((ua) => ({
+                    id: ua.id,
+                    title: ua.title,
+                    description: ua.description ?? "",
+                    startTime: (ua.start_time ?? "").slice(0, 5),
+                    endTime: (ua.end_time ?? "").slice(0, 5),
+                  })),
+                }
+              : row,
+          ),
+        );
       }
-    } else {
-      const { data, error } = await supabase.from("itinerary_days").insert(payload).select("id").single();
-      if (error) {
-        setError(error.message);
-        return;
-      }
-      dayId = data.id as string;
-      setRows((current) => current.map((row) => (row === day ? { ...row, id: dayId } : row)));
+
+      setStatus(`Day ${day.dayNumber} saved.`);
+      router.refresh();
+    } catch {
+      setError("Network error while saving day.");
     }
-
-    // Activities are replaced wholesale for the day, which keeps ordering simple.
-    await supabase.from("activities").delete().eq("itinerary_day_id", dayId);
-    if (day.activities.length > 0) {
-      const { error } = await supabase.from("activities").insert(
-        day.activities.map((activity, index) => ({
-          itinerary_day_id: dayId,
-          title: activity.title,
-          description: activity.description || null,
-          start_time: activity.startTime || null,
-          end_time: activity.endTime || null,
-          activity_order: index + 1,
-        })),
-      );
-      if (error) {
-        setError(error.message);
-        return;
-      }
-    }
-
-    setStatus(`Day ${day.dayNumber} saved.`);
-    router.refresh();
   }
 
   async function duplicateTrip() {
-    const startDate = window.prompt("New trip code (must be unique):", `${form.tripCode}-COPY`);
-    if (!startDate) return;
+    const newCode = window.prompt("New trip code (must be unique):", `${form.tripCode}-COPY`);
+    if (!newCode || !newCode.trim()) return;
     const newName = window.prompt("New trip name:", form.name);
-    if (!newName) return;
+    if (!newName || !newName.trim()) return;
 
-    const response = await fetch("/api/admin/copy-trip", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sourceTripId: trip.id, newTripCode: startDate, newName }),
-    });
+    setError("");
+    setStatus("");
 
-    if (!response.ok) {
+    try {
+      const response = await fetch(`/api/admin/trips/${trip.id}/copy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          new_trip_code: newCode.trim(),
+          new_name: newName.trim(),
+        }),
+      });
+
       const data = await response.json().catch(() => null);
-      setError(data?.error ?? "Could not duplicate the trip.");
+      if (!response.ok) {
+        if (data?.fieldErrors) {
+          const firstErr = Object.values(data.fieldErrors).flat()[0];
+          setError(String(firstErr || data?.error || "Could not duplicate the trip."));
+        } else {
+          setError(data?.error ?? "Could not duplicate the trip.");
+        }
+        return;
+      }
+
+      const newTripId = data.data?.id;
+      if (newTripId) {
+        router.push(`/admin/trips/${newTripId}`);
+      } else {
+        router.refresh();
+      }
+    } catch {
+      setError("Network error while duplicating trip.");
+    }
+  }
+
+  async function handleItineraryCsv(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setItineraryImporting(true);
+    setItineraryReport(null);
+    setError("");
+
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+
+      const res = await fetch(`/api/admin/trips/${trip.id}/itinerary/import`, {
+        method: "POST",
+        body: fd,
+      });
+
+      const json = await res.json().catch(() => null);
+      setItineraryImporting(false);
+
+      if (!res.ok) {
+        setError(json?.error ?? "Failed to import itinerary CSV.");
+        return;
+      }
+
+      setItineraryReport(`Imported: ${json.days_upserted} days upserted, ${json.activities_inserted} activities created.`);
+      setStatus("Itinerary CSV successfully imported.");
+      router.refresh();
+    } catch {
+      setItineraryImporting(false);
+      setError("Network error while importing itinerary CSV.");
+    }
+  }
+
+  async function sendBroadcast(e: FormEvent) {
+    e.preventDefault();
+    if (!broadcastTitle.trim()) {
+      setError("Broadcast title is required.");
       return;
     }
 
-    const data = await response.json();
-    window.location.href = `/admin/trips/${data.tripId}`;
+    setBroadcasting(true);
+    setBroadcastStatus("");
+    setError("");
+
+    try {
+      const res = await fetch("/api/admin/push/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trip_id: trip.id,
+          title: broadcastTitle.trim(),
+          body: broadcastBody.trim() || undefined,
+          sendWhatsapp,
+        }),
+      });
+
+      const json = await res.json().catch(() => null);
+      setBroadcasting(false);
+
+      if (!res.ok) {
+        setError(json?.error ?? "Failed to send broadcast.");
+        return;
+      }
+
+      setBroadcastStatus(
+        `Broadcast sent! Push notifications: ${json.sent} sent (${json.failed} failed). In-app: ${json.inAppCreated ?? 0}.` +
+          (sendWhatsapp ? ` WhatsApp: ${json.whatsappSent ?? 0} sent (${json.whatsappFailed ?? 0} failed).` : "")
+      );
+      setBroadcastTitle("");
+      setBroadcastBody("");
+    } catch {
+      setBroadcasting(false);
+      setError("Network error while sending broadcast.");
+    }
   }
 
   return (
@@ -296,12 +522,50 @@ export default function TripEditor({
       </form>
 
       <section className="admin-card">
-        <div className="admin-card-head">
+        <div className="admin-card-head" style={{ flexWrap: "wrap", gap: "8px" }}>
           <h2 className="serif">Itinerary</h2>
-          <button type="button" className="btn btn-secondary" onClick={addDay}>
-            Add day
-          </button>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setShowItineraryImport(!showItineraryImport)}
+            >
+              {showItineraryImport ? "Close Import" : "Import CSV"}
+            </button>
+            <button type="button" className="btn btn-primary" onClick={addDay}>
+              Add day
+            </button>
+          </div>
         </div>
+
+        {showItineraryImport && (
+          <div style={{ margin: "16px 0", padding: "16px", background: "var(--color-surface, #1e293b)", borderRadius: "8px", border: "1px dashed var(--color-border, #334155)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <h3 className="serif" style={{ margin: 0, fontSize: "1.1rem" }}>Bulk Import Days & Activities</h3>
+              <a
+                href={`/api/admin/trips/${trip.id}/itinerary/import`}
+                download="itinerary_template.csv"
+                className="link-btn"
+              >
+                Download CSV Template
+              </a>
+            </div>
+            <p className="admin-hint">
+              Upload a UTF-8 CSV containing day numbers, destinations, hotel names, itinerary descriptions, and optional activities.
+            </p>
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleItineraryCsv}
+              disabled={itineraryImporting}
+              style={{ marginTop: "8px" }}
+            />
+            {itineraryImporting && <p className="muted small" style={{ marginTop: "8px" }}>Importing itinerary days & activities…</p>}
+            {itineraryReport && (
+              <p className="form-notice" role="status" style={{ marginTop: "10px" }}>{itineraryReport}</p>
+            )}
+          </div>
+        )}
 
         {rows.length === 0 && <p className="panel-note">No days yet. Add the first day.</p>}
 
@@ -397,6 +661,51 @@ export default function TripEditor({
             </article>
           ))}
         </div>
+      </section>
+ 
+      <section className="admin-card">
+        <h2 className="serif">Broadcast to Trip Members</h2>
+        <p className="admin-hint">
+          Send an announcement to all travellers enrolled in this trip via in-app alerts, Web Push,
+          and optionally direct WhatsApp message.
+        </p>
+
+        <form onSubmit={sendBroadcast}>
+          <label className="form-field">
+            Announcement Title
+            <input
+              required
+              value={broadcastTitle}
+              onChange={(e) => setBroadcastTitle(e.target.value)}
+              placeholder="e.g. Tomorrow's departure time updated to 7:00 AM"
+            />
+          </label>
+
+          <label className="form-field">
+            Message
+            <textarea
+              rows={3}
+              value={broadcastBody}
+              onChange={(e) => setBroadcastBody(e.target.value)}
+              placeholder="Provide any additional details or instructions for travellers..."
+            />
+          </label>
+
+          <label className="form-field" style={{ display: "flex", gap: "10px", alignItems: "center", margin: "12px 0" }}>
+            <input
+              type="checkbox"
+              checked={sendWhatsapp}
+              onChange={(e) => setSendWhatsapp(e.target.checked)}
+            />
+            <span>Also send as WhatsApp message to all members</span>
+          </label>
+
+          {broadcastStatus && <p className="form-notice" role="status">{broadcastStatus}</p>}
+
+          <button className="btn btn-primary" type="submit" disabled={broadcasting}>
+            {broadcasting ? "Broadcasting…" : "Send broadcast"}
+          </button>
+        </form>
       </section>
     </>
   );

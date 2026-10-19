@@ -3,6 +3,7 @@ import Brand from "@/components/brand";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import AdminNav from "@/components/admin-nav";
+import MobileNav from "@/components/mobile-nav";
 import type { Notification, Profile } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +39,7 @@ export default async function AdminPanelLayout({ children }: { children: React.R
             { href: "/admin/trips", label: "Trips" },
             { href: "/admin/destinations", label: "Destinations" },
             { href: "/admin/notifications", label: `Notifications${count ? ` (${count})` : ""}` },
+            { href: "/admin/audit-log", label: "Audit log" },
           ]}
         />
         <div className="side-bottom">
@@ -56,7 +58,10 @@ export default async function AdminPanelLayout({ children }: { children: React.R
           </Link>
         </div>
       </aside>
-      <section className="admin-main">{children}</section>
+      <section className="admin-main">
+        <MobileNav title="Admin Menu" />
+        {children}
+      </section>
     </div>
   );
 }

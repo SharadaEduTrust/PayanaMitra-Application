@@ -2,7 +2,6 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 export default function NotificationComposer({ travellers }: { travellers: { id: string; name: string }[] }) {
   const router = useRouter();
@@ -28,31 +27,35 @@ export default function NotificationComposer({ travellers }: { travellers: { id:
     }
 
     setLoading(true);
-    const supabase = createClient();
 
-    const rows = recipients.map((userId) => ({
-      user_id: userId,
-      title: title.trim(),
-      body: body.trim() || null,
-    }));
+    try {
+      const response = await fetch("/api/admin/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipients,
+          title: title.trim(),
+          body: body.trim() || null,
+        }),
+      });
 
-    const { error: insertError } = await supabase.from("notifications").insert(rows);
-    setLoading(false);
+      const data = await response.json().catch(() => null);
+      setLoading(false);
 
-    if (insertError) {
-      setError(
-        insertError.message.includes("row-level security")
-          ? "Only admins can create notifications."
-          : insertError.message,
-      );
-      return;
+      if (!response.ok) {
+        setError(data?.error ?? "Could not send notification.");
+        return;
+      }
+
+      setStatus(`Sent to ${recipients.length} traveller${recipients.length > 1 ? "s" : ""}.`);
+      setTitle("");
+      setBody("");
+      setRecipients([]);
+      router.refresh();
+    } catch {
+      setLoading(false);
+      setError("Network error while sending notification.");
     }
-
-    setStatus(`Sent to ${recipients.length} traveller${recipients.length > 1 ? "s" : ""}.`);
-    setTitle("");
-    setBody("");
-    setRecipients([]);
-    router.refresh();
   }
 
   function toggle(id: string) {

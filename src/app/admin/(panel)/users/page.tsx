@@ -9,9 +9,10 @@ export default async function AdminUsersPage() {
   await requireProfile(["admin"]);
   const supabase = await createClient();
 
-  const [{ data: people }, { data: details }] = await Promise.all([
+  const [{ data: people }, { data: details }, { data: leaders }] = await Promise.all([
     supabase.from("profiles").select("*").order("last_name", { ascending: true }),
     supabase.from("traveller_details").select("user_id, food_preference, emergency_contact_name, emergency_contact_no"),
+    supabase.from("profiles").select("id, first_name, last_name").eq("role", "leader").order("first_name", { ascending: true }),
   ]);
 
   const detailByUser = new Map(
@@ -53,7 +54,7 @@ export default async function AdminUsersPage() {
         </div>
       </header>
       <div className="admin-body">
-        <UsersAdmin users={users} />
+        <UsersAdmin users={users} leaders={leaders ?? []} />
       </div>
     </>
   );

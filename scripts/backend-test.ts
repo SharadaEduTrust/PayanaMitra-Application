@@ -707,7 +707,7 @@ async function main() {
           .eq('id', createdDocId)
           .single()
 
-        check(sec, 'Passport number is never stored in plaintext (stored encrypted)', dbDoc && dbDoc.doc_number_enc !== rawPassportNumber && dbDoc.doc_number_enc.length > 10)
+        check(sec, 'Passport number is never stored in plaintext (stored encrypted)', Boolean(dbDoc && dbDoc.doc_number_enc !== rawPassportNumber && dbDoc.doc_number_enc.length > 10))
 
         // C. Verify GET /api/documents decrypts only for authorized users
         const getDocsRes = await fetch(`${API_BASE}/api/documents`, {

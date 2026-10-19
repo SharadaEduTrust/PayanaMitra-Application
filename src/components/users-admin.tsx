@@ -377,7 +377,7 @@ export default function UsersAdmin({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", "payana_users_template.csv");
+    link.setAttribute("download", "Payana_guests_template.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

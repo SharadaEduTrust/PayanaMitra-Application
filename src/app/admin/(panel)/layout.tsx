@@ -20,17 +20,7 @@ export default async function AdminPanelLayout({ children }: { children: React.R
   return (
     <div className="admin">
       <aside className="admin-side">
-        <Link href="/admin" className="brand brand-light">
-          <img
-            className="brand-badge"
-            src="/brand/payana-trails-badge.png"
-            alt="Payana Trails"
-            width={36}
-            height={36}
-            style={{ width: 36, height: 36 }}
-          />
-          <span className="brand-word">payana</span>
-        </Link>
+        <Brand size={36} tone="light" href="/admin" />
         <div className="side-label">Manage</div>
         <AdminNav
           links={[

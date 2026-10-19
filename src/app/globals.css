@@ -1422,7 +1422,7 @@ h3 {
 
 /* Brand lockup */
 .brand-lockup { display:flex; flex-direction:column; line-height:1; }
-.brand-word { font-family:var(--font-serif); font-size:24px; letter-spacing:-.01em; }
+.brand-word { font-family:var(--font-serif); font-size:24px; letter-spacing:-.01em; text-transform:capitalize; }
 .brand-sub { font-family:var(--font-sans); font-size:10px; letter-spacing:.34em; text-transform:uppercase; margin-top:3px; opacity:.72; }
 .brand-light .brand-word { color:#FDFBF9; }
 .brand-light .brand-sub { color:#D4A373; }

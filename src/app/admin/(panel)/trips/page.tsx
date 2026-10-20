@@ -26,9 +26,14 @@ export default async function AdminTripsPage() {
           <h1>Trails</h1>
           <small>Create, publish and manage itineraries.</small>
         </div>
-        <Link className="btn btn-primary" href="/admin/trips/new">
-          New trail
-        </Link>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <Link className="btn btn-secondary" href="/admin/import?tab=trails">
+            Import CSV
+          </Link>
+          <Link className="btn btn-primary" href="/admin/trips/new">
+            New trail
+          </Link>
+        </div>
       </header>
       <div className="admin-body">
         <TripListAdmin trips={rows} />

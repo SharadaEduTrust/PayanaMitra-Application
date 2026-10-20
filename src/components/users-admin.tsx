@@ -79,7 +79,8 @@ export default function UsersAdmin({
   const [importReport, setImportReport] = useState<{
     created: number;
     skipped: number;
-    errors?: Array<{ row: number; phone: string; error: string }>;
+    errorCount?: number;
+    results?: Array<{ row: number; phone: string; status: string; error?: string }>;
   } | null>(null);
 
   // Pagination state
@@ -314,42 +315,15 @@ export default function UsersAdmin({
     setImporting(true);
     setImportReport(null);
     setError("");
+    setStatus("");
 
     try {
-      const text = await file.text();
-      const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").filter((l) => l.trim().length > 0);
-      if (lines.length < 2) {
-        setError("CSV must contain a header row and at least one user record.");
-        setImporting(false);
-        return;
-      }
+      const fd = new FormData();
+      fd.append("file", file);
 
-      const headers = lines[0].split(",").map((h) => h.trim().toLowerCase().replace(/["']/g, ""));
-      const usersToImport: Record<string, string>[] = [];
-
-      for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(",").map((v) => v.trim().replace(/^["']|["']$/g, ""));
-        const rowObj: Record<string, string> = {};
-        headers.forEach((h, idx) => {
-          rowObj[h] = values[idx] ?? "";
-        });
-        if (rowObj.phone) {
-          usersToImport.push({
-            phone: rowObj.phone,
-            first_name: rowObj.first_name || rowObj.firstname || "Guest",
-            last_name: rowObj.last_name || rowObj.lastname || "",
-            role: rowObj.role || "traveller",
-            email: rowObj.email || "",
-            location: rowObj.location || "",
-            remarks: rowObj.remarks || "",
-          });
-        }
-      }
-
-      const res = await fetch("/api/admin/import", {
+      const res = await fetch("/api/admin/users/import", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ users: usersToImport }),
+        body: fd,
       });
 
       const json = await res.json().catch(() => null);
@@ -361,26 +335,12 @@ export default function UsersAdmin({
       }
 
       setImportReport(json);
+      setStatus(`Guest CSV import complete: ${json.created} created, ${json.skipped} skipped.`);
       router.refresh();
     } catch {
       setImporting(false);
-      setError("Error parsing or sending CSV.");
+      setError("Network error while importing guests CSV.");
     }
-  }
-
-  function downloadSampleCsv() {
-    const csvContent =
-      "phone,first_name,last_name,role,email,location,remarks\n" +
-      "9876543210,Aarav,Patel,traveller,aarav@example.com,Bengaluru,Enjoys trekking\n" +
-      "9876543211,Sunita,Sharma,traveller,sunita@example.com,Mysuru,Vegetarian\n";
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "Payana_guests_template.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   }
 
   return (
@@ -428,22 +388,29 @@ export default function UsersAdmin({
               className="btn btn-secondary"
               onClick={() => setShowImport(!showImport)}
             >
-              {showImport ? "Close CSV Import" : "Import CSV"}
+              {showImport ? "Close CSV Import" : "Import Guests (CSV)"}
             </button>
           </div>
         </div>
 
         {showImport && (
-          <div style={{ margin: "16px 0", padding: "16px", background: "var(--color-surface, #1e293b)", borderRadius: "8px", border: "1px dashed var(--color-border, #334155)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-              <h3 className="serif" style={{ margin: 0 }}>Bulk Import Guests</h3>
-              <button type="button" className="link-btn" onClick={downloadSampleCsv}>
+          <div style={{ margin: "16px 0", padding: "18px", background: "var(--color-surface, #1e293b)", borderRadius: "8px", border: "1px dashed var(--color-border, #334155)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "10px" }}>
+              <div>
+                <h3 className="serif" style={{ margin: 0, fontSize: "1.15rem" }}>Bulk Import Guests (CSV)</h3>
+                <p className="admin-hint" style={{ margin: "4px 0 0" }}>
+                  Upload a UTF-8 CSV with phone numbers, names, role, and optional details. Duplicates are automatically skipped.
+                </p>
+              </div>
+              <a
+                href="/api/admin/users/import"
+                download="users_import_template.csv"
+                className="link-btn"
+                style={{ fontWeight: 600 }}
+              >
                 Download CSV Template
-              </button>
+              </a>
             </div>
-            <p className="admin-hint">
-              Upload a UTF-8 CSV with phone numbers and guest details. Duplicates are automatically skipped.
-            </p>
             <input
               type="file"
               accept=".csv"
@@ -453,13 +420,18 @@ export default function UsersAdmin({
             />
             {importing && <p className="muted small" style={{ marginTop: "8px" }}>Processing CSV import batch…</p>}
             {importReport && (
-              <div style={{ marginTop: "12px", padding: "10px", background: "rgba(0,0,0,0.2)", borderRadius: "6px" }}>
+              <div style={{ marginTop: "14px", padding: "12px", background: "rgba(0,0,0,0.2)", borderRadius: "6px" }}>
                 <strong>Import Results:</strong> Created: {importReport.created} · Skipped (duplicates): {importReport.skipped}
-                {importReport.errors && importReport.errors.length > 0 && (
+                {importReport.results && importReport.results.some((r) => r.status === "error") && (
                   <div style={{ marginTop: "8px", color: "var(--color-danger, #ef4444)" }}>
-                    {importReport.errors.map((err, i) => (
-                      <div key={i} className="small">Row {err.row} ({err.phone}): {err.error}</div>
-                    ))}
+                    <strong>Errors:</strong>
+                    {importReport.results
+                      .filter((r) => r.status === "error")
+                      .map((err, i) => (
+                        <div key={i} className="small">
+                          Row {err.row} ({err.phone}): {err.error}
+                        </div>
+                      ))}
                   </div>
                 )}
               </div>

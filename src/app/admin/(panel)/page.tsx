@@ -44,8 +44,8 @@ export default async function AdminOverviewPage() {
         <section className="admin-card">
           <h2 className="serif">Getting started</h2>
           <ol className="admin-steps">
-            <li>Create guest accounts in <Link href="/admin/users">Guests</Link>.</li>
-            <li>Create a trail in <Link href="/admin/trips">Trails</Link> and give it a unique code.</li>
+            <li>Create guest accounts in <Link href="/admin/users">Guests</Link> or bulk upload via <Link href="/admin/import?tab=guests">CSV Import</Link>.</li>
+            <li>Create a trail in <Link href="/admin/trips">Trails</Link> or bulk import via <Link href="/admin/import?tab=trails">CSV Import</Link>.</li>
             <li>Add day plans and activities to the itinerary.</li>
             <li>Add the guests as members.</li>
             <li>Set the trail status to <strong>published</strong> so members can see it.</li>

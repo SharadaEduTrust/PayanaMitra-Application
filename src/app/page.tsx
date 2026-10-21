@@ -42,7 +42,7 @@ export default function Home() {
         <div className="hero-photo-inner container">
           <div className="eyebrow hero-eyebrow">Journeys, thoughtfully curated</div>
           <h1 className="serif">
-            Curated Journeys for Travellers who value{" "}
+            Curated Journeys for Guests who value{" "}
             <em>Stories over Sightseeing</em>
           </h1>
           <p className="hero-sub">
@@ -67,13 +67,13 @@ export default function Home() {
             <em>Plan smarter.</em>
           </h2>
           <p className="hero-copy">
-            Payana Trails turns the way you travel into a trip that actually
+            Payana Trails turns the way you travel into a trail that actually
             feels like yours — thoughtful routes, local textures, and plans that
             leave room for the unexpected.
           </p>
           <div className="hero-actions">
             <Link href="/signup" className="btn btn-primary">
-              Create your first trip
+              Start your first trail
             </Link>
             <a href="#how" className="btn btn-secondary">
               See how it works
@@ -104,7 +104,7 @@ export default function Home() {
       </section>
       <div className="container trust">
         <span>
-          For travellers who prefer <strong>meaning over checklists</strong>
+          For guests who prefer <strong>meaning over checklists</strong>
         </span>
         <span>
           Built for <strong>36 curious destinations</strong>
@@ -118,7 +118,7 @@ export default function Home() {
           <div>
             <div className="eyebrow">A better way to arrive</div>
             <h2 className="serif">
-              The trip starts
+              The trail starts
               <br />
               with a conversation.
             </h2>
@@ -131,7 +131,7 @@ export default function Home() {
         <div className="feature-grid">
           <div className="feature">
             <span className="feature-num">01 / Tell us</span>
-            <h3>Your kind of trip</h3>
+            <h3>Your kind of trail</h3>
             <p>
               Share your dates, budget, pace, and the moments you want to
               remember.
@@ -158,7 +158,7 @@ export default function Home() {
       <section className="quote" id="why">
         <div className="container">
           <p>
-            “The best trips are not collected. They are felt, one small decision
+            “The best trails are not collected. They are felt, one small decision
             at a time.”
           </p>
           <span>— The Payana principle</span>
@@ -184,7 +184,7 @@ export default function Home() {
               </p>
               <div className="footer-actions">
                 <Link href="/login" className="btn btn-primary">
-                  Plan a trip
+                  Plan a trail
                 </Link>
                 <Link href="/login" className="btn btn-outline-light">
                   Log in

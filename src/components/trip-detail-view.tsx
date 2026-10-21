@@ -56,7 +56,7 @@ export default function TripDetailView({
   return (
     <div className="trip-detail">
       <Link className="back-link" href="/dashboard">
-        ← All trips
+        ← All trails
       </Link>
 
       <header className="page-head">
@@ -71,13 +71,13 @@ export default function TripDetailView({
 
       {trip.status !== "published" && (
         <p className="form-note">
-          This trip is still a draft. Your coordinator will publish it when the itinerary is final.
+          This trail is still a draft. Your coordinator will publish it when the itinerary is final.
         </p>
       )}
 
       <div className="trip-columns">
         <section className="panel">
-          <h2 className="serif">Trip notes</h2>
+          <h2 className="serif">Trail notes</h2>
           {trip.remarks ? <p>{trip.remarks}</p> : <p className="panel-note">No notes from your coordinator yet.</p>}
         </section>
 
@@ -153,7 +153,7 @@ export default function TripDetailView({
           Leave feedback
         </Link>
         <Link className="btn btn-secondary" href={`/dashboard/trips/${trip.id}/survey`}>
-          Trip survey
+          Trail survey
         </Link>
         {canContribute && (
           <Link className="btn btn-secondary" href={`/admin/trips/${trip.id}`}>

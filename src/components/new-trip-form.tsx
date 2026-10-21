@@ -35,9 +35,9 @@ export default function NewTripForm() {
       if (!res.ok) {
         if (json?.fieldErrors) {
           const firstErr = Object.values(json.fieldErrors).flat()[0];
-          setError(String(firstErr || json.error || "Failed to create trip."));
+          setError(String(firstErr || json.error || "Failed to create trail."));
         } else {
-          setError(json?.error ?? "Failed to create trip.");
+          setError(json?.error ?? "Failed to create trail.");
         }
         return;
       }
@@ -45,25 +45,25 @@ export default function NewTripForm() {
       router.push(`/admin/trips/${json.data.id}`);
     } catch {
       setLoading(false);
-      setError("Network error while creating trip.");
+      setError("Network error while creating trail.");
     }
   }
 
   return (
     <form className="admin-card" onSubmit={submit}>
-      <h2 className="serif">New trip</h2>
+      <h2 className="serif">New trail</h2>
       <p className="admin-hint">
-        Trips are created as drafts. Travellers only see a trip once you set the status to published
+        Trails are created as drafts. Guests only see a trail once you set the status to published
         and add them as members.
       </p>
 
       <div className="field-row">
         <label className="form-field">
-          Trip code
+          Trail code
           <input required name="trip_code" placeholder="PM-2026-HAM-01" />
         </label>
         <label className="form-field">
-          Trip name
+          Trail name
           <input required name="name" placeholder="Hampi Heritage Trail" />
         </label>
       </div>
@@ -87,7 +87,7 @@ export default function NewTripForm() {
       {error && <p className="form-error" role="alert">{error}</p>}
 
       <button className="btn btn-primary" type="submit" disabled={loading}>
-        {loading ? "Creating…" : "Create draft trip"}
+        {loading ? "Creating…" : "Create draft trail"}
       </button>
     </form>
   );

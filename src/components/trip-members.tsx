@@ -47,7 +47,7 @@ export default function TripMembers({ tripId }: { tripId: string }) {
 
         setMembers(enrolled);
       } catch {
-        if (!ignore) setError("Failed to load members or traveller list.");
+        if (!ignore) setError("Failed to load members or guest list.");
       }
     }
 
@@ -74,7 +74,7 @@ export default function TripMembers({ tripId }: { tripId: string }) {
       setLoading(false);
 
       if (!res.ok) {
-        setError(json?.error ?? "Failed to add traveller to trip.");
+        setError(json?.error ?? "Failed to add guest to trail.");
         return;
       }
 
@@ -106,7 +106,7 @@ export default function TripMembers({ tripId }: { tripId: string }) {
 
       if (!res.ok) {
         const json = await res.json().catch(() => null);
-        setError(json?.error ?? "Failed to remove traveller from trip.");
+        setError(json?.error ?? "Failed to remove guest from trail.");
         return;
       }
 
@@ -121,14 +121,14 @@ export default function TripMembers({ tripId }: { tripId: string }) {
     <section className="admin-card">
       <h2 className="serif">Members</h2>
       <p className="admin-hint">
-        Only members can see a published trip. Adding someone here is what grants them access.
+        Only members can see a published trail. Adding someone here is what grants them access.
       </p>
 
       <div className="field-row">
         <label className="form-field">
-          Add a traveller
+          Add a guest
           <select value={selected} onChange={(event) => setSelected(event.target.value)}>
-            <option value="">Select a traveller</option>
+            <option value="">Select a guest</option>
             {candidates
               .filter((candidate) => !members.some((member) => member.userId === candidate.id))
               .map((candidate) => (
@@ -139,7 +139,7 @@ export default function TripMembers({ tripId }: { tripId: string }) {
           </select>
         </label>
         <button type="button" className="btn btn-primary" onClick={addMember} disabled={!selected || loading}>
-          {loading ? "Adding…" : "Add to trip"}
+          {loading ? "Adding…" : "Add to trail"}
         </button>
       </div>
 

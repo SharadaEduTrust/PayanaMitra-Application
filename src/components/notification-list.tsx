@@ -42,7 +42,7 @@ export default function NotificationList({ notifications }: { notifications: Ent
     return (
       <div className="panel-empty">
         <h2 className="serif">Nothing new</h2>
-        <p>Notifications from your trip coordinator will appear here.</p>
+        <p>Notifications from your trail coordinator will appear here.</p>
       </div>
     );
   }

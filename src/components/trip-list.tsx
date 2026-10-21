@@ -17,13 +17,13 @@ export type TripSummary = {
 };
 
 const sections = [
-  { key: "current", title: "Travelling now", note: "Your active trip." },
-  { key: "upcoming", title: "Upcoming", note: "Trips you are booked on." },
-  { key: "past", title: "Past", note: "Trips you have completed." },
+  { key: "current", title: "On trail now", note: "Your active trail." },
+  { key: "upcoming", title: "Upcoming", note: "Trails you are booked on." },
+  { key: "past", title: "Past", note: "Trails you have completed." },
 ] as const;
 
 const statusLabel: Record<string, string> = {
-  current: "Travelling now",
+  current: "On trail now",
   upcoming: "Upcoming",
   past: "Completed",
   closed: "Not published",
@@ -55,7 +55,7 @@ export default function TripList({
     <>
       <header className="topbar">
         <div>
-          <h1>My trips</h1>
+          <h1>My trails</h1>
           <small>Everything you are booked on.</small>
         </div>
         <div className="topbar-actions">
@@ -70,9 +70,9 @@ export default function TripList({
         {total === 0 ? (
           <div className="panel-empty">
             <img src="/illustrations/empty-state.webp" alt="" />
-            <h2 className="serif">No trips yet</h2>
+            <h2 className="serif">No trails yet</h2>
             <p>
-              Once your coordinator adds you to a trip and publishes it, it will appear here with the
+              Once your coordinator adds you to a trail and publishes it, it will appear here with the
               full day-by-day itinerary.
             </p>
           </div>
@@ -103,7 +103,7 @@ export default function TripList({
                           ` – ${new Date(trip.endDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`}
                       </p>
                       {trip.status === "closed" ? (
-                        <p className="muted small">Your coordinator has not published this trip yet.</p>
+                        <p className="muted small">Your coordinator has not published this trail yet.</p>
                       ) : (
                         <div className="trip-card-actions">
                           <Link className="btn btn-primary" href={`/dashboard/trips/${trip.id}`}>

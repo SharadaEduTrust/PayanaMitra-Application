@@ -163,18 +163,18 @@ export default function TripEditor({
       if (!res.ok) {
         if (json?.fieldErrors) {
           const firstErr = Object.values(json.fieldErrors).flat()[0];
-          setError(String(firstErr || json.error || "Failed to update trip."));
+          setError(String(firstErr || json.error || "Failed to update trail."));
         } else {
-          setError(json?.error ?? "Failed to update trip.");
+          setError(json?.error ?? "Failed to update trail.");
         }
         return;
       }
 
-      setStatus("Trip saved.");
+      setStatus("Trail saved.");
       router.refresh();
     } catch {
       setSaving(false);
-      setError("Network error while saving trip.");
+      setError("Network error while saving trail.");
     }
   }
 
@@ -327,9 +327,9 @@ export default function TripEditor({
   }
 
   async function duplicateTrip() {
-    const newCode = window.prompt("New trip code (must be unique):", `${form.tripCode}-COPY`);
+    const newCode = window.prompt("New trail code (must be unique):", `${form.tripCode}-COPY`);
     if (!newCode || !newCode.trim()) return;
-    const newName = window.prompt("New trip name:", form.name);
+    const newName = window.prompt("New trail name:", form.name);
     if (!newName || !newName.trim()) return;
 
     setError("");
@@ -349,9 +349,9 @@ export default function TripEditor({
       if (!response.ok) {
         if (data?.fieldErrors) {
           const firstErr = Object.values(data.fieldErrors).flat()[0];
-          setError(String(firstErr || data?.error || "Could not duplicate the trip."));
+          setError(String(firstErr || data?.error || "Could not duplicate the trail."));
         } else {
-          setError(data?.error ?? "Could not duplicate the trip.");
+          setError(data?.error ?? "Could not duplicate the trail.");
         }
         return;
       }
@@ -363,7 +363,7 @@ export default function TripEditor({
         router.refresh();
       }
     } catch {
-      setError("Network error while duplicating trip.");
+      setError("Network error while duplicating trail.");
     }
   }
 
@@ -448,7 +448,7 @@ export default function TripEditor({
     <>
       <form className="admin-card" onSubmit={saveTrip}>
         <div className="admin-card-head">
-          <h2 className="serif">Trip details</h2>
+          <h2 className="serif">Trail details</h2>
           <button type="button" className="btn btn-secondary" onClick={duplicateTrip}>
             Duplicate
           </button>
@@ -456,11 +456,11 @@ export default function TripEditor({
 
         <div className="field-row">
           <label className="form-field">
-            Trip code
+            Trail code
             <input required value={form.tripCode} onChange={(e) => set("tripCode", e.target.value)} placeholder="PM-2026-HAM-01" />
           </label>
           <label className="form-field">
-            Trip name
+            Trail name
             <input required value={form.name} onChange={(e) => set("name", e.target.value)} />
           </label>
         </div>
@@ -473,7 +473,7 @@ export default function TripEditor({
           <label className="form-field">
             Status
             <select value={form.status} onChange={(e) => set("status", e.target.value)}>
-              <option value="draft">Draft — hidden from travellers</option>
+              <option value="draft">Draft — hidden from guests</option>
               <option value="published">Published — visible to members</option>
               <option value="archived">Archived</option>
             </select>
@@ -504,20 +504,20 @@ export default function TripEditor({
         </label>
 
         <label className="form-field">
-          Remarks shown to travellers
+          Remarks shown to guests
           <textarea rows={3} value={form.remarks ?? ""} onChange={(e) => set("remarks", e.target.value)} />
         </label>
 
         <label className="form-field" style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <input type="checkbox" checked={form.isActive} onChange={(e) => set("isActive", e.target.checked)} />
-          Trip is active
+          Trail is active
         </label>
 
         {error && <p className="form-error" role="alert">{error}</p>}
         {status && <p className="form-notice" role="status">{status}</p>}
 
         <button className="btn btn-primary" type="submit" disabled={saving}>
-          {saving ? "Saving…" : "Save trip"}
+          {saving ? "Saving…" : "Save trail"}
         </button>
       </form>
 
@@ -664,9 +664,9 @@ export default function TripEditor({
       </section>
  
       <section className="admin-card">
-        <h2 className="serif">Broadcast to Trip Members</h2>
+        <h2 className="serif">Broadcast to Trail Members</h2>
         <p className="admin-hint">
-          Send an announcement to all travellers enrolled in this trip via in-app alerts, Web Push,
+          Send an announcement to all guests enrolled in this trail via in-app alerts, Web Push,
           and optionally direct WhatsApp message.
         </p>
 
@@ -687,7 +687,7 @@ export default function TripEditor({
               rows={3}
               value={broadcastBody}
               onChange={(e) => setBroadcastBody(e.target.value)}
-              placeholder="Provide any additional details or instructions for travellers..."
+              placeholder="Provide any additional details or instructions for guests..."
             />
           </label>
 

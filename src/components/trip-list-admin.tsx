@@ -21,7 +21,52 @@ export default function TripListAdmin({ trips }: { trips: TrailLeaderView[] }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
+  // CSV import state
+  const [showImport, setShowImport] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importReport, setImportReport] = useState<{
+    created: number;
+    skipped: number;
+    errorCount: number;
+    results?: Array<{ row: number; trip_code: string; status: string; error?: string }>;
+  } | null>(null);
+
   const pageSize = 15;
+
+  async function handleCsvUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    setImportReport(null);
+    setError("");
+    setNotice("");
+
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+
+      const res = await fetch("/api/admin/trips/import", {
+        method: "POST",
+        body: fd,
+      });
+
+      const json = await res.json().catch(() => null);
+      setImporting(false);
+
+      if (!res.ok) {
+        setError(json?.error ?? "Failed to import trails CSV.");
+        return;
+      }
+
+      setImportReport(json);
+      setNotice(`Trails CSV import complete: ${json.created} created, ${json.skipped} skipped.`);
+      router.refresh();
+    } catch {
+      setImporting(false);
+      setError("Network error while importing trails CSV.");
+    }
+  }
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -59,25 +104,25 @@ export default function TripListAdmin({ trips }: { trips: TrailLeaderView[] }) {
       setLoadingTripId(null);
 
       if (!res.ok) {
-        setError(json?.error ?? "Failed to update trip status.");
+        setError(json?.error ?? "Failed to update trail status.");
         return;
       }
 
       setRows((current) =>
         current.map((t) => (t.trip_id === tripId ? { ...t, status: newStatus } : t)),
       );
-      setNotice(`Trip status set to ${newStatus}.`);
+      setNotice(`Trail status set to ${newStatus}.`);
       router.refresh();
     } catch {
       setLoadingTripId(null);
-      setError("Network error while updating trip status.");
+      setError("Network error while updating trail status.");
     }
   }
 
   async function duplicate(trip: TrailLeaderView) {
-    const newCode = window.prompt("New trip code (must be unique):", `${trip.trip_code}-COPY`);
+    const newCode = window.prompt("New trail code (must be unique):", `${trip.trip_code}-COPY`);
     if (!newCode || !newCode.trim()) return;
-    const newName = window.prompt("New trip name:", trip.trip_name);
+    const newName = window.prompt("New trail name:", trip.trip_name);
     if (!newName || !newName.trim()) return;
 
     setError("");
@@ -100,9 +145,9 @@ export default function TripListAdmin({ trips }: { trips: TrailLeaderView[] }) {
       if (!res.ok) {
         if (data?.fieldErrors) {
           const firstErr = Object.values(data.fieldErrors).flat()[0];
-          setError(String(firstErr || data?.error || "Could not duplicate the trip."));
+          setError(String(firstErr || data?.error || "Could not duplicate the trail."));
         } else {
-          setError(data?.error ?? "Could not duplicate the trip.");
+          setError(data?.error ?? "Could not duplicate the trail.");
         }
         return;
       }
@@ -115,18 +160,71 @@ export default function TripListAdmin({ trips }: { trips: TrailLeaderView[] }) {
       }
     } catch {
       setLoadingTripId(null);
-      setError("Network error while duplicating trip.");
+      setError("Network error while duplicating trail.");
     }
   }
 
   if (trips.length === 0) {
     return (
       <div className="panel-empty">
-        <h2 className="serif">No trips yet</h2>
-        <p>Create your first trip, add days and activities, then publish it to your members.</p>
-        <Link className="btn btn-primary" href="/admin/trips/new">
-          Create a trip
-        </Link>
+        <h2 className="serif">No trails yet</h2>
+        <p>Create your first trail, add days and activities, or import multiple trails via CSV.</p>
+        <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap", marginTop: "14px" }}>
+          <Link className="btn btn-primary" href="/admin/trips/new">
+            Create a trail
+          </Link>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setShowImport(!showImport)}
+          >
+            {showImport ? "Close Import" : "Import Trails (CSV)"}
+          </button>
+        </div>
+        {showImport && (
+          <div style={{ margin: "20px auto 0", maxWidth: "600px", textAlign: "left", padding: "18px", background: "var(--color-surface, #1e293b)", borderRadius: "8px", border: "1px dashed var(--color-border, #334155)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "10px" }}>
+              <h3 className="serif" style={{ margin: 0, fontSize: "1.15rem" }}>Bulk Import Trails (CSV)</h3>
+              <a
+                href="/api/admin/trips/import"
+                download="trails_import_template.csv"
+                className="link-btn"
+                style={{ fontWeight: 600 }}
+              >
+                Download CSV Template
+              </a>
+            </div>
+            <p className="admin-hint" style={{ margin: "4px 0 12px" }}>
+              Upload a UTF-8 CSV with columns: <code>trip_code</code>, <code>name</code>, <code>destination</code>, <code>start_date</code>, <code>end_date</code>, <code>leader_phone</code>, <code>remarks</code>.
+            </p>
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleCsvUpload}
+              disabled={importing}
+            />
+            {importing && <p className="muted small" style={{ marginTop: "8px" }}>Processing trail import batch…</p>}
+            {error && <p className="form-error" role="alert" style={{ marginTop: "10px" }}>{error}</p>}
+            {notice && <p className="form-notice" role="status" style={{ marginTop: "10px" }}>{notice}</p>}
+            {importReport && (
+              <div style={{ marginTop: "14px", padding: "12px", background: "rgba(0,0,0,0.2)", borderRadius: "6px" }}>
+                <strong>Import Results:</strong> Created: {importReport.created} · Skipped (duplicates): {importReport.skipped}
+                {importReport.errorCount > 0 && importReport.results && (
+                  <div style={{ marginTop: "8px", color: "var(--color-danger, #ef4444)" }}>
+                    <strong>Errors ({importReport.errorCount}):</strong>
+                    {importReport.results
+                      .filter((r) => r.status === "error")
+                      .map((err, i) => (
+                        <div key={i} className="small">
+                          Row {err.row} ({err.trip_code || "Unknown"}): {err.error}
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -134,7 +232,7 @@ export default function TripListAdmin({ trips }: { trips: TrailLeaderView[] }) {
   return (
     <div className="admin-card">
       <div className="admin-card-head" style={{ flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
-        <h2 className="serif">All Trips ({filtered.length})</h2>
+        <h2 className="serif">All Trails ({filtered.length})</h2>
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
           <input
             className="admin-search"
@@ -158,21 +256,74 @@ export default function TripListAdmin({ trips }: { trips: TrailLeaderView[] }) {
             <option value="published">Published</option>
             <option value="archived">Archived</option>
           </select>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setShowImport(!showImport)}
+          >
+            {showImport ? "Close CSV Import" : "Import Trails (CSV)"}
+          </button>
         </div>
       </div>
+
+      {showImport && (
+        <div style={{ margin: "16px 0", padding: "18px", background: "var(--color-surface, #1e293b)", borderRadius: "8px", border: "1px dashed var(--color-border, #334155)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "10px" }}>
+            <div>
+              <h3 className="serif" style={{ margin: 0, fontSize: "1.15rem" }}>Bulk Import Trails (CSV)</h3>
+              <p className="admin-hint" style={{ margin: "4px 0 0" }}>
+                Upload a UTF-8 CSV with trail details. Existing trail codes are automatically skipped.
+              </p>
+            </div>
+            <a
+              href="/api/admin/trips/import"
+              download="trails_import_template.csv"
+              className="link-btn"
+              style={{ fontWeight: 600 }}
+            >
+              Download CSV Template
+            </a>
+          </div>
+          <input
+            type="file"
+            accept=".csv"
+            onChange={handleCsvUpload}
+            disabled={importing}
+            style={{ marginTop: "8px" }}
+          />
+          {importing && <p className="muted small" style={{ marginTop: "8px" }}>Processing trail import batch…</p>}
+          {importReport && (
+            <div style={{ marginTop: "14px", padding: "12px", background: "rgba(0,0,0,0.2)", borderRadius: "6px" }}>
+              <strong>Import Results:</strong> Created: {importReport.created} · Skipped (duplicates): {importReport.skipped}
+              {importReport.errorCount > 0 && importReport.results && (
+                <div style={{ marginTop: "8px", color: "var(--color-danger, #ef4444)" }}>
+                  <strong>Errors ({importReport.errorCount}):</strong>
+                  {importReport.results
+                    .filter((r) => r.status === "error")
+                    .map((err, i) => (
+                      <div key={i} className="small">
+                        Row {err.row} ({err.trip_code || "Unknown"}): {err.error}
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {error && <p className="form-error" role="alert" style={{ marginBottom: "12px" }}>{error}</p>}
       {notice && <p className="form-notice" role="status" style={{ marginBottom: "12px" }}>{notice}</p>}
 
       {filtered.length === 0 ? (
-        <p className="panel-note">No trips match that filter.</p>
+        <p className="panel-note">No trails match that filter.</p>
       ) : (
         <>
           <table className="admin-table">
             <thead>
               <tr>
                 <th>Code</th>
-                <th>Trip Name</th>
+                <th>Trail Name</th>
                 <th>Dates</th>
                 <th>Leader</th>
                 <th>Status</th>

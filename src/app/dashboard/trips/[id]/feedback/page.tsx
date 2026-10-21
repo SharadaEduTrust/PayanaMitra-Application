@@ -37,7 +37,7 @@ export default async function FeedbackPage({ params }: Params) {
         <div>
           <div className="eyebrow">Feedback</div>
           <h1 className="serif">How was {tripData.name}?</h1>
-          <p>Your rating and comments help the coordinator improve future trips.</p>
+          <p>Your rating and comments help the coordinator improve future trails.</p>
         </div>
       </header>
       <FeedbackForm tripId={id} alreadySubmitted={Boolean(mine)} />

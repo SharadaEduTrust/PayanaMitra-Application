@@ -42,7 +42,7 @@ export default function SurveyForm({
     if (insertError) {
       setError(
         insertError.message.includes("row-level security")
-          ? "You can only respond to surveys for trips you are part of."
+          ? "You can only respond to surveys for trails you are part of."
           : insertError.message,
       );
       return;
@@ -58,7 +58,7 @@ export default function SurveyForm({
         <h2 className="serif">Thank you</h2>
         <p>Your answers have been saved and shared with the coordinator.</p>
         <Link className="btn btn-primary" href="/dashboard">
-          Back to my trips
+          Back to my trails
         </Link>
       </div>
     );

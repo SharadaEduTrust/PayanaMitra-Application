@@ -117,9 +117,9 @@ export default async function ProfilePage() {
               {profile.first_name} {profile.last_name}
             </h1>
             <p>
-              <span className="pill-role">{profile.role}</span>{" "}
+              <span className="pill-role">{profile.role === "traveller" ? "Guest" : profile.role}</span>{" "}
               {profile.location ? `Home city ${profile.location}. ` : ""}
-              Keep your details current so your coordinator can reach you during a trip.
+              Keep your details current so your coordinator can reach you during a trail.
             </p>
           </div>
         </div>
@@ -165,7 +165,7 @@ export default async function ProfilePage() {
         </section>
 
         <section className="panel" id="travel">
-          <h2 className="serif">Travel details</h2>
+          <h2 className="serif">Guest details</h2>
           <p className="panel-note">Food needs, allergies, emergency contact and insurance.</p>
           <TravellerDetailsForm details={traveller} />
         </section>

@@ -25,7 +25,7 @@ export default async function SurveyPage({ params }: Params) {
   // lives in survey_responses seeded by the coordinator. Reuse the trip's
   // remarks to carry the intro, and ask the standard closing questions.
   const questions = [
-    "What did you enjoy most about this trip?",
+    "What did you enjoy most about this trail?",
     "What would you change for next time?",
     "Which destination would you like next?",
   ];

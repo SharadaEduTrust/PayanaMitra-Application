@@ -72,7 +72,7 @@ export default async function DocumentsPage() {
       <div className="trip-columns">
         <section className="panel">
           <h2 className="serif">Add a document</h2>
-          <p className="panel-note">PAN, passport, visa, or any other document your trip needs.</p>
+          <p className="panel-note">PAN, passport, visa, or any other document your trail needs.</p>
           <DocumentForm />
         </section>
 

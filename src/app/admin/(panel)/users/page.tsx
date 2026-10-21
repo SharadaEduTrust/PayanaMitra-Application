@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import type { Profile, TravellerDetails } from "@/lib/types";
@@ -49,8 +50,13 @@ export default async function AdminUsersPage() {
     <>
       <header className="topbar">
         <div>
-          <h1>Travellers</h1>
-          <small>Accounts, roles and access.</small>
+          <h1>Guests</h1>
+          <small>Guest accounts, roles and access.</small>
+        </div>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <Link className="btn btn-secondary" href="/admin/import?tab=guests">
+            Import CSV
+          </Link>
         </div>
       </header>
       <div className="admin-body">

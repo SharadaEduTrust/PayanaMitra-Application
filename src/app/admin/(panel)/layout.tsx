@@ -20,24 +20,15 @@ export default async function AdminPanelLayout({ children }: { children: React.R
   return (
     <div className="admin">
       <aside className="admin-side">
-        <Link href="/admin" className="brand brand-light">
-          <img
-            className="brand-badge"
-            src="/brand/payana-trails-badge.png"
-            alt="Payana Trails"
-            width={36}
-            height={36}
-            style={{ width: 36, height: 36 }}
-          />
-          <span className="brand-word">payana</span>
-        </Link>
+        <Brand size={36} tone="light" href="/admin" />
         <div className="side-label">Manage</div>
         <AdminNav
           links={[
             { href: "/admin", label: "Overview" },
-            { href: "/admin/users", label: "Travellers" },
-            { href: "/admin/trips", label: "Trips" },
+            { href: "/admin/users", label: "Guests" },
+            { href: "/admin/trips", label: "Trails" },
             { href: "/admin/destinations", label: "Destinations" },
+            { href: "/admin/import", label: "CSV Import" },
             { href: "/admin/notifications", label: `Notifications${count ? ` (${count})` : ""}` },
             { href: "/admin/audit-log", label: "Audit log" },
           ]}
@@ -54,7 +45,7 @@ export default async function AdminPanelLayout({ children }: { children: React.R
             </p>
           </div>
           <Link className="side-link" href="/dashboard">
-            View as traveller
+            View as guest
           </Link>
         </div>
       </aside>

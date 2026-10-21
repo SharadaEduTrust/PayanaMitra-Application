@@ -5,7 +5,7 @@ export default function NewTripPage() {
   return (
     <div className="admin-body">
       <Link className="back-link" href="/admin/trips">
-        ← All trips
+        ← All trails
       </Link>
       <NewTripForm />
     </div>

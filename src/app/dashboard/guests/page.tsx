@@ -24,7 +24,7 @@ export default async function LeaderGuestsPage() {
           <div className="eyebrow">Trail Leadership</div>
           <h1 className="serif">Assigned Guests</h1>
           <p>
-            Travellers currently assigned under your trail leadership. Review their dietary,
+            Guests currently assigned under your trail leadership. Review their dietary,
             emergency, and insurance details to ensure a seamless journey.
           </p>
         </div>

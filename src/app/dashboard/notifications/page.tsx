@@ -27,7 +27,7 @@ export default async function NotificationsPage() {
         <div>
           <div className="eyebrow">Notifications</div>
           <h1 className="serif">Updates from your coordinator</h1>
-          <p>Trip changes, schedule alerts and travel reminders.</p>
+          <p>Trail changes, schedule alerts and travel reminders.</p>
         </div>
       </header>
       <NotificationList notifications={notifications} />

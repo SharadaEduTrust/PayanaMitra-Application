@@ -72,8 +72,8 @@ export default function AuditLogViewer({
             style={{ padding: "6px 12px", borderRadius: "6px" }}
           >
             <option value="all">All entities</option>
-            <option value="trips">Trips</option>
-            <option value="profiles">Users / Profiles</option>
+            <option value="trips">Trails</option>
+            <option value="profiles">Guests / Profiles</option>
             <option value="guest_documents">Documents</option>
             <option value="itinerary_days">Itinerary</option>
             <option value="notifications">Notifications</option>

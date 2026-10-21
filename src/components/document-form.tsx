@@ -2,12 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-
-const docTypes = ["pan", "passport", "visa", "aadhaar", "driving_licence", "other"];
+import { DOCUMENT_TYPES } from "@/lib/documents";
 
 export default function DocumentForm() {
   const router = useRouter();
-  const [docType, setDocType] = useState("pan");
+  const [docType, setDocType] = useState("aadhar");
   const [expiry, setExpiry] = useState("");
   const [country, setCountry] = useState("India");
   const [status, setStatus] = useState("");
@@ -52,18 +51,18 @@ export default function DocumentForm() {
   return (
     <form onSubmit={submit}>
       <label className="form-field">
-        Document type
+        Document Type
         <select value={docType} onChange={(event) => setDocType(event.target.value)}>
-          {docTypes.map((type) => (
-            <option key={type} value={type}>
-              {type.replace("_", " ")}
+          {DOCUMENT_TYPES.map((item) => (
+            <option key={item.value} value={item.value}>
+              {item.label}
             </option>
           ))}
         </select>
       </label>
 
       <label className="form-field">
-        Document number
+        Document Number
         <input
           name="doc_number"
           required
@@ -75,17 +74,17 @@ export default function DocumentForm() {
 
       <div className="field-row">
         <label className="form-field">
-          Expiry date
+          Expiry Date
           <input type="date" value={expiry} onChange={(event) => setExpiry(event.target.value)} />
         </label>
         <label className="form-field">
-          Issuing country
+          Issuing Country
           <input value={country} onChange={(event) => setCountry(event.target.value)} />
         </label>
       </div>
 
       <label className="form-field">
-        Attachment (Optional PDF or Image, max 10MB)
+        Attachment (Optional PDF or Image, Max 10MB)
         <input type="file" name="file" accept=".pdf,image/jpeg,image/png,image/webp" />
       </label>
 
@@ -93,7 +92,7 @@ export default function DocumentForm() {
       {status && <p className="form-notice" role="status">{status}</p>}
 
       <button className="btn btn-primary" type="submit" disabled={loading}>
-        {loading ? "Encrypting & Uploading…" : "Save document"}
+        {loading ? "Encrypting & Uploading…" : "Save Document"}
       </button>
     </form>
   );

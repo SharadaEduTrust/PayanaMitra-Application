@@ -14,6 +14,67 @@ export default function DestinationsAdmin({ destinations }: { destinations: Dest
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Edit destination state
+  const [editingDestination, setEditingDestination] = useState<Destination | null>(null);
+  const [editForm, setEditForm] = useState(blank);
+  const [editError, setEditError] = useState("");
+  const [editLoading, setEditLoading] = useState(false);
+
+  function startEdit(dest: Destination) {
+    setEditingDestination(dest);
+    setEditForm({
+      name: dest.name,
+      region: dest.region ?? "",
+      country: dest.country ?? "India",
+      description: dest.description ?? "",
+      image_url: dest.image_url ?? "",
+    });
+    setEditError("");
+  }
+
+  async function saveEdit(event: FormEvent) {
+    event.preventDefault();
+    if (!editingDestination) return;
+    setEditError("");
+    setEditLoading(true);
+
+    try {
+      const res = await fetch(`/api/admin/destinations/${editingDestination.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editForm.name.trim(),
+          region: editForm.region?.trim() || null,
+          country: editForm.country?.trim() || null,
+          description: editForm.description?.trim() || null,
+          image_url: editForm.image_url?.trim() || null,
+        }),
+      });
+
+      const json = await res.json().catch(() => null);
+      setEditLoading(false);
+
+      if (!res.ok) {
+        if (json?.fieldErrors) {
+          const firstErr = Object.values(json.fieldErrors).flat()[0];
+          setEditError(String(firstErr || json.error || "Failed to update destination."));
+        } else {
+          setEditError(json?.error ?? "Failed to update destination.");
+        }
+        return;
+      }
+
+      const updated = json.data as Destination;
+      setRows((current) => current.map((r) => (r.id === updated.id ? updated : r)));
+      setEditingDestination(null);
+      setStatus(`Destination "${updated.name}" updated successfully.`);
+      router.refresh();
+    } catch {
+      setEditLoading(false);
+      setEditError("Network error while updating destination.");
+    }
+  }
+
   async function create(event: FormEvent) {
     event.preventDefault();
     setError("");
@@ -105,7 +166,10 @@ export default function DestinationsAdmin({ destinations }: { destinations: Dest
                   <td>{row.region ?? "—"}</td>
                   <td>{row.country ?? "—"}</td>
                   <td className="row-actions">
-                    <button className="link-btn" onClick={() => remove(row.id)}>
+                    <button type="button" className="link-btn" onClick={() => startEdit(row)}>
+                      Edit
+                    </button>
+                    <button type="button" className="link-btn" onClick={() => remove(row.id)}>
                       Delete
                     </button>
                   </td>
@@ -154,6 +218,56 @@ export default function DestinationsAdmin({ destinations }: { destinations: Dest
           </button>
         </form>
       </section>
+
+      {/* Edit Destination Modal */}
+      {editingDestination && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+          <form className="admin-card" onSubmit={saveEdit} style={{ maxWidth: "560px", width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+            <div className="admin-card-head">
+              <h2 className="serif">Edit {editingDestination.name}</h2>
+              <button type="button" className="link-btn" onClick={() => setEditingDestination(null)}>✕ Cancel</button>
+            </div>
+
+            <div className="field-row">
+              <label className="form-field">
+                Name
+                <input required value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+              </label>
+              <label className="form-field">
+                Region
+                <input value={editForm.region} onChange={(e) => setEditForm({ ...editForm, region: e.target.value })} placeholder="Karnataka" />
+              </label>
+            </div>
+
+            <div className="field-row">
+              <label className="form-field">
+                Country
+                <input value={editForm.country} onChange={(e) => setEditForm({ ...editForm, country: e.target.value })} />
+              </label>
+              <label className="form-field">
+                Image URL
+                <input value={editForm.image_url} onChange={(e) => setEditForm({ ...editForm, image_url: e.target.value })} placeholder="https://…" />
+              </label>
+            </div>
+
+            <label className="form-field">
+              Description
+              <textarea rows={3} value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+            </label>
+
+            {editError && <p className="form-error" role="alert">{editError}</p>}
+
+            <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
+              <button className="btn btn-primary" type="submit" disabled={editLoading}>
+                {editLoading ? "Saving…" : "Save changes"}
+              </button>
+              <button className="btn btn-secondary" type="button" onClick={() => setEditingDestination(null)}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </>
   );
 }

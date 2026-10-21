@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const links = [
-  { href: "/dashboard", label: "All trails" },
-  { href: "/dashboard/profile", label: "My profile" },
-  { href: "/dashboard/documents", label: "My documents" },
+  { href: "/dashboard", label: "All Trails" },
+  { href: "/dashboard/profile", label: "My Profile" },
+  { href: "/dashboard/documents", label: "My Documents" },
   { href: "/dashboard/notifications", label: "Notifications" },
 ];
 
@@ -19,7 +19,7 @@ export default function DashboardNav({ role }: { role: string }) {
 
   return (
     <>
-      <div className="side-label">Your trails</div>
+      <div className="side-label">Your Trails</div>
       {links.map((link) => (
         <Link
           key={link.href}
@@ -34,7 +34,7 @@ export default function DashboardNav({ role }: { role: string }) {
         <>
           <div className="side-label">Trail Lead</div>
           <Link className={`side-link ${isActive("/dashboard/guests") ? "active" : ""}`} href="/dashboard/guests">
-            Assigned guests
+            Assigned Guests
           </Link>
         </>
       )}

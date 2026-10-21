@@ -104,7 +104,7 @@ export default async function LeaderGuestsPage() {
                   </div>
 
                   <div>
-                    <span className="eyebrow" style={{ fontSize: "10px", display: "block", marginBottom: "4px" }}>Food Allergies</span>
+                    <span className="eyebrow" style={{ fontSize: "10px", display: "block", marginBottom: "4px" }}>Food Allergy</span>
                     <span className={details?.food_allergy ? "bold" : "muted small"}>
                       {details?.food_allergy || "None reported"}
                     </span>
@@ -126,7 +126,7 @@ export default async function LeaderGuestsPage() {
 
                   {guest.remarks && (
                     <div style={{ gridColumn: "1 / -1" }}>
-                      <span className="eyebrow" style={{ fontSize: "10px", display: "block", marginBottom: "4px" }}>Admin Remarks</span>
+                      <span className="eyebrow" style={{ fontSize: "10px", display: "block", marginBottom: "4px" }}>Remarks</span>
                       <p className="small muted" style={{ margin: 0 }}>{guest.remarks}</p>
                     </div>
                   )}

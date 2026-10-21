@@ -90,14 +90,14 @@ export default async function ProfilePage() {
   }
 
   const completion: CompletionItem[] = [
-    { label: "Home city", done: Boolean(profile.location), href: PANEL_ACCOUNT },
+    { label: "Location", done: Boolean(profile.location), href: PANEL_ACCOUNT },
     // Not traveller-editable, so the checklist says who to ask rather than
     // linking to a field that cannot be changed here.
-    { label: "Email address (ask your coordinator)", done: Boolean(profile.email), href: PANEL_ACCOUNT },
-    { label: "Date of birth", done: Boolean(traveller?.dob), href: PANEL_TRAVEL },
-    { label: "Food preference", done: Boolean(traveller?.food_preference), href: PANEL_TRAVEL },
-    { label: "Emergency contact", done: Boolean(traveller?.emergency_contact_name && traveller?.emergency_contact_no), href: PANEL_TRAVEL },
-    { label: "Travel insurance", done: Boolean(traveller?.travel_insurance_no), href: PANEL_TRAVEL },
+    { label: "email id (ask your coordinator)", done: Boolean(profile.email), href: PANEL_ACCOUNT },
+    { label: "Date of Birth", done: Boolean(traveller?.dob), href: PANEL_TRAVEL },
+    { label: "Food Preference", done: Boolean(traveller?.food_preference), href: PANEL_TRAVEL },
+    { label: "Emergency Contact", done: Boolean(traveller?.emergency_contact_name && traveller?.emergency_contact_no), href: PANEL_TRAVEL },
+    { label: "Travel Insurance", done: Boolean(traveller?.travel_insurance_no), href: PANEL_TRAVEL },
     { label: "At least one document", done: documentCount > 0, href: "/dashboard/documents" },
   ];
   const missing = completion.filter((item) => !item.done);
@@ -118,7 +118,7 @@ export default async function ProfilePage() {
             </h1>
             <p>
               <span className="pill-role">{profile.role === "traveller" ? "Guest" : profile.role}</span>{" "}
-              {profile.location ? `Home city ${profile.location}. ` : ""}
+              {profile.location ? `Location: ${profile.location}. ` : ""}
               Keep your details current so your coordinator can reach you during a trail.
             </p>
           </div>

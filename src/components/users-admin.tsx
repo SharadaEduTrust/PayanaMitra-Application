@@ -19,6 +19,15 @@ type UserRow = {
   foodPreference: string | null;
   emergencyContact: string | null;
   leaderId?: string | null;
+  leaderName?: string | null;
+  dob?: string | null;
+  foodAllergy?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactNo?: string | null;
+  travelInsuranceNo?: string | null;
+  insuranceCompany?: string | null;
+  insuranceExpiry?: string | null;
+  passportIssuedLocation?: string | null;
 };
 
 type LeaderOption = {
@@ -65,12 +74,15 @@ export default function UsersAdmin({
     leaderId: "",
     location: "",
     remarks: "",
+    dob: "",
     foodPreference: "",
     foodAllergy: "",
     emergencyContactName: "",
     emergencyContactNo: "",
     travelInsuranceNo: "",
     insuranceCompany: "",
+    insuranceExpiry: "",
+    passportIssuedLocation: "",
   });
 
   // CSV import modal state
@@ -123,12 +135,15 @@ export default function UsersAdmin({
       leaderId: user.leaderId ?? "",
       location: user.location ?? "",
       remarks: user.remarks ?? "",
+      dob: user.dob ?? "",
       foodPreference: user.foodPreference ?? "",
-      foodAllergy: "",
-      emergencyContactName: emergencyParts[0] ?? "",
-      emergencyContactNo: emergencyParts[1] ?? "",
-      travelInsuranceNo: "",
-      insuranceCompany: "",
+      foodAllergy: user.foodAllergy ?? "",
+      emergencyContactName: user.emergencyContactName ?? emergencyParts[0] ?? "",
+      emergencyContactNo: user.emergencyContactNo ?? emergencyParts[1] ?? "",
+      travelInsuranceNo: user.travelInsuranceNo ?? "",
+      insuranceCompany: user.insuranceCompany ?? "",
+      insuranceExpiry: user.insuranceExpiry ?? "",
+      passportIssuedLocation: user.passportIssuedLocation ?? "",
     });
   }
 
@@ -152,12 +167,15 @@ export default function UsersAdmin({
           email: editForm.email.trim() || null,
           location: editForm.location.trim() || null,
           remarks: editForm.remarks.trim() || null,
+          dob: editForm.dob || null,
           food_preference: editForm.foodPreference || null,
           food_allergy: editForm.foodAllergy.trim() || null,
           emergency_contact_name: editForm.emergencyContactName.trim() || null,
           emergency_contact_no: editForm.emergencyContactNo.trim() || null,
           travel_insurance_no: editForm.travelInsuranceNo.trim() || null,
           insurance_company: editForm.insuranceCompany.trim() || null,
+          insurance_expiry: editForm.insuranceExpiry || null,
+          passport_issued_location: editForm.passportIssuedLocation.trim() || null,
         }),
       });
 
@@ -174,6 +192,11 @@ export default function UsersAdmin({
         return;
       }
 
+      const assignedLeader = leaders.find((l) => l.id === editForm.leaderId);
+      const assignedLeaderName = assignedLeader
+        ? `${assignedLeader.first_name} ${assignedLeader.last_name}`.trim()
+        : null;
+
       setRows((current) =>
         current.map((r) =>
           r.id === editingUser.id
@@ -183,13 +206,23 @@ export default function UsersAdmin({
                 lastName: editForm.lastName.trim(),
                 email: editForm.email.trim() || null,
                 role: editForm.role,
+                leaderId: editForm.leaderId || null,
+                leaderName: assignedLeaderName,
                 location: editForm.location.trim() || null,
                 remarks: editForm.remarks.trim() || null,
+                dob: editForm.dob || null,
                 foodPreference: editForm.foodPreference || null,
+                foodAllergy: editForm.foodAllergy.trim() || null,
+                emergencyContactName: editForm.emergencyContactName.trim() || null,
+                emergencyContactNo: editForm.emergencyContactNo.trim() || null,
                 emergencyContact:
                   editForm.emergencyContactName.trim() && editForm.emergencyContactNo.trim()
                     ? `${editForm.emergencyContactName.trim()} · ${editForm.emergencyContactNo.trim()}`
                     : r.emergencyContact,
+                travelInsuranceNo: editForm.travelInsuranceNo.trim() || null,
+                insuranceCompany: editForm.insuranceCompany.trim() || null,
+                insuranceExpiry: editForm.insuranceExpiry || null,
+                passportIssuedLocation: editForm.passportIssuedLocation.trim() || null,
               }
             : r,
         ),
@@ -399,17 +432,27 @@ export default function UsersAdmin({
               <div>
                 <h3 className="serif" style={{ margin: 0, fontSize: "1.15rem" }}>Bulk Import Guests (CSV)</h3>
                 <p className="admin-hint" style={{ margin: "4px 0 0" }}>
-                  Upload a UTF-8 CSV with phone numbers, names, role, and optional details. Duplicates are automatically skipped.
+                  Upload a UTF-8 CSV with columns: <code>User Id</code>, <code>First Name</code>, <code>Last Name</code>, <code>Role</code>, <code>Leader Name</code>, <code>Date of Joining</code>, <code>Active / Inactive</code>, <code>Location</code>, <code>email id</code>, <code>Mobile Number</code>.
                 </p>
               </div>
-              <a
-                href="/api/admin/users/import"
-                download="users_import_template.csv"
-                className="link-btn"
-                style={{ fontWeight: 600 }}
-              >
-                Download CSV Template
-              </a>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <a
+                  href="/api/admin/users/import?template=users"
+                  download="users_import_template.csv"
+                  className="link-btn"
+                  style={{ fontWeight: 600 }}
+                >
+                  Download User Table Template
+                </a>
+                <a
+                  href="/api/admin/users/import?template=guest_details"
+                  download="guest_details_import_template.csv"
+                  className="link-btn"
+                  style={{ fontWeight: 600 }}
+                >
+                  Download Guest Details Template
+                </a>
+              </div>
             </div>
             <input
               type="file"
@@ -446,37 +489,39 @@ export default function UsersAdmin({
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Phone</th>
+                  <th>User Id / Mobile Number</th>
+                  <th>First Name</th>
+                  <th>Last Name</th>
                   <th>Role</th>
-                  <th>Guest details</th>
-                  <th>Last active</th>
-                  <th>Status</th>
+                  <th>Leader Name</th>
+                  <th>Location</th>
+                  <th>email id</th>
+                  <th>Active / Inactive</th>
+                  <th>Date Last Active</th>
                   <th aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
                 {paginatedRows.map((row) => (
                   <tr key={row.id}>
-                    <td>
-                      <strong>
-                        {row.firstName} {row.lastName}
-                      </strong>
-                      {row.email && <div className="muted small">{row.email}</div>}
-                    </td>
                     <td className="mono">{row.phone}</td>
-                    <td style={{ textTransform: "capitalize" }}>{row.role === "traveller" ? "Guest" : row.role}</td>
-                    <td className="muted small">
-                      {row.foodPreference ? `${row.foodPreference.replace("_", " ")}` : "—"}
-                      {row.emergencyContact ? ` · ${row.emergencyContact}` : ""}
+                    <td>
+                      <strong>{row.firstName}</strong>
                     </td>
                     <td>
-                      {row.lastActiveAt ? new Date(row.lastActiveAt).toLocaleDateString("en-IN") : "Never"}
+                      <strong>{row.lastName}</strong>
                     </td>
+                    <td style={{ textTransform: "capitalize" }}>{row.role === "traveller" ? "Guest" : row.role === "leader" ? "Trail leader" : "Admin"}</td>
+                    <td>{row.leaderName || "—"}</td>
+                    <td>{row.location || "—"}</td>
+                    <td className="small">{row.email || "—"}</td>
                     <td>
                       <span className={`pill ${row.isActive ? "on" : "off"}`}>
-                        {row.isActive ? "Active" : "Suspended"}
+                        {row.isActive ? "Active" : "Inactive"}
                       </span>
+                    </td>
+                    <td className="small muted">
+                      {row.lastActiveAt ? new Date(row.lastActiveAt).toLocaleDateString("en-IN") : "Never"}
                     </td>
                     <td className="row-actions">
                       <button className="link-btn" onClick={() => startEdit(row)}>
@@ -532,22 +577,22 @@ export default function UsersAdmin({
 
             <div className="field-row">
               <label className="form-field">
-                First name
+                First Name
                 <input required value={editForm.firstName} onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })} />
               </label>
               <label className="form-field">
-                Last name
+                Last Name
                 <input required value={editForm.lastName} onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })} />
               </label>
             </div>
 
             <div className="field-row">
               <label className="form-field">
-                Phone number
+                Mobile Number (User Id)
                 <input disabled value={editingUser.phone} className="muted mono" />
               </label>
               <label className="form-field">
-                Email
+                email id
                 <input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
               </label>
             </div>
@@ -562,7 +607,7 @@ export default function UsersAdmin({
                 </select>
               </label>
               <label className="form-field">
-                Assigned Trail Leader
+                Leader Name
                 <select value={editForm.leaderId} onChange={(e) => setEditForm({ ...editForm, leaderId: e.target.value })}>
                   <option value="">No leader assigned</option>
                   {leaders.map((ldr) => (
@@ -576,27 +621,60 @@ export default function UsersAdmin({
 
             <div className="field-row">
               <label className="form-field">
-                Home city
+                Location
                 <input value={editForm.location} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} />
               </label>
               <label className="form-field">
-                Food preference
+                Date of Birth
+                <input type="date" value={editForm.dob} onChange={(e) => setEditForm({ ...editForm, dob: e.target.value })} />
+              </label>
+            </div>
+
+            <div className="field-row">
+              <label className="form-field">
+                Food Preference
                 <select value={editForm.foodPreference} onChange={(e) => setEditForm({ ...editForm, foodPreference: e.target.value })}>
                   <option value="">None selected</option>
                   <option value="veg">Vegetarian</option>
                   <option value="non_veg">Non-Vegetarian</option>
                 </select>
               </label>
+              <label className="form-field">
+                Food Allergy
+                <input value={editForm.foodAllergy} onChange={(e) => setEditForm({ ...editForm, foodAllergy: e.target.value })} placeholder="e.g. Peanuts, Dairy" />
+              </label>
             </div>
 
             <div className="field-row">
               <label className="form-field">
-                Emergency contact name
+                Emergency Contact Name
                 <input value={editForm.emergencyContactName} onChange={(e) => setEditForm({ ...editForm, emergencyContactName: e.target.value })} />
               </label>
               <label className="form-field">
-                Emergency contact number
+                Emergency Contact Number
                 <input type="tel" value={editForm.emergencyContactNo} onChange={(e) => setEditForm({ ...editForm, emergencyContactNo: e.target.value })} />
+              </label>
+            </div>
+
+            <div className="field-row">
+              <label className="form-field">
+                Travel Insurance No.
+                <input value={editForm.travelInsuranceNo} onChange={(e) => setEditForm({ ...editForm, travelInsuranceNo: e.target.value })} />
+              </label>
+              <label className="form-field">
+                Travel Insurance Company
+                <input value={editForm.insuranceCompany} onChange={(e) => setEditForm({ ...editForm, insuranceCompany: e.target.value })} />
+              </label>
+            </div>
+
+            <div className="field-row">
+              <label className="form-field">
+                Travel Insurance Expiry Date
+                <input type="date" value={editForm.insuranceExpiry} onChange={(e) => setEditForm({ ...editForm, insuranceExpiry: e.target.value })} />
+              </label>
+              <label className="form-field">
+                Passport Issued Location
+                <input value={editForm.passportIssuedLocation} onChange={(e) => setEditForm({ ...editForm, passportIssuedLocation: e.target.value })} />
               </label>
             </div>
 
@@ -628,29 +706,29 @@ export default function UsersAdmin({
         <form onSubmit={createUser}>
           <div className="field-row">
             <label className="form-field">
-              First name
+              First Name
               <input required value={draft.firstName} onChange={(e) => setDraft({ ...draft, firstName: e.target.value })} />
             </label>
             <label className="form-field">
-              Last name
+              Last Name
               <input required value={draft.lastName} onChange={(e) => setDraft({ ...draft, lastName: e.target.value })} />
             </label>
           </div>
 
           <div className="field-row">
             <label className="form-field">
-              Phone number
-              <input required type="tel" value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} placeholder="98765 43210" />
+              Mobile Number
+              <input required type="tel" value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} placeholder="98765 43210 (Used as User Id)" />
             </label>
             <label className="form-field">
-              Email
+              email id
               <input required type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
             </label>
           </div>
 
           <div className="field-row">
             <label className="form-field">
-              Initial PIN
+              Initial Password / PIN
               <input
                 readOnly
                 disabled
@@ -670,7 +748,7 @@ export default function UsersAdmin({
 
           <div className="field-row">
             <label className="form-field">
-              Assigned Trail Leader (Optional)
+              Leader Name (Optional)
               <select value={draft.leaderId} onChange={(e) => setDraft({ ...draft, leaderId: e.target.value })}>
                 <option value="">No leader assigned</option>
                 {leaders.map((ldr) => (
@@ -681,7 +759,7 @@ export default function UsersAdmin({
               </select>
             </label>
             <label className="form-field">
-              Home city
+              Location
               <input value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} />
             </label>
           </div>

@@ -59,11 +59,11 @@ export default function NewTripForm() {
 
       <div className="field-row">
         <label className="form-field">
-          Trail code
-          <input required name="trip_code" placeholder="PM-2026-HAM-01" />
+          Trail Id
+          <input required name="trip_code" placeholder="003 or PM-2026-HAM-01" />
         </label>
         <label className="form-field">
-          Trail name
+          Trail Name
           <input required name="name" placeholder="Hampi Heritage Trail" />
         </label>
       </div>
@@ -74,13 +74,13 @@ export default function NewTripForm() {
           <input name="destination" placeholder="Hampi, Karnataka" />
         </label>
         <label className="form-field">
-          Start date
+          Start Date
           <input type="date" name="start_date" />
         </label>
       </div>
 
       <label className="form-field">
-        End date
+        End Date
         <input type="date" name="end_date" />
       </label>
 

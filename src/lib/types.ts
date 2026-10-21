@@ -191,9 +191,11 @@ export type TrailLeaderView = {
   trip_id: string;
   trip_code: string;
   trip_name: string;
+  destination?: string | null;
   start_date: string | null;
   end_date: string | null;
   status: TripStatus;
+  is_active?: boolean;
   leader_id: string | null;
   leader_first_name: string | null;
   leader_last_name: string | null;

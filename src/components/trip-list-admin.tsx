@@ -195,7 +195,7 @@ export default function TripListAdmin({ trips }: { trips: TrailLeaderView[] }) {
               </a>
             </div>
             <p className="admin-hint" style={{ margin: "4px 0 12px" }}>
-              Upload a UTF-8 CSV with columns: <code>trip_code</code>, <code>name</code>, <code>destination</code>, <code>start_date</code>, <code>end_date</code>, <code>leader_phone</code>, <code>remarks</code>.
+              Upload a UTF-8 CSV with columns: <code>Trail Id</code>, <code>Trail Name</code>, <code>Destination</code>, <code>Start Date</code>, <code>End Date</code>, <code>Leader</code>, <code>Active / Inactive</code>, <code>Remarks</code>.
             </p>
             <input
               type="file"
@@ -272,7 +272,7 @@ export default function TripListAdmin({ trips }: { trips: TrailLeaderView[] }) {
             <div>
               <h3 className="serif" style={{ margin: 0, fontSize: "1.15rem" }}>Bulk Import Trails (CSV)</h3>
               <p className="admin-hint" style={{ margin: "4px 0 0" }}>
-                Upload a UTF-8 CSV with trail details. Existing trail codes are automatically skipped.
+                Upload a UTF-8 CSV with columns: <code>Trail Id</code>, <code>Trail Name</code>, <code>Destination</code>, <code>Start Date</code>, <code>End Date</code>, <code>Leader</code>, <code>Active / Inactive</code>.
               </p>
             </div>
             <a
@@ -322,35 +322,42 @@ export default function TripListAdmin({ trips }: { trips: TrailLeaderView[] }) {
           <table className="admin-table">
             <thead>
               <tr>
-                <th>Code</th>
+                <th>Trail Id</th>
                 <th>Trail Name</th>
-                <th>Dates</th>
+                <th>Destination</th>
+                <th>Start Date</th>
+                <th>End Date</th>
                 <th>Leader</th>
-                <th>Status</th>
+                <th>Active / Inactive</th>
                 <th aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
               {paginatedRows.map((trip) => {
                 const isLoading = loadingTripId === trip.trip_id;
+                const isItemActive = trip.is_active !== false && trip.status !== "archived";
                 return (
                   <tr key={trip.trip_id}>
                     <td className="mono">{trip.trip_code}</td>
                     <td>
                       <strong>{trip.trip_name}</strong>
                     </td>
+                    <td>{trip.destination || "—"}</td>
                     <td>
                       {trip.start_date ? new Date(trip.start_date).toLocaleDateString("en-IN") : "—"}
-                      {trip.end_date ? ` – ${new Date(trip.end_date).toLocaleDateString("en-IN")}` : ""}
+                    </td>
+                    <td>
+                      {trip.end_date ? new Date(trip.end_date).toLocaleDateString("en-IN") : "—"}
                     </td>
                     <td>
                       {trip.leader_first_name
-                        ? `${trip.leader_first_name} ${trip.leader_last_name}`
+                        ? `${trip.leader_first_name} ${trip.leader_last_name ?? ""}`.trim()
                         : "Unassigned"}
                     </td>
                     <td>
-                      <span className={`pill ${statusPill[trip.status] ?? "off"}`}>
-                        {trip.status}
+                      <span className={`pill ${isItemActive && trip.status === "published" ? "on" : "off"}`}>
+                        {isItemActive ? "Active" : "Inactive"}
+                        <span className="muted small" style={{ marginLeft: "4px" }}>({trip.status})</span>
                       </span>
                     </td>
                     <td className="row-actions">

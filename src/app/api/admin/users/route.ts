@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession, derivePassword, phoneToEmail, PHONE_REGEX } from '@/lib/server/auth'
+import { encrypt } from '@/lib/server/crypto'
 
 /**
  * GET   /api/admin/users   — paginated, filterable user list with leader and guest details
@@ -33,6 +34,9 @@ const GuestDetailsSchema = z.object({
   insurance_company:        z.string().max(50, 'Max 50 characters').nullable().optional(),
   insurance_expiry:         z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').nullable().optional(),
   passport_issued_location: z.string().max(50, 'Max 50 characters').nullable().optional(),
+  pan:                      z.string().trim().max(10).nullable().optional(),
+  passport_no:              z.string().trim().max(10).nullable().optional(),
+  passport_expiry:          z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 }).optional()
 
 const CreateUserSchema = z.object({
@@ -56,6 +60,9 @@ const CreateUserSchema = z.object({
   insurance_company:        z.string().max(50).nullable().optional(),
   insurance_expiry:         z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   passport_issued_location: z.string().max(50).nullable().optional(),
+  pan:                      z.string().trim().max(10).nullable().optional(),
+  passport_no:              z.string().trim().max(10).nullable().optional(),
+  passport_expiry:          z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 })
 
 const PatchUserSchema = z.object({
@@ -82,6 +89,9 @@ const PatchUserSchema = z.object({
   insurance_company:        z.string().max(50).nullable().optional(),
   insurance_expiry:         z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   passport_issued_location: z.string().max(50).nullable().optional(),
+  pan:                      z.string().trim().max(10).nullable().optional(),
+  passport_no:              z.string().trim().max(10).nullable().optional(),
+  passport_expiry:          z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 })
 
 async function requireAdmin() {
@@ -418,6 +428,83 @@ export async function PATCH(req: NextRequest) {
       .eq('user_id', id)
       .maybeSingle()
     travellerDetails = tdData
+  }
+
+  // Handle PAN in guest_documents
+  const panVal = fields.pan !== undefined ? fields.pan : guest_details?.pan
+  if (panVal) {
+    try {
+      const enc = await encrypt(panVal.trim())
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: existingPan } = await (admin.from('guest_documents') as any)
+        .select('id')
+        .eq('user_id', id)
+        .eq('doc_type', 'pan')
+        .maybeSingle()
+
+      if (existingPan) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from('guest_documents') as any).update({
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+          updated_at: new Date().toISOString(),
+        }).eq('id', existingPan.id)
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from('guest_documents') as any).insert({
+          user_id: id,
+          doc_type: 'pan',
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+        })
+      }
+    } catch (panErr) {
+      console.error('Failed to encrypt PAN in admin user PATCH:', panErr)
+    }
+  }
+
+  // Handle Passport in guest_documents
+  const passportVal = fields.passport_no !== undefined ? fields.passport_no : guest_details?.passport_no
+  const passportExpVal = fields.passport_expiry !== undefined ? fields.passport_expiry : guest_details?.passport_expiry
+  const passportLocVal = (fields.passport_issued_location ?? guest_details?.passport_issued_location) || 'India'
+
+  if (passportVal) {
+    try {
+      const enc = await encrypt(passportVal.trim())
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: existingPass } = await (admin.from('guest_documents') as any)
+        .select('id')
+        .eq('user_id', id)
+        .eq('doc_type', 'passport')
+        .maybeSingle()
+
+      if (existingPass) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from('guest_documents') as any).update({
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+          expiry_date: passportExpVal || null,
+          issued_country: passportLocVal,
+          updated_at: new Date().toISOString(),
+        }).eq('id', existingPass.id)
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from('guest_documents') as any).insert({
+          user_id: id,
+          doc_type: 'passport',
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+          expiry_date: passportExpVal || null,
+          issued_country: passportLocVal,
+        })
+      }
+    } catch (passErr) {
+      console.error('Failed to encrypt Passport in admin user PATCH:', passErr)
+    }
   }
 
   return NextResponse.json({

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth";
+import { decrypt } from "@/lib/server/crypto";
 import type { Profile, TravellerDetails } from "@/lib/types";
 import UsersAdmin from "@/components/users-admin";
 
@@ -9,17 +11,53 @@ export const dynamic = "force-dynamic";
 export default async function AdminUsersPage() {
   await requireProfile(["admin"]);
   const supabase = await createClient();
+  const admin = createAdminClient();
 
-  const [{ data: people }, { data: details }, { data: leaders }] = await Promise.all([
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [{ data: people }, { data: details }, { data: leaders }, { data: documents }] = await Promise.all([
     supabase.from("profiles").select("*").order("last_name", { ascending: true }),
     supabase.from("traveller_details").select("*"),
     supabase.from("profiles").select("id, first_name, last_name").eq("role", "leader").order("first_name", { ascending: true }),
+    (admin.from("guest_documents") as any).select("user_id, doc_type, doc_number_enc, iv, auth_tag, expiry_date"),
   ]);
 
   const leaderMap = new Map((leaders ?? []).map((l) => [l.id, `${l.first_name} ${l.last_name}`.trim()]));
 
   const detailByUser = new Map(
     ((details ?? []) as TravellerDetails[]).map((d) => [d.user_id, d]),
+  );
+
+  const panByUser = new Map<string, string>();
+  const passportByUser = new Map<string, string>();
+  const passportExpiryByUser = new Map<string, string>();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await Promise.all(
+    (documents ?? []).map(async (doc: any) => {
+      const docType = String(doc.doc_type || "").toLowerCase();
+      if (docType === "pan" || docType === "passport") {
+        let docNum = "";
+        if (doc.doc_number_enc && doc.iv && doc.auth_tag) {
+          try {
+            docNum = await decrypt({
+              ciphertext: doc.doc_number_enc,
+              iv: doc.iv,
+              authTag: doc.auth_tag,
+            });
+          } catch {
+            docNum = "";
+          }
+        }
+        if (docType === "pan" && docNum) {
+          panByUser.set(doc.user_id, docNum);
+        } else if (docType === "passport" && docNum) {
+          passportByUser.set(doc.user_id, docNum);
+          if (doc.expiry_date) {
+            passportExpiryByUser.set(doc.user_id, String(doc.expiry_date).slice(0, 10));
+          }
+        }
+      }
+    }),
   );
 
   const users = ((people ?? []) as Profile[]).map((profile) => {
@@ -52,6 +90,9 @@ export default async function AdminUsersPage() {
       insuranceCompany: detail?.insurance_company ?? null,
       insuranceExpiry: detail?.insurance_expiry ?? null,
       passportIssuedLocation: detail?.passport_issued_location ?? null,
+      pan: panByUser.get(profile.id) ?? null,
+      passportNo: passportByUser.get(profile.id) ?? null,
+      passportExpiry: passportExpiryByUser.get(profile.id) ?? null,
     };
   });
 

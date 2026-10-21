@@ -28,6 +28,9 @@ type UserRow = {
   insuranceCompany?: string | null;
   insuranceExpiry?: string | null;
   passportIssuedLocation?: string | null;
+  pan?: string | null;
+  passportNo?: string | null;
+  passportExpiry?: string | null;
 };
 
 type LeaderOption = {
@@ -83,6 +86,9 @@ export default function UsersAdmin({
     insuranceCompany: "",
     insuranceExpiry: "",
     passportIssuedLocation: "",
+    pan: "",
+    passportNo: "",
+    passportExpiry: "",
   });
 
   // CSV import modal state
@@ -144,6 +150,9 @@ export default function UsersAdmin({
       insuranceCompany: user.insuranceCompany ?? "",
       insuranceExpiry: user.insuranceExpiry ?? "",
       passportIssuedLocation: user.passportIssuedLocation ?? "",
+      pan: user.pan ?? "",
+      passportNo: user.passportNo ?? "",
+      passportExpiry: user.passportExpiry ?? "",
     });
   }
 
@@ -176,6 +185,9 @@ export default function UsersAdmin({
           insurance_company: editForm.insuranceCompany.trim() || null,
           insurance_expiry: editForm.insuranceExpiry || null,
           passport_issued_location: editForm.passportIssuedLocation.trim() || null,
+          pan: editForm.pan.trim().toUpperCase() || null,
+          passport_no: editForm.passportNo.trim().toUpperCase() || null,
+          passport_expiry: editForm.passportExpiry || null,
         }),
       });
 
@@ -223,6 +235,9 @@ export default function UsersAdmin({
                 insuranceCompany: editForm.insuranceCompany.trim() || null,
                 insuranceExpiry: editForm.insuranceExpiry || null,
                 passportIssuedLocation: editForm.passportIssuedLocation.trim() || null,
+                pan: editForm.pan.trim().toUpperCase() || null,
+                passportNo: editForm.passportNo.trim().toUpperCase() || null,
+                passportExpiry: editForm.passportExpiry || null,
               }
             : r,
         ),
@@ -632,49 +647,116 @@ export default function UsersAdmin({
 
             <div className="field-row">
               <label className="form-field">
-                Food Preference
-                <select value={editForm.foodPreference} onChange={(e) => setEditForm({ ...editForm, foodPreference: e.target.value })}>
-                  <option value="">None selected</option>
-                  <option value="veg">Vegetarian</option>
-                  <option value="non_veg">Non-Vegetarian</option>
-                </select>
+                PAN
+                <input
+                  value={editForm.pan}
+                  maxLength={10}
+                  onChange={(e) => setEditForm({ ...editForm, pan: e.target.value.toUpperCase() })}
+                  placeholder="10 characters (e.g. AAADK9754A)"
+                />
               </label>
               <label className="form-field">
-                Food Allergy
-                <input value={editForm.foodAllergy} onChange={(e) => setEditForm({ ...editForm, foodAllergy: e.target.value })} placeholder="e.g. Peanuts, Dairy" />
+                Passport No.
+                <input
+                  value={editForm.passportNo}
+                  maxLength={10}
+                  onChange={(e) => setEditForm({ ...editForm, passportNo: e.target.value.toUpperCase() })}
+                  placeholder="10 characters (e.g. ZA495775)"
+                />
               </label>
             </div>
 
             <div className="field-row">
               <label className="form-field">
-                Emergency Contact Name
-                <input value={editForm.emergencyContactName} onChange={(e) => setEditForm({ ...editForm, emergencyContactName: e.target.value })} />
+                Passport Expiry Date
+                <input
+                  type="date"
+                  value={editForm.passportExpiry}
+                  onChange={(e) => setEditForm({ ...editForm, passportExpiry: e.target.value })}
+                />
               </label>
               <label className="form-field">
-                Emergency Contact Number
-                <input type="tel" value={editForm.emergencyContactNo} onChange={(e) => setEditForm({ ...editForm, emergencyContactNo: e.target.value })} />
+                Passport Issued Location
+                <input
+                  value={editForm.passportIssuedLocation}
+                  maxLength={20}
+                  onChange={(e) => setEditForm({ ...editForm, passportIssuedLocation: e.target.value })}
+                  placeholder="e.g. Bangalore"
+                />
               </label>
             </div>
 
             <div className="field-row">
               <label className="form-field">
                 Travel Insurance No.
-                <input value={editForm.travelInsuranceNo} onChange={(e) => setEditForm({ ...editForm, travelInsuranceNo: e.target.value })} />
+                <input
+                  value={editForm.travelInsuranceNo}
+                  maxLength={20}
+                  onChange={(e) => setEditForm({ ...editForm, travelInsuranceNo: e.target.value })}
+                  placeholder="e.g. 7103167389"
+                />
               </label>
               <label className="form-field">
                 Travel Insurance Company
-                <input value={editForm.insuranceCompany} onChange={(e) => setEditForm({ ...editForm, insuranceCompany: e.target.value })} />
+                <input
+                  value={editForm.insuranceCompany}
+                  maxLength={20}
+                  onChange={(e) => setEditForm({ ...editForm, insuranceCompany: e.target.value })}
+                  placeholder="e.g. TATA AIG"
+                />
               </label>
             </div>
 
             <div className="field-row">
               <label className="form-field">
                 Travel Insurance Expiry Date
-                <input type="date" value={editForm.insuranceExpiry} onChange={(e) => setEditForm({ ...editForm, insuranceExpiry: e.target.value })} />
+                <input
+                  type="date"
+                  value={editForm.insuranceExpiry}
+                  onChange={(e) => setEditForm({ ...editForm, insuranceExpiry: e.target.value })}
+                />
               </label>
               <label className="form-field">
-                Passport Issued Location
-                <input value={editForm.passportIssuedLocation} onChange={(e) => setEditForm({ ...editForm, passportIssuedLocation: e.target.value })} />
+                Food Preference
+                <select value={editForm.foodPreference} onChange={(e) => setEditForm({ ...editForm, foodPreference: e.target.value })}>
+                  <option value="">None selected</option>
+                  <option value="veg">Veg</option>
+                  <option value="non_veg">Non Veg</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="field-row">
+              <label className="form-field">
+                Food Allergy
+                <input
+                  value={editForm.foodAllergy}
+                  maxLength={30}
+                  onChange={(e) => setEditForm({ ...editForm, foodAllergy: e.target.value })}
+                  placeholder="e.g. Peanuts and Milk"
+                />
+              </label>
+              <label className="form-field">
+                Emergency Contact Name
+                <input
+                  value={editForm.emergencyContactName}
+                  maxLength={20}
+                  onChange={(e) => setEditForm({ ...editForm, emergencyContactName: e.target.value })}
+                  placeholder="e.g. Anita Kamath"
+                />
+              </label>
+            </div>
+
+            <div className="field-row">
+              <label className="form-field">
+                Emergency Contact Number
+                <input
+                  type="tel"
+                  value={editForm.emergencyContactNo}
+                  maxLength={10}
+                  onChange={(e) => setEditForm({ ...editForm, emergencyContactNo: e.target.value.replace(/\D/g, "") })}
+                  placeholder="10 digits (e.g. 9019911700)"
+                />
               </label>
             </div>
 

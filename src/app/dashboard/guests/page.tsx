@@ -82,8 +82,8 @@ export default async function LeaderGuestsPage() {
                     </div>
                   </div>
                   {details?.food_preference && (
-                    <span className="pill on" style={{ textTransform: "capitalize" }}>
-                      {details.food_preference.replace("_", " ")}
+                    <span className="pill on" style={{ textTransform: "none", fontWeight: 600 }}>
+                      {details.food_preference === "veg" ? "Veg" : details.food_preference === "non_veg" ? "Non Veg" : details.food_preference}
                     </span>
                   )}
                 </div>

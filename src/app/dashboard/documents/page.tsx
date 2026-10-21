@@ -2,6 +2,7 @@ import { requireProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decrypt } from "@/lib/server/crypto";
 import DocumentForm from "@/components/document-form";
+import SavedDocumentsList from "@/components/saved-documents-list";
 
 export const dynamic = "force-dynamic";
 
@@ -60,8 +61,8 @@ export default async function DocumentsPage() {
     <div className="trip-detail">
       <header className="page-head">
         <div>
-          <div className="eyebrow">My documents</div>
-          <h1 className="serif">Identity & travel documents</h1>
+          <div className="eyebrow">My Documents</div>
+          <h1 className="serif">Identity & Travel Documents</h1>
           <p>
             Document numbers are encrypted with AES-256-GCM before they are stored. Only you,
             your assigned trail leader, and administrators can access them.
@@ -71,54 +72,14 @@ export default async function DocumentsPage() {
 
       <div className="trip-columns">
         <section className="panel">
-          <h2 className="serif">Add a document</h2>
-          <p className="panel-note">PAN, passport, visa, or any other document your trail needs.</p>
+          <h2 className="serif">Add a Document</h2>
+          <p className="panel-note">Aadhar, PAN, Passport, or any other document your trail needs.</p>
           <DocumentForm />
         </section>
 
         <section className="panel">
-          <h2 className="serif">Saved documents</h2>
-          {docs.length === 0 ? (
-            <p className="panel-note">Nothing saved yet.</p>
-          ) : (
-            <div className="contact-list">
-              {docs.map((doc) => (
-                <div key={doc.id} style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "12px 0", borderBottom: "1px solid var(--color-border, rgba(255,255,255,0.08))" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span className="contact-label">{doc.doc_type.replace("_", " ").toUpperCase()}</span>
-                    {doc.download_url && (
-                      <a
-                        href={doc.download_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="link-btn"
-                        style={{ fontSize: "12px" }}
-                      >
-                        Download {doc.file_name ? doc.file_name : "file"} ↗
-                      </a>
-                    )}
-                  </div>
-                  <span className="contact-name mono">
-                    {doc.doc_number ? (
-                      <>
-                        <span style={{ letterSpacing: "2px", opacity: 0.6 }}>•••• •••• </span>
-                        <span>{doc.doc_number.slice(-4)}</span>
-                        <span className="muted small" style={{ marginLeft: "8px", fontWeight: "normal" }}>
-                          ({doc.doc_number})
-                        </span>
-                      </>
-                    ) : (
-                      "Document on file"
-                    )}
-                  </span>
-                  <span className="muted small">
-                    {doc.issued_country ?? "Country not recorded"}
-                    {doc.expiry_date ? ` · expires ${new Date(doc.expiry_date).toLocaleDateString("en-IN")}` : ""}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+          <h2 className="serif">Saved Documents</h2>
+          <SavedDocumentsList initialDocs={docs} />
         </section>
       </div>
     </div>

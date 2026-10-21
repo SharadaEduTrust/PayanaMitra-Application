@@ -161,6 +161,14 @@ button {
   background: var(--sun);
   color: var(--white);
 }
+.btn-sm {
+  padding: 8px 16px;
+  font-size: 13px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 .hero {
   min-height: 670px;
   display: grid;
@@ -1287,6 +1295,10 @@ h3 {
 }
 .admin .btn {
   font-size: 14px;
+}
+.admin .btn-sm {
+  font-size: 13px;
+  padding: 8px 16px;
 }
 .admin .form-error {
   font-size: 14px;

@@ -124,8 +124,8 @@ export default function TripMembers({ tripId }: { tripId: string }) {
         Only enrolled guests can see a published trail. Adding someone here is what grants them access.
       </p>
 
-      <div className="field-row">
-        <label className="form-field">
+      <div style={{ display: "flex", gap: "12px", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "18px" }}>
+        <label className="form-field" style={{ flex: "1 1 280px", maxWidth: "420px", margin: 0 }}>
           Add a guest
           <select value={selected} onChange={(event) => setSelected(event.target.value)}>
             <option value="">Select a guest</option>
@@ -138,8 +138,14 @@ export default function TripMembers({ tripId }: { tripId: string }) {
               ))}
           </select>
         </label>
-        <button type="button" className="btn btn-primary" onClick={addMember} disabled={!selected || loading}>
-          {loading ? "Adding…" : "Add to trail"}
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          onClick={addMember}
+          disabled={!selected || loading}
+          style={{ width: "auto" }}
+        >
+          {loading ? "Adding…" : "Add guest"}
         </button>
       </div>
 

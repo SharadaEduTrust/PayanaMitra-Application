@@ -35,13 +35,57 @@ const GuestDetailsSchema = z.object({
   passport_issued_location: z.string().max(50, 'Max 50 characters').nullable().optional(),
 }).optional()
 
+const OptionalEmailSchema = z.preprocess(
+  (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+  z.string().email('Invalid email address').nullable().optional(),
+)
+
+const OptionalUuidSchema = z.preprocess(
+  (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+  z.string().uuid('Invalid leader ID').nullable().optional(),
+)
+
+const PhoneInputSchema = z.preprocess(
+  (val) => (typeof val === 'string' ? val.trim().replace(/[\s\-\(\)]/g, '') : val),
+  z.string()
+    .min(10, 'Phone number must be at least 10 digits (e.g. 9876543210 or +919876543210)')
+    .max(16, 'Phone number cannot exceed 15 digits')
+    .regex(PHONE_REGEX, 'Phone must be a valid 10-15 digit number (e.g. 9876543210 or +919876543210)'),
+)
+
+export function formatZodError(error: z.ZodError) {
+  const flattened = error.flatten()
+  const fieldErrors = flattened.fieldErrors as Record<string, string[] | undefined>
+  const formErrors = flattened.formErrors
+
+  const messages: string[] = []
+
+  for (const [field, errs] of Object.entries(fieldErrors)) {
+    if (Array.isArray(errs) && errs.length > 0) {
+      const fieldName = field.replace(/_/g, ' ')
+      messages.push(`${fieldName}: ${errs.join(', ')}`)
+    }
+  }
+
+  if (Array.isArray(formErrors) && formErrors.length > 0) {
+    messages.push(formErrors.join(', '))
+  }
+
+  const detailedMessage = messages.join('; ')
+  return {
+    error: detailedMessage ? `Validation failed: ${detailedMessage}` : 'Validation failed',
+    fieldErrors,
+    formErrors,
+  }
+}
+
 const CreateUserSchema = z.object({
-  phone:           z.string().regex(PHONE_REGEX, 'Phone must be a valid 10-15 digit number (e.g. 9876543210 or +919876543210)'),
+  phone:           PhoneInputSchema,
   first_name:      z.string().min(1, 'First name is required').max(50, 'First name cannot exceed 50 characters'),
   last_name:       z.string().min(1, 'Last name is required').max(50, 'Last name cannot exceed 50 characters'),
   role:            RoleInputSchema.default('traveller'),
-  leader_id:       z.string().uuid('Invalid leader ID').nullable().optional(),
-  email:           z.string().email('Invalid email address').nullable().optional(),
+  leader_id:       OptionalUuidSchema,
+  email:           OptionalEmailSchema,
   location:        z.string().max(50, 'Location cannot exceed 50 characters').nullable().optional(),
   date_of_joining: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date of joining must be YYYY-MM-DD').nullable().optional(),
   remarks:         z.string().max(2000, 'Remarks cannot exceed 2000 characters').nullable().optional(),
@@ -63,8 +107,8 @@ const PatchUserSchema = z.object({
   first_name:      z.string().min(1).max(50).optional(),
   last_name:       z.string().min(1).max(50).optional(),
   role:            RoleInputSchema.optional(),
-  leader_id:       z.string().uuid('Invalid leader ID').nullable().optional(),
-  email:           z.string().email().nullable().optional(),
+  leader_id:       OptionalUuidSchema,
+  email:           OptionalEmailSchema,
   location:        z.string().max(50).nullable().optional(),
   date_of_joining: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   remarks:         z.string().max(2000).nullable().optional(),
@@ -159,10 +203,7 @@ export async function POST(req: NextRequest) {
 
   const parsed = CreateUserSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Validation failed', fieldErrors: parsed.error.flatten().fieldErrors },
-      { status: 422 },
-    )
+    return NextResponse.json(formatZodError(parsed.error), { status: 422 })
   }
 
   const data = parsed.data
@@ -308,10 +349,7 @@ export async function PATCH(req: NextRequest) {
 
   const parsed = PatchUserSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Validation failed', fieldErrors: parsed.error.flatten().fieldErrors },
-      { status: 422 },
-    )
+    return NextResponse.json(formatZodError(parsed.error), { status: 422 })
   }
 
   const { id, reset_pin, guest_details, ...fields } = parsed.data

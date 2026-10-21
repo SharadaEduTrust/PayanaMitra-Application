@@ -167,6 +167,8 @@ export interface GuestDocument {
   auth_tag: string
   expiry_date: string | null
   issued_country: string | null
+  issued_date?: string | null
+  issued_place?: string | null
   storage_path?: string | null
   file_name?: string | null
   file_size?: number | null

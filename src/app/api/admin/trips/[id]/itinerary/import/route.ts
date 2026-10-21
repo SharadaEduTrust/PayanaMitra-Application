@@ -200,7 +200,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       if (!VALID_MEAL_PLANS.has(rawMealPlan)) {
         errors.push({
           row: rowNum,
-          error: `Invalid Meal Plan: "${rawMealPlan}". Supported values: "Breakfast", "Breakfast & Dinner", "Breakfast, Lunch & Dinner"`,
+          error: `Invalid meal_plan (Meal Plan): "${rawMealPlan}". Supported values: "Breakfast", "Breakfast & Dinner", "Breakfast, Lunch & Dinner"`,
         })
         skipped++
         continue

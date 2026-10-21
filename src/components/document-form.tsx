@@ -20,7 +20,8 @@ export default function DocumentForm() {
     setError("");
     setLoading(true);
 
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     form.set("doc_type", docType);
     if (expiry) form.set("expiry_date", expiry);
     if (country) form.set("issued_country", country);
@@ -39,12 +40,15 @@ export default function DocumentForm() {
         return;
       }
 
-      event.currentTarget.reset();
+      formElement.reset();
       setStatus("Document saved and securely encrypted.");
       setExpiry("");
+      setDocType("pan");
+      setCountry("India");
       router.refresh();
-    } catch {
+    } catch (err) {
       setLoading(false);
+      console.error("Failed to save document:", err);
       setError("Network error while saving document.");
     }
   }

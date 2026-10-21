@@ -21,8 +21,8 @@ export default function SignupPage() {
           <Brand size={36} />
           <h2>Create your account.</h2>
           <p>
-            Your phone number must match the one your trail coordinator holds. After registering you
-            sign in with that number and a PIN made from its last four digits.
+            Your phone number identifies your account. The system automatically allocates the last four digits
+            of your phone number as your initial password, which you can change later.
           </p>
           <SignupForm />
           <div className="auth-switch">

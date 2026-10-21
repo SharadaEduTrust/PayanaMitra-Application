@@ -315,7 +315,7 @@ export default function UsersAdmin({
   }
 
   async function resetPassword(row: UserRow) {
-    if (!window.confirm(`Reset PIN for ${row.firstName} ${row.lastName}? Their temporary PIN will become the last 4 digits of their phone (${row.phone.slice(-4)}).`)) {
+    if (!window.confirm(`Reset password for ${row.firstName} ${row.lastName}? Their password will be reset to the last 4 digits of their phone (${row.phone.slice(-4)}).`)) {
       return;
     }
     setError("");
@@ -325,19 +325,19 @@ export default function UsersAdmin({
       const response = await fetch("/api/admin/users", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: row.id, reset_pin: true }),
+        body: JSON.stringify({ id: row.id, reset_pin: true, reset_password: true }),
       });
 
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        setError(data?.error ?? "Could not reset the PIN.");
+        setError(data?.error ?? "Could not reset the password.");
         return;
       }
 
-      setStatus(`PIN reset for ${row.firstName}. Their temporary PIN is the last 4 digits of their phone (${row.phone.slice(-4)}).`);
+      setStatus(`Password reset for ${row.firstName}. Their password has been reset to the last 4 digits of their phone (${row.phone.slice(-4)}).`);
       router.refresh();
     } catch {
-      setError("Network error while resetting PIN.");
+      setError("Network error while resetting password.");
     }
   }
 
@@ -528,7 +528,7 @@ export default function UsersAdmin({
                         Edit
                       </button>
                       <button className="link-btn" onClick={() => resetPassword(row)}>
-                        Reset PIN
+                        Reset Password
                       </button>
                       <button className="link-btn" onClick={() => updateUser(row.id, { is_active: !row.isActive }, row.isActive ? "Account suspended." : "Account restored.")}>
                         {row.isActive ? "Suspend" : "Restore"}

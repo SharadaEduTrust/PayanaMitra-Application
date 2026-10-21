@@ -23,8 +23,7 @@ export default function AdminLoginPage() {
           <Brand size={36} />
           <h2>Administrator sign in.</h2>
           <p>
-            Use the phone number registered to your admin account, with the last four digits as your
-            PIN.
+            Use the phone number registered to your admin account and your password.
           </p>
           <AdminLoginForm />
           <div className="auth-switch">

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { TravellerDetails } from "@/lib/types";
@@ -162,6 +163,16 @@ export default async function ProfilePage() {
               <dd>{profile.is_active ? "Active" : "Deactivated by your coordinator"}</dd>
             </div>
           </dl>
+
+          <h3 className="serif profile-subhead">Security & Password</h3>
+          <p className="panel-note" style={{ marginBottom: "12px" }}>
+            Your initial password is the last 4 digits of your phone number ({profile.phone.slice(-4)}). You can change your password anytime.
+          </p>
+          <div>
+            <Link className="btn btn-secondary" href="/change-password">
+              Change Password
+            </Link>
+          </div>
         </section>
 
         <section className="panel" id="travel">

@@ -132,12 +132,12 @@ export async function loginWithPhonePin(
   ip: string,
   options?: LoginOptions,
 ): Promise<LoginResult> {
-  const GENERIC_ERROR = 'Invalid phone number or PIN.'
+  const GENERIC_ERROR = 'Invalid phone number or password.'
   const rawPhone = phoneInput.trim().replace(/\s+/g, '')
-  const pin = pinInput.trim()
+  const password = pinInput.trim()
 
-  // 1. Validate basic format
-  if (!PHONE_REGEX.test(rawPhone) || !PIN_REGEX.test(pin)) {
+  // 1. Validate basic format (phone valid format and password at least 4 characters)
+  if (!PHONE_REGEX.test(rawPhone) || password.length < 4) {
     return { ok: false, error: GENERIC_ERROR, status: 400 }
   }
 
@@ -151,15 +151,9 @@ export async function loginWithPhonePin(
     }
   }
 
-  // 3. Validate submitted PIN matches the last 4 digits of the phone number
-  if (!pinMatches(rawPhone, pin)) {
-    await recordAttempt(rawPhone, ip, false)
-    return { ok: false, error: GENERIC_ERROR, status: 401 }
-  }
-
   const admin = createAdminClient()
 
-  // 4. Find profile matching candidate variants
+  // 3. Find profile matching candidate variants
   const candidates = phoneCandidates(rawPhone)
   if (!candidates.includes(rawPhone)) candidates.push(rawPhone)
 
@@ -171,22 +165,21 @@ export async function loginWithPhonePin(
 
   const profile = matchedProfiles && matchedProfiles.length > 0 ? matchedProfiles[0] : null
 
-  // Reject if profile does not exist, is inactive, or submitted pin does not match profile's phone suffix
-  if (!profile || !profile.is_active || !pinMatches(profile.phone, pin)) {
+  // Reject if profile does not exist or is inactive
+  if (!profile || !profile.is_active) {
     await recordAttempt(rawPhone, ip, false)
     return { ok: false, error: GENERIC_ERROR, status: 401 }
   }
 
-  // 5. Check role requirement if requested
+  // 4. Check role requirement if requested
   if (options?.requireRole && profile.role !== options.requireRole) {
     await recordAttempt(rawPhone, ip, false)
     return { ok: false, error: GENERIC_ERROR, status: 401 }
   }
 
-  // 6. Supabase Auth credential derivation
-  const expectedFour = expectedPin(profile.phone)
+  // 5. Supabase Auth credential derivation using entered password
   const authEmail = phoneToEmail(profile.phone)
-  const expectedPassword = await derivePassword(profile.phone, expectedFour)
+  const enteredPasswordHash = await derivePassword(profile.phone, password)
 
   const supabase = await createServerClient()
   let session: { access_token: string; refresh_token: string } | null = null
@@ -194,7 +187,7 @@ export async function loginWithPhonePin(
   // Attempt standard password sign-in
   const res1 = await supabase.auth.signInWithPassword({
     email: authEmail,
-    password: expectedPassword,
+    password: enteredPasswordHash,
   })
 
   if (!res1.error && res1.data?.session) {
@@ -206,7 +199,7 @@ export async function loginWithPhonePin(
     // Check if derived using cleanPhone without plus prefix
     const cleanPhone = profile.phone.replace(/^\+/, '')
     if (cleanPhone !== profile.phone) {
-      const altPassword = await derivePassword(cleanPhone, expectedFour)
+      const altPassword = await derivePassword(cleanPhone, password)
       const res2 = await supabase.auth.signInWithPassword({
         email: authEmail,
         password: altPassword,
@@ -221,24 +214,29 @@ export async function loginWithPhonePin(
   }
 
   // Safe server-side credential reconciliation:
-  // If the user entered their valid phone-suffix PIN, but Supabase Auth credentials
-  // are out of sync (e.g. user set custom password in legacy form or old seed),
-  // synchronize the password with the admin API and complete the login.
-  if (!session) {
+  // If the user entered their initial system-allocated last 4 digits, but Supabase Auth credentials
+  // are not yet set or need reconciliation, synchronize the initial password and complete login.
+  if (!session && pinMatches(profile.phone, password)) {
     try {
-      await admin.auth.admin.updateUserById(profile.id, {
-        password: expectedPassword,
-        email: authEmail,
-        email_confirm: true,
-      })
-      const retry = await supabase.auth.signInWithPassword({
-        email: authEmail,
-        password: expectedPassword,
-      })
-      if (!retry.error && retry.data?.session) {
-        session = {
-          access_token: retry.data.session.access_token,
-          refresh_token: retry.data.session.refresh_token,
+      // Check if user has explicitly set a custom changed password
+      const { data: authUserData } = await admin.auth.admin.getUserById(profile.id)
+      const hasChangedPassword = Boolean(authUserData?.user?.user_metadata?.password_changed)
+
+      if (!hasChangedPassword) {
+        await admin.auth.admin.updateUserById(profile.id, {
+          password: enteredPasswordHash,
+          email: authEmail,
+          email_confirm: true,
+        })
+        const retry = await supabase.auth.signInWithPassword({
+          email: authEmail,
+          password: enteredPasswordHash,
+        })
+        if (!retry.error && retry.data?.session) {
+          session = {
+            access_token: retry.data.session.access_token,
+            refresh_token: retry.data.session.refresh_token,
+          }
         }
       }
     } catch (syncErr) {
@@ -251,7 +249,7 @@ export async function loginWithPhonePin(
     return { ok: false, error: GENERIC_ERROR, status: 401 }
   }
 
-  // 7. Generate one-time magiclink tokenHash for callers utilizing verifyOtp
+  // 6. Generate one-time magiclink tokenHash for callers utilizing verifyOtp
   let tokenHash: string | null = null
   try {
     const { data: link } = await admin.auth.admin.generateLink({
@@ -263,7 +261,7 @@ export async function loginWithPhonePin(
     // Non-fatal fallback
   }
 
-  // 8. Neutralize must_change_password and update last_active_at
+  // 7. Neutralize must_change_password and update last_active_at
   const profileUpdates: Record<string, unknown> = {
     last_active_at: new Date().toISOString(),
   }
@@ -275,7 +273,7 @@ export async function loginWithPhonePin(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (admin.from('profiles') as any).update(profileUpdates).eq('id', profile.id)
 
-  // 9. Record success
+  // 8. Record success
   await recordAttempt(rawPhone, ip, true)
 
   return {
@@ -285,6 +283,8 @@ export async function loginWithPhonePin(
     tokenHash,
   }
 }
+
+export const loginWithPhonePassword = loginWithPhonePin
 
 /**
  * Sign out the current user and clear the session cookie.

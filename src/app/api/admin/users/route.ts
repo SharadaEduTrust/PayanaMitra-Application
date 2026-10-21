@@ -70,6 +70,7 @@ const PatchUserSchema = z.object({
   remarks:         z.string().max(2000).nullable().optional(),
   is_active:       z.boolean().optional(),
   reset_pin:       z.boolean().optional(),
+  reset_password:  z.boolean().optional(),
   // Guest details update
   guest_details:   GuestDetailsSchema,
   dob:                      z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
@@ -314,7 +315,7 @@ export async function PATCH(req: NextRequest) {
     )
   }
 
-  const { id, reset_pin, guest_details, ...fields } = parsed.data
+  const { id, reset_pin, reset_password, guest_details, ...fields } = parsed.data
   const admin = createAdminClient()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -350,12 +351,16 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  if (reset_pin) {
+  const shouldResetPassword = Boolean(reset_pin || reset_password)
+  if (shouldResetPassword) {
     const phone = current.phone
     const initialPin = phone.slice(-4)
     const password = await derivePassword(phone, initialPin)
-    const { error: pwErr } = await admin.auth.admin.updateUserById(id, { password })
-    if (pwErr) return NextResponse.json({ error: `PIN reset failed: ${pwErr.message}` }, { status: 500 })
+    const { error: pwErr } = await admin.auth.admin.updateUserById(id, {
+      password,
+      user_metadata: { password_changed: false },
+    })
+    if (pwErr) return NextResponse.json({ error: `Password reset failed: ${pwErr.message}` }, { status: 500 })
   }
 
   const profileUpdatePayload: Record<string, unknown> = {}
@@ -363,7 +368,7 @@ export async function PATCH(req: NextRequest) {
   for (const key of profileKeys) {
     if (fields[key] !== undefined) profileUpdatePayload[key] = fields[key]
   }
-  if (reset_pin) profileUpdatePayload['must_change_password'] = false
+  if (shouldResetPassword) profileUpdatePayload['must_change_password'] = false
 
   let updatedProfile = current
   if (Object.keys(profileUpdatePayload).length > 0) {

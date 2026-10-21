@@ -478,7 +478,7 @@ export default function TripEditor({
             Status / Visibility
             <select value={form.status} onChange={(e) => set("status", e.target.value)}>
               <option value="draft">Draft — hidden from guests</option>
-              <option value="published">Published — visible to members</option>
+              <option value="published">Published — visible to guests</option>
               <option value="archived">Archived</option>
             </select>
           </label>
@@ -686,7 +686,7 @@ export default function TripEditor({
       </section>
  
       <section className="admin-card">
-        <h2 className="serif">Broadcast to Trail Members</h2>
+        <h2 className="serif">Broadcast to Trail Guests</h2>
         <p className="admin-hint">
           Send an announcement to all guests enrolled in this trail via in-app alerts, Web Push,
           and optionally direct WhatsApp message.
@@ -719,7 +719,7 @@ export default function TripEditor({
               checked={sendWhatsapp}
               onChange={(e) => setSendWhatsapp(e.target.checked)}
             />
-            <span>Also send as WhatsApp message to all members</span>
+            <span>Also send as WhatsApp message to all guests</span>
           </label>
 
           {broadcastStatus && <p className="form-notice" role="status">{broadcastStatus}</p>}

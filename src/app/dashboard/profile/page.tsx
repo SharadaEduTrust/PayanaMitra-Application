@@ -152,7 +152,7 @@ export default async function ProfilePage() {
           <h3 className="serif profile-subhead">Account history</h3>
           <dl className="fact-list">
             <div>
-              <dt>Member since</dt>
+              <dt>Guest since</dt>
               <dd>{formatDate(profile.date_of_joining)}</dd>
             </div>
             <div>

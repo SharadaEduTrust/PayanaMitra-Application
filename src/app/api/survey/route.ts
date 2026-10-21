@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     .eq('user_id', user.id)
 
   if ((count ?? 0) === 0) {
-    return NextResponse.json({ error: 'Not a member of this trip' }, { status: 403 })
+    return NextResponse.json({ error: 'You are not a registered guest on this trail' }, { status: 403 })
   }
 
   const rows = responses.map(r => ({

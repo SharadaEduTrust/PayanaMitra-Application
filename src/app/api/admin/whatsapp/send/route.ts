@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
   if (!members || members.length === 0) {
     return NextResponse.json({
       sent: 0, failed: 0, inAppCreated: 0,
-      message: 'No members in this trip',
+      message: 'No guests enrolled in this trail',
     })
   }
 
@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
   if (profilesWithPhone.length === 0) {
     return NextResponse.json({
       sent: 0, failed: 0, inAppCreated: 0,
-      message: 'No members have a phone number on file',
+      message: 'No guests have a phone number on file',
     })
   }
 

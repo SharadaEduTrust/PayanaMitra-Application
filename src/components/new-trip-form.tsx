@@ -54,7 +54,7 @@ export default function NewTripForm() {
       <h2 className="serif">New trail</h2>
       <p className="admin-hint">
         Trails are created as drafts. Guests only see a trail once you set the status to published
-        and add them as members.
+        and add them as guests.
       </p>
 
       <div className="field-row">

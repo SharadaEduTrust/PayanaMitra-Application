@@ -47,7 +47,7 @@ export default function TripMembers({ tripId }: { tripId: string }) {
 
         setMembers(enrolled);
       } catch {
-        if (!ignore) setError("Failed to load members or guest list.");
+        if (!ignore) setError("Failed to load trail guests.");
       }
     }
 
@@ -86,10 +86,10 @@ export default function TripMembers({ tripId }: { tripId: string }) {
         ]);
       }
       setSelected("");
-      setStatus("Member added.");
+      setStatus("Guest added.");
     } catch {
       setLoading(false);
-      setError("Network error while adding member.");
+      setError("Network error while adding guest.");
     }
   }
 
@@ -111,17 +111,17 @@ export default function TripMembers({ tripId }: { tripId: string }) {
       }
 
       setMembers((current) => current.filter((member) => member.userId !== userId));
-      setStatus("Member removed.");
+      setStatus("Guest removed.");
     } catch {
-      setError("Network error while removing member.");
+      setError("Network error while removing guest.");
     }
   }
 
   return (
     <section className="admin-card">
-      <h2 className="serif">Members</h2>
+      <h2 className="serif">Guests</h2>
       <p className="admin-hint">
-        Only members can see a published trail. Adding someone here is what grants them access.
+        Only enrolled guests can see a published trail. Adding someone here is what grants them access.
       </p>
 
       <div className="field-row">
@@ -144,7 +144,7 @@ export default function TripMembers({ tripId }: { tripId: string }) {
       </div>
 
       {members.length === 0 ? (
-        <p className="panel-note">No members yet.</p>
+        <p className="panel-note">No guests enrolled yet.</p>
       ) : (
         <table className="admin-table">
           <thead>

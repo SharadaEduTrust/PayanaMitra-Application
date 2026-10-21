@@ -3,6 +3,7 @@ import Brand from "@/components/brand";
 import { requireProfile } from "@/lib/auth";
 import DashboardNav from "@/components/dashboard-nav";
 import MobileNav from "@/components/mobile-nav";
+import LogoutButton from "@/components/logout-button";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const profile = await requireProfile();
@@ -30,10 +31,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
               <span className="side-phone mono">{profile.phone}</span>
             </p>
           </Link>
+          <LogoutButton redirectTo="/login" />
         </div>
       </aside>
       <section className="main">
-        <MobileNav title="Menu" />
+        <MobileNav title="Menu" redirectTo="/login" />
         {children}
       </section>
     </div>

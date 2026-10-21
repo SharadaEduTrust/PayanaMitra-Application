@@ -620,6 +620,18 @@ h3 {
   width: 100%;
   text-align: left;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  border-radius: 6px;
+  margin-top: 4px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.side-logout:hover {
+  color: #ffb4ab;
+  background: rgba(255, 252, 246, 0.08);
 }
 .trip-list {
   display: flex;
@@ -655,9 +667,6 @@ h3 {
   border-top: 1px solid var(--line);
   margin-top: 24px;
   padding-top: 18px;
-}
-.side-logout:hover {
-  color: var(--white);
 }
 .auth-switch {
   text-align: center;

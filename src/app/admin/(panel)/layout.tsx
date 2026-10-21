@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import AdminNav from "@/components/admin-nav";
 import MobileNav from "@/components/mobile-nav";
+import LogoutButton from "@/components/logout-button";
 import type { Notification, Profile } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -47,10 +48,11 @@ export default async function AdminPanelLayout({ children }: { children: React.R
           <Link className="side-link" href="/dashboard">
             View as guest
           </Link>
+          <LogoutButton redirectTo="/admin/login" />
         </div>
       </aside>
       <section className="admin-main">
-        <MobileNav title="Admin Menu" />
+        <MobileNav title="Admin Menu" redirectTo="/admin/login" />
         {children}
       </section>
     </div>

@@ -6,6 +6,7 @@ import AvatarUpload from "@/components/avatar-upload";
 import ProfileForm from "@/components/profile-form";
 import ProfileSummary, { type CompletionItem } from "@/components/profile-summary";
 import TravellerDetailsForm from "@/components/traveller-details-form";
+import LogoutButton from "@/components/logout-button";
 
 export const dynamic = "force-dynamic";
 
@@ -168,10 +169,16 @@ export default async function ProfilePage() {
           <p className="panel-note" style={{ marginBottom: "12px" }}>
             Your initial password is the last 4 digits of your phone number ({profile.phone.slice(-4)}). You can change your password anytime.
           </p>
-          <div>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
             <Link className="btn btn-secondary" href="/change-password">
               Change Password
             </Link>
+            <LogoutButton
+              redirectTo="/login"
+              className="btn btn-secondary"
+              label="Log out"
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+            />
           </div>
         </section>
 

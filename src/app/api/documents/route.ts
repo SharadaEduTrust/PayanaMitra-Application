@@ -15,8 +15,10 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const CreateDocSchema = z.object({
   doc_type:       z.string().min(1, 'Document type required').max(50),
   doc_number:     z.string().max(100).optional().nullable(),
+  issued_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   expiry_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   issued_country: z.string().max(100).optional().nullable(),
+  issued_place:   z.string().max(100).optional().nullable(),
   trip_id:        z.string().uuid().optional().nullable(),
 })
 
@@ -108,6 +110,7 @@ export async function POST(req: NextRequest) {
 
   let doc_type = ''
   let doc_number: string | null = null
+  let issued_date: string | null = null
   let expiry_date: string | null = null
   let issued_country: string | null = null
   let trip_id: string | null = null
@@ -127,8 +130,9 @@ export async function POST(req: NextRequest) {
 
     doc_type = String(formData.get('doc_type') ?? formData.get('type') ?? '').trim()
     doc_number = (formData.get('doc_number') as string)?.trim() || (formData.get('document_number') as string)?.trim() || null
+    issued_date = (formData.get('issued_date') as string)?.trim() || null
     expiry_date = (formData.get('expiry_date') as string)?.trim() || null
-    issued_country = (formData.get('issued_country') as string)?.trim() || (formData.get('country') as string)?.trim() || null
+    issued_country = (formData.get('issued_place') as string)?.trim() || (formData.get('issued_country') as string)?.trim() || (formData.get('country') as string)?.trim() || null
     trip_id = (formData.get('trip_id') as string)?.trim() || null
 
     if (!doc_type) {
@@ -186,8 +190,9 @@ export async function POST(req: NextRequest) {
 
     doc_type = parsed.data.doc_type
     doc_number = parsed.data.doc_number ?? null
+    issued_date = parsed.data.issued_date ?? null
     expiry_date = parsed.data.expiry_date ?? null
-    issued_country = parsed.data.issued_country ?? null
+    issued_country = parsed.data.issued_place ?? parsed.data.issued_country ?? null
     trip_id = parsed.data.trip_id ?? null
   }
 
@@ -216,6 +221,7 @@ export async function POST(req: NextRequest) {
     doc_number_enc: ciphertext,
     iv,
     auth_tag: authTag,
+    issued_date: issued_date || null,
     expiry_date: expiry_date || null,
     issued_country: issued_country || null,
   }
@@ -231,12 +237,17 @@ export async function POST(req: NextRequest) {
     .select()
     .single()
 
-  if (insertResult.error && (insertResult.error.message.includes('column') || insertResult.error.message.includes('storage_path'))) {
-    // Fallback if storage columns have not been migrated
-    delete insertPayload.storage_path
-    delete insertPayload.file_name
-    delete insertPayload.file_size
-    delete insertPayload.mime_type
+  if (insertResult.error && (insertResult.error.message.includes('column') || insertResult.error.message.includes('storage_path') || insertResult.error.message.includes('issued_date'))) {
+    // Fallback if issued_date or storage columns have not been migrated
+    if (insertResult.error.message.includes('issued_date')) {
+      delete insertPayload.issued_date
+    }
+    if (insertResult.error.message.includes('storage_path') || insertResult.error.message.includes('column')) {
+      delete insertPayload.storage_path
+      delete insertPayload.file_name
+      delete insertPayload.file_size
+      delete insertPayload.mime_type
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     insertResult = await (admin.from('guest_documents') as any)
       .insert(insertPayload)

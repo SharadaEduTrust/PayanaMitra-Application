@@ -7,8 +7,10 @@ interface Params { params: Promise<{ id: string }> }
 
 const UpdateDocSchema = z.object({
   doc_type:       z.string().min(1).max(50).optional(),
+  issued_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   expiry_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   issued_country: z.string().max(100).optional().nullable(),
+  issued_place:   z.string().max(100).optional().nullable(),
   trip_id:        z.string().uuid().optional().nullable(),
 }).strict()
 
@@ -88,17 +90,37 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const updatePayload: Record<string, unknown> = {
+    ...parsed.data,
+    updated_at: new Date().toISOString(),
+  }
+
+  if (parsed.data.issued_place !== undefined) {
+    updatePayload.issued_country = parsed.data.issued_place
+    delete updatePayload.issued_place
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: updated, error } = await (admin.from('guest_documents') as any)
-    .update({ ...parsed.data, updated_at: new Date().toISOString() })
+  let updateResult = await (admin.from('guest_documents') as any)
+    .update(updatePayload)
     .eq('id', id)
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (updateResult.error && updateResult.error.message.includes('issued_date')) {
+    delete updatePayload.issued_date
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    updateResult = await (admin.from('guest_documents') as any)
+      .update(updatePayload)
+      .eq('id', id)
+      .select()
+      .single()
+  }
+
+  if (updateResult.error) return NextResponse.json({ error: updateResult.error.message }, { status: 500 })
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { doc_number_enc, iv, auth_tag, ...safe } = updated
+  const { doc_number_enc, iv, auth_tag, ...safe } = updateResult.data
   return NextResponse.json({ ok: true, data: safe })
 }
 

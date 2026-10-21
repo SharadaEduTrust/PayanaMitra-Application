@@ -158,6 +158,7 @@ export type GuestDocument = {
   doc_number_enc: string | null;
   iv: string;
   auth_tag: string;
+  issued_date?: string | null;
   expiry_date: string | null;
   issued_country: string | null;
   storage_path?: string | null;

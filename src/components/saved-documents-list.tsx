@@ -8,6 +8,7 @@ export type SavedDoc = {
   id: string;
   doc_type: string;
   doc_number: string | null;
+  issued_date?: string | null;
   expiry_date: string | null;
   issued_country: string | null;
   file_name: string | null;
@@ -29,8 +30,9 @@ export default function SavedDocumentsList({
   const [editingDoc, setEditingDoc] = useState<SavedDoc | null>(null);
   const [editForm, setEditForm] = useState({
     doc_type: "aadhar",
+    issued_date: "",
     expiry_date: "",
-    issued_country: "India",
+    issued_country: "",
   });
   const [editError, setEditError] = useState("");
   const [editLoading, setEditLoading] = useState(false);
@@ -41,8 +43,9 @@ export default function SavedDocumentsList({
     const mappedType = normalizedType === "aadhaar" ? "aadhar" : normalizedType;
     setEditForm({
       doc_type: mappedType,
+      issued_date: doc.issued_date ? doc.issued_date.slice(0, 10) : "",
       expiry_date: doc.expiry_date ? doc.expiry_date.slice(0, 10) : "",
-      issued_country: doc.issued_country || "India",
+      issued_country: doc.issued_country || "",
     });
     setEditError("");
   }
@@ -59,6 +62,7 @@ export default function SavedDocumentsList({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           doc_type: editForm.doc_type,
+          issued_date: editForm.issued_date || null,
           expiry_date: editForm.expiry_date || null,
           issued_country: editForm.issued_country?.trim() || null,
         }),
@@ -83,6 +87,7 @@ export default function SavedDocumentsList({
             ? {
                 ...d,
                 doc_type: editForm.doc_type,
+                issued_date: editForm.issued_date || null,
                 expiry_date: editForm.expiry_date || null,
                 issued_country: editForm.issued_country?.trim() || null,
               }
@@ -204,10 +209,28 @@ export default function SavedDocumentsList({
               )}
             </span>
 
-            <span className="muted small">
-              {doc.issued_country ?? "Country not recorded"}
-              {doc.expiry_date ? ` · expires ${new Date(doc.expiry_date).toLocaleDateString("en-IN")}` : ""}
-            </span>
+            {(() => {
+              const details: string[] = [];
+              if (doc.issued_date) {
+                try {
+                  details.push(`Issued: ${new Date(doc.issued_date).toLocaleDateString("en-IN")}`);
+                } catch {
+                  details.push(`Issued: ${doc.issued_date}`);
+                }
+              }
+              if (doc.expiry_date) {
+                try {
+                  details.push(`Expires: ${new Date(doc.expiry_date).toLocaleDateString("en-IN")}`);
+                } catch {
+                  details.push(`Expires: ${doc.expiry_date}`);
+                }
+              }
+              if (doc.issued_country) {
+                details.push(`Issued at: ${doc.issued_country}`);
+              }
+              if (details.length === 0) return null;
+              return <span className="muted small">{details.join(" · ")}</span>;
+            })()}
           </div>
         ))}
       </div>
@@ -235,7 +258,15 @@ export default function SavedDocumentsList({
               </select>
             </label>
 
-            <div className="field-row">
+            <div className="field-row" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))" }}>
+              <label className="form-field">
+                Issued Date
+                <input
+                  type="date"
+                  value={editForm.issued_date}
+                  onChange={(e) => setEditForm({ ...editForm, issued_date: e.target.value })}
+                />
+              </label>
               <label className="form-field">
                 Expiry Date
                 <input
@@ -245,9 +276,10 @@ export default function SavedDocumentsList({
                 />
               </label>
               <label className="form-field">
-                Issuing Country
+                Issued at (Place)
                 <input
                   value={editForm.issued_country}
+                  placeholder="e.g. Bangalore"
                   onChange={(e) => setEditForm({ ...editForm, issued_country: e.target.value })}
                 />
               </label>

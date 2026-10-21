@@ -7,8 +7,9 @@ import { DOCUMENT_TYPES } from "@/lib/documents";
 export default function DocumentForm() {
   const router = useRouter();
   const [docType, setDocType] = useState("aadhar");
-  const [expiry, setExpiry] = useState("");
-  const [country, setCountry] = useState("India");
+  const [issuedDate, setIssuedDate] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [issuedPlace, setIssuedPlace] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -21,8 +22,12 @@ export default function DocumentForm() {
 
     const form = new FormData(event.currentTarget);
     form.set("doc_type", docType);
-    if (expiry) form.set("expiry_date", expiry);
-    if (country) form.set("issued_country", country);
+    if (issuedDate) form.set("issued_date", issuedDate);
+    if (expiryDate) form.set("expiry_date", expiryDate);
+    if (issuedPlace) {
+      form.set("issued_country", issuedPlace);
+      form.set("issued_place", issuedPlace);
+    }
 
     try {
       const response = await fetch("/api/documents", {
@@ -40,7 +45,9 @@ export default function DocumentForm() {
 
       event.currentTarget.reset();
       setStatus("Document saved and securely encrypted.");
-      setExpiry("");
+      setIssuedDate("");
+      setExpiryDate("");
+      setIssuedPlace("");
       router.refresh();
     } catch {
       setLoading(false);
@@ -72,14 +79,30 @@ export default function DocumentForm() {
         />
       </label>
 
-      <div className="field-row">
+      <div className="field-row" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))" }}>
         <label className="form-field">
-          Expiry Date
-          <input type="date" value={expiry} onChange={(event) => setExpiry(event.target.value)} />
+          Issued Date
+          <input
+            type="date"
+            value={issuedDate}
+            onChange={(event) => setIssuedDate(event.target.value)}
+          />
         </label>
         <label className="form-field">
-          Issuing Country
-          <input value={country} onChange={(event) => setCountry(event.target.value)} />
+          Expiry Date
+          <input
+            type="date"
+            value={expiryDate}
+            onChange={(event) => setExpiryDate(event.target.value)}
+          />
+        </label>
+        <label className="form-field">
+          Issued at (Place)
+          <input
+            value={issuedPlace}
+            placeholder="e.g. Bangalore"
+            onChange={(event) => setIssuedPlace(event.target.value)}
+          />
         </label>
       </div>
 

@@ -49,6 +49,7 @@ export default async function DocumentsPage() {
         doc_type: (doc.doc_type as string) || "document",
         doc_number,
         expiry_date: doc.expiry_date as string | null,
+        issued_date: (doc.issued_date as string | null) ?? null,
         issued_country: doc.issued_country as string | null,
         file_name: doc.file_name as string | null,
         download_url,

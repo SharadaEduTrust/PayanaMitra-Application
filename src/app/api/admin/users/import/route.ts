@@ -1,31 +1,48 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession, derivePassword, phoneToEmail, PHONE_REGEX } from '@/lib/server/auth'
+import { encryptDocumentNumber } from '@/lib/crypto'
 
 /**
- * GET  /api/admin/users/import — Returns a downloadable CSV template with all supported columns.
- * POST /api/admin/users/import — Accepts multipart/form-data with a single `file` field (UTF-8 CSV).
- *                               Bulk-creates up to 500 users server-side with leader assignment support.
+ * GET  /api/admin/users/import — Returns a downloadable CSV template with field names from the specification.
+ * POST /api/admin/users/import — Bulk-creates up to 500 users server-side with leader assignment and guest details.
  *
- * CSV columns:
- *   phone           — 10-15 digit phone number (required)
- *   first_name      — string max 50 (required)
- *   last_name       — string max 50 (required)
- *   role            — guest | traveller | leader | admin (default: traveller)
- *   leader_phone    — optional phone number of assigned leader
- *   email           — optional contact e-mail
- *   location        — optional home location / city (max 50)
- *   date_of_joining — YYYY-MM-DD (optional)
- *   remarks         — freeform notes (optional)
+ * Follows exact Field Names from the Payana Mitra App - Table Details sheet ("User Table" & "Guest Details Table"):
+ *   User Id / Mobile Number — 10-15 digit phone number (required)
+ *   First Name              — string max 50 (required)
+ *   Last Name               — string max 50 (required)
+ *   Role                    — Guest / Leader / Admin (default: Guest)
+ *   Leader Name             — Leader name or 10-15 digit phone of assigned leader (optional)
+ *   Date of Joining         — DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD (optional)
+ *   Active / Inactive       — Active or Inactive (optional, default: Active)
+ *   Location                — optional home location / city (max 50)
+ *   email id                — optional contact e-mail
+ *   Remarks                 — freeform notes (optional)
+ *
+ * Optional Guest Details columns (from "Guest Details Table"):
+ *   Date of Birth           — DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD
+ *   PAN                     — 10-char alphanumeric
+ *   Passport No.            — alphanumeric
+ *   Passport Expiry Date    — DD-MM-YYYY or YYYY-MM-DD
+ *   Passport Issued Location— string max 50
+ *   Travel Insurance No.    — alphanumeric
+ *   Travel Insurance Company— string max 50
+ *   Travel Insurance Expiry Date — DD-MM-YYYY or YYYY-MM-DD
+ *   Food Preference         — Veg or Non Veg
+ *   Food Allergy            — string max 50
+ *   Emergency Contact Name  — string max 50
+ *   Emergency Contact Number— 10-15 digits
  */
-
-const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
 
 const ROLE_MAP: Record<string, 'traveller' | 'leader' | 'admin'> = {
   traveller: 'traveller',
   guest: 'traveller',
+  student: 'traveller',
   leader: 'leader',
+  trail_leader: 'leader',
+  'trail leader': 'leader',
   admin: 'admin',
+  administrator: 'admin',
 }
 
 async function requireAdmin() {
@@ -39,7 +56,7 @@ function parseCSV(text: string): Record<string, string>[] {
   const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
   const headerLine = lines.find(l => l.trim().length > 0)
   if (!headerLine) return []
-  const headers = splitCSVRow(headerLine).map(h => h.trim().toLowerCase())
+  const headers = splitCSVRow(headerLine).map(h => h.trim())
   const rows: Record<string, string>[] = []
   for (let i = lines.indexOf(headerLine) + 1; i < lines.length; i++) {
     const line = lines[i]
@@ -73,17 +90,71 @@ function splitCSVRow(line: string): string[] {
   return fields
 }
 
+function getField(row: Record<string, string>, ...aliases: string[]): string {
+  for (const a of aliases) {
+    if (row[a] !== undefined && row[a].trim() !== '') return row[a].trim()
+    const normTarget = a.toLowerCase().replace(/[\s_/.-]/g, '')
+    for (const [k, v] of Object.entries(row)) {
+      if (k.toLowerCase().replace(/[\s_/.-]/g, '') === normTarget && v.trim() !== '') {
+        return v.trim()
+      }
+    }
+  }
+  return ''
+}
+
+function parseDateString(dateStr: string): string | null {
+  const clean = dateStr.trim()
+  if (!clean) return null
+  // DD-MM-YYYY or DD/MM/YYYY
+  const dmy = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/)
+  if (dmy) {
+    const day = dmy[1].padStart(2, '0')
+    const month = dmy[2].padStart(2, '0')
+    const year = dmy[3]
+    return `${year}-${month}-${day}`
+  }
+  // YYYY-MM-DD or YYYY/MM/DD
+  const ymd = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/)
+  if (ymd) {
+    const year = ymd[1]
+    const month = ymd[2].padStart(2, '0')
+    const day = ymd[3].padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+  return null
+}
+
 // ─── GET — download CSV template ─────────────────────────────────────────────
-export async function GET() {
+export async function GET(req: NextRequest) {
   const guard = await requireAdmin()
   if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })
 
+  const type = req.nextUrl.searchParams.get('type')
+
+  if (type === 'details' || type === 'guest_details') {
+    // Template matching "Guest Details Table"
+    const lines = [
+      'User Id,First Name,Last Name,Date of Birth,PAN,Passport No.,Passport Expiry Date,Passport Issued Location,Travel Insurance No.,Travel Insurance Company,Travel Insurance Expiry Date,Food Preference,Food Allergy,Emergency Contact Name,Emergency Contact Number',
+      '9019911700,Arvind,Kamath,18-06-1965,AAADK9754A,ZA495775,18-07-2030,Bangalore,7103167389,TATA AIG,10-09-2026,Veg,Peanuts and Milk,Anita Kamath,9019911700',
+      '9876543210,Sunita,Sharma,12-04-1985,,,,,ICICI Lombard,15-08-2027,Non Veg,,Ramesh Sharma,9876543211',
+    ]
+    return new NextResponse(lines.join('\n'), {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="guest_details_import_template.csv"',
+      },
+    })
+  }
+
+  // Template matching "User Table" from the Table Details specification
   const lines = [
-    'phone,first_name,last_name,role,leader_phone,email,location,date_of_joining,remarks',
-    '9876543210,Amit,Sharma,guest,9000000002,amit.sharma@example.com,Mumbai,2024-01-15,Group A',
-    '9876543211,Priya,Mehta,leader,,priya.mehta@example.com,Delhi,2024-02-01,Trail Leader',
-    '9876543212,Rahul,Verma,guest,9000000002,,Delhi,2024-03-10,VIP guest',
-    '9876543213,Sunita,Nair,traveller,,,Bangalore,,',
+    'User Id,First Name,Last Name,Role,Leader Name,Date of Joining,Active / Inactive,Location,email id,Mobile Number',
+    '9019911700,Arvind,Kamath,Guest,Anushree Kini,18-06-2025,Active,Bengaluru,arvindakamath@gmail.com,9019911700',
+    '9000000002,Anushree,Kini,Leader,,01-01-2025,Active,Bengaluru,anushree@payana.app,9000000002',
+    '9876543210,Sunita,Sharma,Guest,Anushree Kini,10-02-2025,Active,Mysuru,sunita.sharma@example.com,9876543210',
+    '9876543211,Rahul,Verma,Guest,Anushree Kini,15-03-2025,Active,Delhi,rahul.verma@example.com,9876543211',
   ]
   return new NextResponse(lines.join('\n'), {
     status: 200,
@@ -133,10 +204,10 @@ export async function POST(req: NextRequest) {
   // Pre-load all existing profiles for phone duplicate detection and leader lookup
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: existingProfiles } = await (admin.from('profiles') as any)
-    .select('id, phone, role') as { data: { id: string; phone: string; role: string }[] | null }
+    .select('id, phone, first_name, last_name, role') as { data: { id: string; phone: string; first_name: string; last_name: string; role: string }[] | null }
 
   const existingPhoneMap = new Map<string, string>()
-  const leaderPhoneToIdMap = new Map<string, string>()
+  const leaderLookupMap = new Map<string, string>()
 
   for (const p of (existingProfiles ?? [])) {
     const clean = p.phone.replace(/\s+/g, '')
@@ -148,12 +219,18 @@ export async function POST(req: NextRequest) {
     }
 
     if (['leader', 'admin'].includes(p.role)) {
-      leaderPhoneToIdMap.set(clean, p.id)
+      leaderLookupMap.set(p.id.toLowerCase(), p.id)
+      leaderLookupMap.set(clean, p.id)
       if (clean.startsWith('+91')) {
-        leaderPhoneToIdMap.set(clean.replace(/^\+91/, ''), p.id)
+        leaderLookupMap.set(clean.replace(/^\+91/, ''), p.id)
       } else {
-        leaderPhoneToIdMap.set(`+91${clean}`, p.id)
+        leaderLookupMap.set(`+91${clean}`, p.id)
       }
+
+      const fullName = `${p.first_name} ${p.last_name}`.trim().toLowerCase()
+      if (fullName) leaderLookupMap.set(fullName, p.id)
+      const firstName = p.first_name.trim().toLowerCase()
+      if (firstName && !leaderLookupMap.has(firstName)) leaderLookupMap.set(firstName, p.id)
     }
   }
 
@@ -170,61 +247,127 @@ export async function POST(req: NextRequest) {
     const raw = rows[i]
     const rowNum = i + 2
 
-    const rawPhone   = (raw['phone'] ?? '').trim().replace(/\s+/g, '')
-    const first_name = (raw['first_name'] ?? '').trim()
-    const last_name  = (raw['last_name'] ?? '').trim()
-    const rawRole    = (raw['role'] ?? 'traveller').trim().toLowerCase()
-    const leaderPhone = (raw['leader_phone'] ?? raw['leader_id'] ?? '').trim().replace(/\s+/g, '')
+    // Field extraction supporting exact sheet names and common aliases
+    const rawPhone = getField(raw, 'Mobile Number', 'MobileNumber', 'User Id', 'UserId', 'phone', 'phone_number').replace(/\s+/g, '')
+    const first_name = getField(raw, 'First Name', 'FirstName', 'first_name', 'Guest 1st Name')
+    const last_name  = getField(raw, 'Last Name', 'LastName', 'last_name', 'Guest Last Name')
+    const rawRole    = getField(raw, 'Role', 'role') || 'Guest'
+    const leaderInput = getField(raw, 'Leader Name', 'LeaderName', 'Leader', 'leader_phone', 'leader_id')
+    const activeInput = getField(raw, 'Active / Inactive', 'Active/Inactive', 'Active', 'status', 'is_active')
+    const location    = getField(raw, 'Location', 'location', 'city') || null
+    const rawDoj      = getField(raw, 'Date of Joining', 'DateOfJoining', 'date_of_joining', 'doj')
+    const email       = getField(raw, 'email id', 'email_id', 'email', 'e-mail') || null
+    const remarks     = getField(raw, 'Remarks', 'remarks', 'notes') || null
 
-    // Field validation
+    // Guest Details fields
+    const rawDob      = getField(raw, 'Date of Birth', 'DateOfBirth', 'dob')
+    const pan         = getField(raw, 'PAN', 'pan') || null
+    const passportNo  = getField(raw, 'Passport No.', 'Passport No', 'Passport Number', 'passport_no') || null
+    const rawPassExp  = getField(raw, 'Passport Expiry Date', 'Passport Expiry', 'passport_expiry')
+    const passLoc     = getField(raw, 'Passport Issued Location', 'Passport Issue Location', 'passport_issued_location') || null
+    const insNo       = getField(raw, 'Travel Insurance No.', 'Travel Insurance No', 'travel_insurance_no') || null
+    const insCo       = getField(raw, 'Travel Insurance Company', 'insurance_company') || null
+    const rawInsExp   = getField(raw, 'Travel Insurance Expiry Date', 'insurance_expiry')
+    const rawFoodPref = getField(raw, 'Food Preference', 'food_preference')
+    const foodAllergy = getField(raw, 'Food Allergy', 'Food Allergies', 'food_allergy') || null
+    const emgName     = getField(raw, 'Emergency Contact Name', 'emergency_contact_name') || null
+    const emgNo       = getField(raw, 'Emergency Contact Number', 'Emergency Contact No', 'emergency_contact_no') || null
+
+    // Validation
     if (!PHONE_REGEX.test(rawPhone)) {
-      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'Phone must be a valid 10-15 digit number' })
+      results.push({ row: rowNum, phone: rawPhone || 'Row ' + rowNum, status: 'error', error: 'User Id / Mobile Number must be a valid 10-15 digit number' })
       continue
     }
     if (!first_name || first_name.length > 50) {
-      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'first_name is required (max 50 chars)' })
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'First Name is required (max 50 chars)' })
       continue
     }
     if (!last_name || last_name.length > 50) {
-      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'last_name is required (max 50 chars)' })
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'Last Name is required (max 50 chars)' })
       continue
     }
 
-    const mappedRole = ROLE_MAP[rawRole]
-    if (!mappedRole) {
-      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: `Invalid role "${rawRole}" — must be guest, traveller, leader, or admin` })
-      continue
-    }
+    const mappedRole = ROLE_MAP[rawRole.toLowerCase().trim()] || 'traveller'
+    const isInactive = activeInput.toLowerCase() === 'inactive' || activeInput.toLowerCase() === 'no' || activeInput.toLowerCase() === 'off'
+    const is_active = !isInactive
 
-    const location = (raw['location'] ?? '').trim() || null
     if (location && location.length > 50) {
       results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'Location cannot exceed 50 characters' })
       continue
     }
 
-    const date_of_joining = (raw['date_of_joining'] ?? '').trim() || null
-    if (date_of_joining && !DATE_REGEX.test(date_of_joining)) {
-      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'date_of_joining must be YYYY-MM-DD' })
+    const date_of_joining = rawDoj ? parseDateString(rawDoj) : null
+    if (rawDoj && !date_of_joining) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: `Date of Joining "${rawDoj}" is invalid. Use DD-MM-YYYY or YYYY-MM-DD.` })
       continue
     }
 
     // Leader lookup
     let leader_id: string | null = null
-    if (leaderPhone) {
+    if (leaderInput) {
       if (['leader', 'admin'].includes(mappedRole)) {
         results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'Leaders and admins cannot be assigned a leader' })
         continue
       }
-      leader_id = leaderPhoneToIdMap.get(leaderPhone) ?? null
+      const cleanInput = leaderInput.trim().toLowerCase()
+      leader_id = leaderLookupMap.get(cleanInput) ?? leaderLookupMap.get(cleanInput.replace(/\s+/g, '')) ?? null
       if (!leader_id) {
-        results.push({ row: rowNum, phone: rawPhone, status: 'error', error: `Assigned leader with phone "${leaderPhone}" not found or not an active leader` })
+        results.push({ row: rowNum, phone: rawPhone, status: 'error', error: `Assigned leader "${leaderInput}" not found. Enter leader's full name or phone number.` })
         continue
       }
     }
 
-    // Duplicate detection
-    if (existingPhoneMap.has(rawPhone)) {
-      results.push({ row: rowNum, phone: rawPhone, status: 'skipped', error: 'Phone already registered' })
+    // Check duplicate phone
+    let existingUserId = existingPhoneMap.get(rawPhone)
+    if (existingUserId) {
+      // If user already exists and this row contains guest details, update details
+      if (rawDob || rawFoodPref || foodAllergy || emgName || emgNo || insNo || insCo || passLoc) {
+        try {
+          const dob = rawDob ? parseDateString(rawDob) : null
+          const insurance_expiry = rawInsExp ? parseDateString(rawInsExp) : null
+          const food_preference = rawFoodPref ? (rawFoodPref.toLowerCase().includes('non') ? 'non_veg' : 'veg') : null
+
+          await admin.from('traveller_details').upsert({
+            user_id: existingUserId,
+            dob,
+            food_preference,
+            food_allergy: foodAllergy,
+            emergency_contact_name: emgName,
+            emergency_contact_no: emgNo,
+            travel_insurance_no: insNo,
+            insurance_company: insCo,
+            insurance_expiry,
+            passport_issued_location: passLoc,
+          }, { onConflict: 'user_id' })
+
+          if (pan) {
+            const enc = encryptDocumentNumber(pan)
+            await admin.from('guest_documents').insert({
+              user_id: existingUserId,
+              doc_type: 'pan',
+              ...enc,
+            })
+          }
+          if (passportNo) {
+            const enc = encryptDocumentNumber(passportNo)
+            const expiry_date = rawPassExp ? parseDateString(rawPassExp) : null
+            await admin.from('guest_documents').insert({
+              user_id: existingUserId,
+              doc_type: 'passport',
+              expiry_date,
+              issued_country: passLoc || 'India',
+              ...enc,
+            })
+          }
+          results.push({ row: rowNum, phone: rawPhone, status: 'created', id: existingUserId })
+          continue
+        } catch (detailErr) {
+          results.push({ row: rowNum, phone: rawPhone, status: 'error', error: String(detailErr) })
+          continue
+        }
+      }
+
+      results.push({ row: rowNum, phone: rawPhone, status: 'skipped', error: 'User Id / Mobile Number already registered' })
       continue
     }
 
@@ -254,12 +397,12 @@ export async function POST(req: NextRequest) {
           last_name,
           role: mappedRole,
           leader_id,
-          email: raw['email'] ? raw['email'].trim() || null : null,
+          email,
           location,
           date_of_joining,
-          remarks: raw['remarks'] ? raw['remarks'].trim() || null : null,
+          remarks,
           must_change_password: false,
-          is_active: true,
+          is_active,
         })
         .select('id')
         .single()
@@ -270,23 +413,62 @@ export async function POST(req: NextRequest) {
         continue
       }
 
-      // Record in map to prevent duplicate inserts within the same batch
-      existingPhoneMap.set(rawPhone, profileData.id)
-      if (rawPhone.startsWith('+91')) {
-        existingPhoneMap.set(rawPhone.replace(/^\+91/, ''), profileData.id)
-      } else {
-        existingPhoneMap.set(`+91${rawPhone}`, profileData.id)
-      }
-      if (['leader', 'admin'].includes(mappedRole)) {
-        leaderPhoneToIdMap.set(rawPhone, profileData.id)
-        if (rawPhone.startsWith('+91')) {
-          leaderPhoneToIdMap.set(rawPhone.replace(/^\+91/, ''), profileData.id)
-        } else {
-          leaderPhoneToIdMap.set(`+91${rawPhone}`, profileData.id)
-        }
+      const createdUserId = profileData.id
+
+      // Upsert guest details if provided
+      const dob = rawDob ? parseDateString(rawDob) : null
+      const insurance_expiry = rawInsExp ? parseDateString(rawInsExp) : null
+      const food_preference = rawFoodPref ? (rawFoodPref.toLowerCase().includes('non') ? 'non_veg' : 'veg') : null
+
+      if (dob || food_preference || foodAllergy || emgName || emgNo || insNo || insCo || passLoc) {
+        await admin.from('traveller_details').upsert({
+          user_id: createdUserId,
+          dob,
+          food_preference,
+          food_allergy: foodAllergy,
+          emergency_contact_name: emgName,
+          emergency_contact_no: emgNo,
+          travel_insurance_no: insNo,
+          insurance_company: insCo,
+          insurance_expiry,
+          passport_issued_location: passLoc,
+        }, { onConflict: 'user_id' })
       }
 
-      results.push({ row: rowNum, phone: rawPhone, status: 'created', id: profileData.id })
+      if (pan) {
+        const enc = encryptDocumentNumber(pan)
+        await admin.from('guest_documents').insert({
+          user_id: createdUserId,
+          doc_type: 'pan',
+          ...enc,
+        })
+      }
+      if (passportNo) {
+        const enc = encryptDocumentNumber(passportNo)
+        const expiry_date = rawPassExp ? parseDateString(rawPassExp) : null
+        await admin.from('guest_documents').insert({
+          user_id: createdUserId,
+          doc_type: 'passport',
+          expiry_date,
+          issued_country: passLoc || 'India',
+          ...enc,
+        })
+      }
+
+      // Record in map to prevent duplicate inserts within the same batch
+      existingPhoneMap.set(rawPhone, createdUserId)
+      if (rawPhone.startsWith('+91')) {
+        existingPhoneMap.set(rawPhone.replace(/^\+91/, ''), createdUserId)
+      } else {
+        existingPhoneMap.set(`+91${rawPhone}`, createdUserId)
+      }
+      if (['leader', 'admin'].includes(mappedRole)) {
+        leaderLookupMap.set(rawPhone, createdUserId)
+        const fullName = `${first_name} ${last_name}`.trim().toLowerCase()
+        if (fullName) leaderLookupMap.set(fullName, createdUserId)
+      }
+
+      results.push({ row: rowNum, phone: rawPhone, status: 'created', id: createdUserId })
     } catch (err) {
       results.push({ row: rowNum, phone: rawPhone, status: 'error', error: String(err) })
     }

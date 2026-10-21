@@ -10,14 +10,39 @@ export default async function AdminTripsPage() {
   await requireProfile(["admin"]);
   const supabase = await createClient();
 
-  // trail_leader_view joins each trip to its leader; RLS is security_invoker so
-  // it only returns rows this admin may see.
-  const { data } = await supabase
-    .from("trail_leader_view")
-    .select("*")
+  // Query trips with destination and is_active, joined with leader profiles
+  const { data: tripsData } = await supabase
+    .from("trips")
+    .select("id, trip_code, name, destination, start_date, end_date, status, is_active, leader_id, leader:profiles!leader_id(id, first_name, last_name, phone, email)")
     .order("start_date", { ascending: false });
 
-  const rows = (data ?? []) as TrailLeaderView[];
+  let rows: TrailLeaderView[] = [];
+
+  if (tripsData && tripsData.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rows = tripsData.map((t: any) => ({
+      trip_id: t.id,
+      trip_code: t.trip_code,
+      trip_name: t.name,
+      destination: t.destination ?? null,
+      start_date: t.start_date,
+      end_date: t.end_date,
+      status: t.status,
+      is_active: t.is_active ?? true,
+      leader_id: t.leader_id,
+      leader_first_name: t.leader?.first_name ?? null,
+      leader_last_name: t.leader?.last_name ?? null,
+      leader_phone: t.leader?.phone ?? null,
+      leader_email: t.leader?.email ?? null,
+    }));
+  } else {
+    // Fallback to trail_leader_view
+    const { data: viewData } = await supabase
+      .from("trail_leader_view")
+      .select("*")
+      .order("start_date", { ascending: false });
+    rows = (viewData ?? []) as TrailLeaderView[];
+  }
 
   return (
     <>

@@ -6,33 +6,24 @@ import { getSession } from '@/lib/server/auth'
  * POST /api/admin/trips/[id]/itinerary/import
  *
  * Accepts a multipart/form-data request with a single `file` field that
- * contains a UTF-8 CSV.  Parses the CSV server-side and bulk-imports the
+ * contains a UTF-8 CSV. Parses the CSV server-side and bulk-imports the
  * itinerary (days + activities) for the given trip.
  *
- * CSV columns (header row required, order does not matter):
- *   day_number           — integer >= 1 (required)
- *   destination          — string  (optional)
- *   hotel_name           — string  (optional)
- *   itinerary_text       — string  (optional)
- *   activity_title       — string  (optional — row becomes activity when present)
- *   activity_description — string  (optional)
- *   start_time           — HH:MM or HH:MM:SS (optional)
- *   end_time             — HH:MM or HH:MM:SS (optional)
- *   activity_order       — integer >= 1 (optional)
+ * Follows exact Field Names from the Payana Mitra App - Table Details sheet ("Trail Table Extension"):
+ *   Trail Id             — string (optional for reference)
+ *   Trail Name           — string (optional for reference)
+ *   Day                  — integer >= 1 (required)
+ *   Destination          — string (optional)
+ *   Itinerary            — string (optional, description of the day plan)
+ *   Hotel Name           — string (optional)
  *
- * Behaviour:
- *   - Days are UPSERTED on (trip_id, day_number). Day-level columns from
- *     the FIRST row for each day_number win; subsequent rows for the same
- *     day are treated as additional activities only.
- *   - Activities are APPENDed (no deduplication).
- *   - A row with no activity_title only creates/updates the day record.
- *   - Max 200 rows per CSV.
- *
- * Returns:
- *   { days_upserted, activities_inserted, skipped, errors: [{ row, error }] }
- *
- * GET /api/admin/trips/[id]/itinerary/import
- *   Returns a plain-text CSV template the admin can download.
+ * Extended activity columns supported:
+ *   Meal Plan            — Breakfast | Breakfast & Dinner | Breakfast, Lunch & Dinner (optional)
+ *   Activity Title       — string (optional — row creates activity when present)
+ *   Activity Description — string (optional)
+ *   Start Time           — HH:MM or HH:MM:SS (optional)
+ *   End Time             — HH:MM or HH:MM:SS (optional)
+ *   Activity Order       — integer >= 1 (optional)
  */
 
 interface Params { params: Promise<{ id: string }> }
@@ -56,7 +47,7 @@ function parseCSV(text: string): Record<string, string>[] {
   const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
   const headerLine = lines.find(l => l.trim().length > 0)
   if (!headerLine) return []
-  const headers = splitCSVRow(headerLine).map(h => h.trim().toLowerCase())
+  const headers = splitCSVRow(headerLine).map(h => h.trim())
   const rows: Record<string, string>[] = []
   for (let i = lines.indexOf(headerLine) + 1; i < lines.length; i++) {
     const line = lines[i]
@@ -90,17 +81,29 @@ function splitCSVRow(line: string): string[] {
   return fields
 }
 
+function getField(row: Record<string, string>, ...aliases: string[]): string {
+  for (const a of aliases) {
+    if (row[a] !== undefined && row[a].trim() !== '') return row[a].trim()
+    const normTarget = a.toLowerCase().replace(/[\s_/.-]/g, '')
+    for (const [k, v] of Object.entries(row)) {
+      if (k.toLowerCase().replace(/[\s_/.-]/g, '') === normTarget && v.trim() !== '') {
+        return v.trim()
+      }
+    }
+  }
+  return ''
+}
+
 export async function GET() {
   const guard = await requireAdmin()
   if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })
 
+  // Uses Field Names matching "Trail Table Extension" from the Table Details specification
   const lines = [
-    'day_number,destination,hotel_name,meal_plan,itinerary_text,activity_title,activity_description,start_time,end_time,activity_order',
-    '1,Srinagar,Hotel Grand Palace,"Breakfast & Dinner","Drive from Delhi to Srinagar, check-in",Airport Transfer,Pick-up from Srinagar airport,10:00,12:00,1',
-    '1,,,,,"Shikara Ride","Evening shikara ride on Dal Lake",16:00,18:00,2',
-    '2,Gulmarg,Snow Peak Resort,"Breakfast, Lunch & Dinner","Full day excursion to Gulmarg",Gondola Ride,"Cable car ride to Apharwat Peak",09:00,13:00,1',
-    '2,,,,,"Skiing",Skiing on the slopes,14:00,17:00,2',
-    '3,Pahalgam,Pine View Hotel,"Breakfast","Scenic drive to Pahalgam valley",,,,,',
+    'Trail Id,Trail Name,Day,Destination,Itinerary,Hotel Name,Meal Plan,Activity Title,Activity Description,Start Time,End Time',
+    '003,The Asian Amazon Trail,1,Sandakan,"• Arrive in Sandakan, gateway to wildlife heartland\\n• Transfer to hotel\\n• Welcome dinner",Hotel Sandakan,Breakfast & Dinner,Airport Transfer,Pick-up from Sandakan airport,10:00,12:00',
+    '003,The Asian Amazon Trail,2,Sepilok • Kinabatangan River,"• Visit Orangutan Rehabilitation Centre\\n• Travel to Bilit\\n• Afternoon river cruise",Bilit Rainforest Lodge,Breakfast & Dinner,River Cruise,Afternoon cruise for wildlife spotting,15:00,18:00',
+    '003,The Asian Amazon Trail,3,Kinabatangan River,"• Morning cruise\\n• Jungle walk\\n• Night walk",Bilit Rainforest Lodge,Breakfast, Lunch & Dinner,Morning Cruise,Early morning river safari,06:00,08:30',
   ]
   return new NextResponse(lines.join('\n'), {
     status: 200,
@@ -153,7 +156,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     .eq('id', trip_id)
 
   if ((tripCount ?? 0) === 0) {
-    return NextResponse.json({ error: 'Trip not found' }, { status: 404 })
+    return NextResponse.json({ error: 'Trail not found' }, { status: 404 })
   }
 
   type RowError = { row: number; error: string }
@@ -182,21 +185,22 @@ export async function POST(req: NextRequest, { params }: Params) {
     const row = rows[i]
     const rowNum = i + 2
 
-    const dayRaw = row['day_number'] ?? ''
+    // Field names matching "Trail Table Extension"
+    const dayRaw = getField(row, 'Day', 'day', 'day_number', 'Day Number')
     const dayNum = parseInt(dayRaw, 10)
     if (!dayRaw || isNaN(dayNum) || dayNum < 1) {
-      errors.push({ row: rowNum, error: 'day_number must be an integer >= 1' })
+      errors.push({ row: rowNum, error: 'Day must be an integer >= 1' })
       skipped++
       continue
     }
 
-    const rawMealPlan = (row['meal_plan'] ?? '').trim()
+    const rawMealPlan = getField(row, 'Meal Plan', 'meal_plan', 'MealPlan')
     let mealPlan: string | null = null
     if (rawMealPlan) {
       if (!VALID_MEAL_PLANS.has(rawMealPlan)) {
         errors.push({
           row: rowNum,
-          error: `Invalid meal_plan: "${rawMealPlan}". Supported values are: "Breakfast", "Breakfast & Dinner", "Breakfast, Lunch & Dinner"`,
+          error: `Invalid Meal Plan: "${rawMealPlan}". Supported values: "Breakfast", "Breakfast & Dinner", "Breakfast, Lunch & Dinner"`,
         })
         skipped++
         continue
@@ -204,120 +208,135 @@ export async function POST(req: NextRequest, { params }: Params) {
       mealPlan = rawMealPlan
     }
 
+    const destination = getField(row, 'Destination', 'destination', 'place') || null
+    const hotel_name = getField(row, 'Hotel Name', 'HotelName', 'hotel_name', 'hotel') || null
+    const itinerary_text = getField(row, 'Itinerary', 'itinerary', 'itinerary_text', 'Day Plan') || null
+
     if (!dayData.has(dayNum)) {
       dayData.set(dayNum, {
-        day_number:     dayNum,
-        destination:    row['destination']     || null,
-        hotel_name:     row['hotel_name']      || null,
-        meal_plan:      mealPlan,
-        itinerary_text: row['itinerary_text']  || null,
+        day_number: dayNum,
+        destination,
+        hotel_name,
+        meal_plan: mealPlan,
+        itinerary_text,
       })
     }
 
-    const actTitle = (row['activity_title'] ?? '').trim()
+    const actTitle = getField(row, 'Activity Title', 'ActivityTitle', 'activity_title', 'activity')
     if (!actTitle) continue
 
-    const startTime = (row['start_time'] ?? '').trim() || null
-    const endTime   = (row['end_time']   ?? '').trim() || null
+    const startTime = getField(row, 'Start Time', 'StartTime', 'start_time') || null
+    const endTime   = getField(row, 'End Time', 'EndTime', 'end_time') || null
 
     if (startTime && !TIME_RE.test(startTime)) {
-      errors.push({ row: rowNum, error: 'start_time must be HH:MM or HH:MM:SS' })
+      errors.push({ row: rowNum, error: 'Start Time must be HH:MM or HH:MM:SS' })
       skipped++
       continue
     }
     if (endTime && !TIME_RE.test(endTime)) {
-      errors.push({ row: rowNum, error: 'end_time must be HH:MM or HH:MM:SS' })
+      errors.push({ row: rowNum, error: 'End Time must be HH:MM or HH:MM:SS' })
       skipped++
       continue
     }
     if (startTime && endTime && endTime < startTime) {
-      errors.push({ row: rowNum, error: 'end_time must be after or equal to start_time' })
+      errors.push({ row: rowNum, error: 'End Time must be after or equal to Start Time' })
       skipped++
       continue
     }
 
-    const orderRaw = (row['activity_order'] ?? '').trim()
+    const orderRaw = getField(row, 'Activity Order', 'activity_order')
     const actOrder = orderRaw ? parseInt(orderRaw, 10) : null
-    if (orderRaw && (isNaN(actOrder!) || actOrder! < 1)) {
-      errors.push({ row: rowNum, error: 'activity_order must be an integer >= 1' })
-      skipped++
-      continue
-    }
 
-    if (!activitiesByDay.has(dayNum)) activitiesByDay.set(dayNum, [])
-    activitiesByDay.get(dayNum)!.push({
-      title:          actTitle,
-      description:    (row['activity_description'] ?? '').trim() || null,
-      start_time:     startTime,
-      end_time:       endTime,
-      activity_order: actOrder,
-      row:            rowNum,
+    const existing = activitiesByDay.get(dayNum) ?? []
+    existing.push({
+      title: actTitle,
+      description: getField(row, 'Activity Description', 'activity_description', 'description') || null,
+      start_time: startTime,
+      end_time: endTime,
+      activity_order: actOrder ?? (existing.length + 1),
+      row: rowNum,
     })
+    activitiesByDay.set(dayNum, existing)
   }
 
-  if (dayData.size === 0) {
-    return NextResponse.json(
-      { error: 'No valid days found in CSV', days_upserted: 0, activities_inserted: 0, skipped, errors, message: 'No valid days found in CSV' },
-      { status: 422 },
-    )
-  }
-
-  const dayInserts = Array.from(dayData.values()).map(d => ({ ...d, trip_id }))
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: upsertedDays, error: daysError } = await (admin.from('itinerary_days') as any)
-    .upsert(dayInserts, { onConflict: 'trip_id,day_number', ignoreDuplicates: false })
-    .select('id, day_number')
-
-  if (daysError) {
-    return NextResponse.json({ error: 'Failed to upsert days: ' + daysError.message }, { status: 500 })
-  }
-
-  const days_upserted: number = upsertedDays?.length ?? 0
-
+  // Upsert days
   const dayIdMap = new Map<number, string>()
-  for (const d of (upsertedDays ?? [])) { dayIdMap.set(d.day_number, d.id) }
+  let daysUpserted = 0
 
-  const activityInserts: {
-    itinerary_day_id: string
-    title: string
-    description: string | null
-    start_time: string | null
-    end_time: string | null
-    activity_order: number | null
-  }[] = []
+  for (const [dayNum, d] of dayData.entries()) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: upserted, error: dayErr } = await (admin.from('itinerary_days') as any)
+        .upsert(
+          {
+            trip_id,
+            day_number:     d.day_number,
+            destination:    d.destination,
+            hotel_name:     d.hotel_name,
+            meal_plan:      d.meal_plan,
+            itinerary_text: d.itinerary_text,
+          },
+          { onConflict: 'trip_id,day_number' },
+        )
+        .select('id')
+        .single()
+
+      if (dayErr || !upserted) {
+        errors.push({ row: 0, error: `Day ${dayNum}: ${dayErr?.message ?? 'upsert failed'}` })
+        skipped++
+      } else {
+        dayIdMap.set(dayNum, upserted.id)
+        daysUpserted++
+      }
+    } catch (err) {
+      errors.push({ row: 0, error: `Day ${dayNum}: ${String(err)}` })
+      skipped++
+    }
+  }
+
+  // Insert activities
+  let activitiesInserted = 0
 
   for (const [dayNum, acts] of activitiesByDay.entries()) {
     const dayId = dayIdMap.get(dayNum)
     if (!dayId) {
-      acts.forEach(a => errors.push({ row: a.row, error: 'Could not resolve day_id for day ' + dayNum }))
-      skipped += acts.length
+      acts.forEach(a => {
+        errors.push({ row: a.row, error: `Day ${dayNum} failed to save; activity "${a.title}" skipped` })
+        skipped++
+      })
       continue
     }
+
     for (const a of acts) {
-      activityInserts.push({
-        itinerary_day_id: dayId,
-        title:            a.title,
-        description:      a.description,
-        start_time:       a.start_time,
-        end_time:         a.end_time,
-        activity_order:   a.activity_order,
-      })
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: actErr } = await (admin.from('activities') as any)
+          .insert({
+            itinerary_day_id: dayId,
+            title:            a.title,
+            description:      a.description,
+            start_time:       a.start_time,
+            end_time:         a.end_time,
+            activity_order:   a.activity_order,
+          })
+
+        if (actErr) {
+          errors.push({ row: a.row, error: `Activity "${a.title}": ${actErr.message}` })
+          skipped++
+        } else {
+          activitiesInserted++
+        }
+      } catch (err) {
+        errors.push({ row: a.row, error: `Activity "${a.title}": ${String(err)}` })
+        skipped++
+      }
     }
   }
 
-  let activities_inserted = 0
-  if (activityInserts.length > 0) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: insertedActs, error: actsError } = await (admin.from('activities') as any)
-      .insert(activityInserts)
-      .select('id')
-
-    if (actsError) {
-      return NextResponse.json({ error: 'Failed to insert activities: ' + actsError.message }, { status: 500 })
-    }
-    activities_inserted = insertedActs?.length ?? 0
-  }
-
-  return NextResponse.json({ days_upserted, activities_inserted, skipped, errors })
+  return NextResponse.json({
+    days_upserted:       daysUpserted,
+    activities_inserted: activitiesInserted,
+    skipped,
+    errors,
+  })
 }

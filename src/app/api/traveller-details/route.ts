@@ -14,6 +14,7 @@ const schema = z.object({
   travel_insurance_no: z.string().trim().max(80).optional(),
   insurance_company: z.string().trim().max(120).optional(),
   insurance_expiry: z.string().optional(),
+  passport_issued_location: z.string().trim().max(120).optional(),
 });
 
 const emptyToNull = (value?: string) => (value && value.length > 0 ? value : null);
@@ -46,6 +47,7 @@ export async function POST(request: Request) {
     travel_insurance_no: emptyToNull(parsed.data.travel_insurance_no),
     insurance_company: emptyToNull(parsed.data.insurance_company),
     insurance_expiry: emptyToNull(parsed.data.insurance_expiry),
+    passport_issued_location: emptyToNull(parsed.data.passport_issued_location),
     updated_at: new Date().toISOString(),
   };
 

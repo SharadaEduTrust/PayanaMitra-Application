@@ -10,7 +10,12 @@ export default async function AdminImportPage({
 }) {
   await requireProfile(["admin"]);
   const params = await searchParams;
-  const initialTab = params.tab === "trails" ? "trails" : "guests";
+  const initialTab =
+    params.tab === "trails"
+      ? "trails"
+      : params.tab === "details"
+      ? "details"
+      : "users";
 
   return (
     <>

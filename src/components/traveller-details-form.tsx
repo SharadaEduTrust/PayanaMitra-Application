@@ -13,6 +13,7 @@ const empty = {
   travel_insurance_no: "",
   insurance_company: "",
   insurance_expiry: "",
+  passport_issued_location: "",
 };
 
 /**
@@ -30,6 +31,7 @@ export default function TravellerDetailsForm({ details }: { details: TravellerDe
     travel_insurance_no: details?.travel_insurance_no ?? empty.travel_insurance_no,
     insurance_company: details?.insurance_company ?? empty.insurance_company,
     insurance_expiry: details?.insurance_expiry ?? empty.insurance_expiry,
+    passport_issued_location: details?.passport_issued_location ?? empty.passport_issued_location,
   });
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -64,11 +66,11 @@ export default function TravellerDetailsForm({ details }: { details: TravellerDe
     <form onSubmit={submit}>
       <div className="field-row">
         <label className="form-field">
-          Date of birth
+          Date of Birth
           <input type="date" value={form.dob} onChange={(event) => set("dob", event.target.value)} />
         </label>
         <label className="form-field">
-          Food preference
+          Food Preference
           <select
             value={form.food_preference}
             onChange={(event) => set("food_preference", event.target.value)}
@@ -81,36 +83,42 @@ export default function TravellerDetailsForm({ details }: { details: TravellerDe
       </div>
 
       <label className="form-field">
-        Food allergies
+        Food Allergy
         <input value={form.food_allergy} onChange={(event) => set("food_allergy", event.target.value)} placeholder="Peanuts, shellfish…" />
       </label>
 
       <div className="field-row">
         <label className="form-field">
-          Emergency contact name
+          Emergency Contact Name
           <input value={form.emergency_contact_name} onChange={(event) => set("emergency_contact_name", event.target.value)} />
         </label>
         <label className="form-field">
-          Emergency contact number
+          Emergency Contact Number
           <input type="tel" value={form.emergency_contact_no} onChange={(event) => set("emergency_contact_no", event.target.value)} />
         </label>
       </div>
 
       <div className="field-row">
         <label className="form-field">
-          Insurance policy number
+          Travel Insurance No.
           <input value={form.travel_insurance_no} onChange={(event) => set("travel_insurance_no", event.target.value)} />
         </label>
         <label className="form-field">
-          Insurance company
+          Travel Insurance Company
           <input value={form.insurance_company} onChange={(event) => set("insurance_company", event.target.value)} />
         </label>
       </div>
 
-      <label className="form-field">
-        Insurance expiry
-        <input type="date" value={form.insurance_expiry} onChange={(event) => set("insurance_expiry", event.target.value)} />
-      </label>
+      <div className="field-row">
+        <label className="form-field">
+          Travel Insurance Expiry Date
+          <input type="date" value={form.insurance_expiry} onChange={(event) => set("insurance_expiry", event.target.value)} />
+        </label>
+        <label className="form-field">
+          Passport Issued Location
+          <input value={form.passport_issued_location} onChange={(event) => set("passport_issued_location", event.target.value)} />
+        </label>
+      </div>
 
       {error && <p className="form-error" role="alert">{error}</p>}
       {status && <p className="form-notice" role="status">{status}</p>}

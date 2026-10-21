@@ -45,11 +45,11 @@ export default function ProfileForm({
     <form onSubmit={submit}>
       <dl className="fact-list">
         <div>
-          <dt>Phone</dt>
+          <dt>Mobile Number</dt>
           <dd className="mono">{phone}</dd>
         </div>
         <div>
-          <dt>Email</dt>
+          <dt>email id</dt>
           <dd>{email || "—"}</dd>
         </div>
         <div>
@@ -59,8 +59,8 @@ export default function ProfileForm({
       </dl>
 
       <label className="form-field">
-        Home city
-        <input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Dharwad" />
+        Location
+        <input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="e.g. Bangalore, Karnataka" />
       </label>
 
       {error && <p className="form-error" role="alert">{error}</p>}

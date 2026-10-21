@@ -456,11 +456,11 @@ export default function TripEditor({
 
         <div className="field-row">
           <label className="form-field">
-            Trail code
-            <input required value={form.tripCode} onChange={(e) => set("tripCode", e.target.value)} placeholder="PM-2026-HAM-01" />
+            Trail Id
+            <input required value={form.tripCode} onChange={(e) => set("tripCode", e.target.value)} placeholder="003 or PM-2026-HAM-01" />
           </label>
           <label className="form-field">
-            Trail name
+            Trail Name
             <input required value={form.name} onChange={(e) => set("name", e.target.value)} />
           </label>
         </div>
@@ -471,7 +471,7 @@ export default function TripEditor({
             <input value={form.destination} onChange={(e) => set("destination", e.target.value)} />
           </label>
           <label className="form-field">
-            Status
+            Status / Visibility
             <select value={form.status} onChange={(e) => set("status", e.target.value)}>
               <option value="draft">Draft — hidden from guests</option>
               <option value="published">Published — visible to members</option>
@@ -482,17 +482,17 @@ export default function TripEditor({
 
         <div className="field-row">
           <label className="form-field">
-            Start date
+            Start Date
             <input type="date" value={form.startDate ?? ""} onChange={(e) => set("startDate", e.target.value)} />
           </label>
           <label className="form-field">
-            End date
+            End Date
             <input type="date" value={form.endDate ?? ""} onChange={(e) => set("endDate", e.target.value)} />
           </label>
         </div>
 
         <label className="form-field">
-          Trail leader
+          Leader
           <select value={form.leaderId ?? ""} onChange={(e) => set("leaderId", e.target.value)}>
             <option value="">No leader assigned</option>
             {leaders.map((leader) => (
@@ -504,13 +504,13 @@ export default function TripEditor({
         </label>
 
         <label className="form-field">
-          Remarks shown to guests
+          Remarks
           <textarea rows={3} value={form.remarks ?? ""} onChange={(e) => set("remarks", e.target.value)} />
         </label>
 
         <label className="form-field" style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <input type="checkbox" checked={form.isActive} onChange={(e) => set("isActive", e.target.checked)} />
-          Trail is active
+          Active / Inactive (Trail is active)
         </label>
 
         {error && <p className="form-error" role="alert">{error}</p>}
@@ -551,7 +551,7 @@ export default function TripEditor({
               </a>
             </div>
             <p className="admin-hint">
-              Upload a UTF-8 CSV containing day numbers, destinations, hotel names, itinerary descriptions, and optional activities.
+              Upload a UTF-8 CSV containing columns: <code>Trail Id</code>, <code>Trail Name</code>, <code>Day</code>, <code>Destination</code>, <code>Itinerary</code>, <code>Hotel Name</code> (and optional activities).
             </p>
             <input
               type="file"
@@ -581,7 +581,7 @@ export default function TripEditor({
 
               <div className="field-row">
                 <label className="form-field">
-                  Day number
+                  Day
                   <input
                     type="number"
                     min={1}
@@ -590,18 +590,18 @@ export default function TripEditor({
                   />
                 </label>
                 <label className="form-field">
-                  Place for the day
+                  Destination
                   <input value={day.destination} onChange={(e) => setDay(dayIndex, "destination", e.target.value)} />
                 </label>
               </div>
 
               <label className="form-field">
-                Hotel name
+                Hotel Name
                 <input value={day.hotelName} onChange={(e) => setDay(dayIndex, "hotelName", e.target.value)} />
               </label>
 
               <label className="form-field">
-                Day plan
+                Itinerary
                 <textarea
                   rows={3}
                   value={day.itineraryText}

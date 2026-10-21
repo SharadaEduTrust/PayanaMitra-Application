@@ -36,6 +36,14 @@ const VALID_MEAL_PLANS = new Set([
   'Breakfast, Lunch & Dinner',
 ])
 
+function normalizeMealPlan(val: string): string {
+  const trimmed = val.trim()
+  if (/^breakfast$/i.test(trimmed)) return 'Breakfast'
+  if (/^breakfast\s*(&|and)\s*dinner$/i.test(trimmed)) return 'Breakfast & Dinner'
+  if (/^breakfast,?\s*lunch\s*(&|and)\s*dinner$/i.test(trimmed)) return 'Breakfast, Lunch & Dinner'
+  return trimmed
+}
+
 async function requireAdmin() {
   const profile = await getSession()
   if (!profile) return { error: 'Unauthorized', status: 401 } as const
@@ -194,10 +202,11 @@ export async function POST(req: NextRequest, { params }: Params) {
       continue
     }
 
-    const rawMealPlan = getField(row, 'Meal Plan', 'meal_plan', 'MealPlan')
+    const rawMealPlan = getField(row, 'Meal Details', 'Meal details', 'meal_details', 'Meal Plan', 'meal_plan', 'MealPlan', 'Meals')
     let mealPlan: string | null = null
     if (rawMealPlan) {
-      if (!VALID_MEAL_PLANS.has(rawMealPlan)) {
+      const normalized = normalizeMealPlan(rawMealPlan)
+      if (!VALID_MEAL_PLANS.has(normalized)) {
         errors.push({
           row: rowNum,
           error: `Invalid Meal Plan: "${rawMealPlan}". Supported values: "Breakfast", "Breakfast & Dinner", "Breakfast, Lunch & Dinner"`,
@@ -205,7 +214,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         skipped++
         continue
       }
-      mealPlan = rawMealPlan
+      mealPlan = normalized
     }
 
     const destination = getField(row, 'Destination', 'destination', 'place') || null

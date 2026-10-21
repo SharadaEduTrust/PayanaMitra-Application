@@ -718,7 +718,7 @@ export default function CsvImportAdmin({ initialTab = "users" }: { initialTab?: 
           <section className="admin-card" style={{ background: "var(--paper)" }}>
             <h4 className="serif" style={{ margin: "0 0 6px" }}>Extension of Trail Table: Day wise Itinerary</h4>
             <p className="admin-hint" style={{ margin: "0 0 12px" }}>
-              Per the sheet, the Day wise Itinerary contains: <code>Trail Id</code>, <code>Trail Name</code>, <code>Day</code>, <code>Destination</code>, <code>Itinerary</code>, <code>Hotel Name</code>.
+              Per the sheet, the Day wise Itinerary contains: <code>Trail Id</code>, <code>Trail Name</code>, <code>Day</code>, <code>Destination</code>, <code>Itinerary</code>, <code>Hotel Name</code>, <code>Meal details</code>.
             </p>
             <p className="admin-hint" style={{ margin: 0 }}>
               To upload day wise itinerary CSV, open any trail from <Link href="/admin/trips">Trails</Link>, click <strong>Edit</strong>, and use the <strong>Import CSV</strong> button in the Days & Itinerary section.

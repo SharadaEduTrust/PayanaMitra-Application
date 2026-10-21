@@ -9,6 +9,7 @@ export type EditableDay = {
   destination: string;
   itineraryText: string;
   hotelName: string;
+  mealPlan?: string;
   activities: {
     id?: string;
     title: string;
@@ -74,6 +75,7 @@ export default function TripEditor({
         destination: "",
         itineraryText: "",
         hotelName: "",
+        mealPlan: "",
         activities: [],
       },
     ]);
@@ -211,6 +213,7 @@ export default function TripEditor({
             destination: day.destination?.trim() || null,
             itinerary_text: day.itineraryText?.trim() || null,
             hotel_name: day.hotelName?.trim() || null,
+            meal_plan: day.mealPlan || null,
             activities: validActivities.map(({ id: _ignored, ...act }) => act),
           }),
         });
@@ -243,6 +246,7 @@ export default function TripEditor({
             destination: day.destination?.trim() || null,
             itinerary_text: day.itineraryText?.trim() || null,
             hotel_name: day.hotelName?.trim() || null,
+            meal_plan: day.mealPlan || null,
           }),
         });
 
@@ -551,7 +555,7 @@ export default function TripEditor({
               </a>
             </div>
             <p className="admin-hint">
-              Upload a UTF-8 CSV containing columns: <code>Trail Id</code>, <code>Trail Name</code>, <code>Day</code>, <code>Destination</code>, <code>Itinerary</code>, <code>Hotel Name</code> (and optional activities).
+              Upload a UTF-8 CSV containing columns: <code>Trail Id</code>, <code>Trail Name</code>, <code>Day</code>, <code>Destination</code>, <code>Itinerary</code>, <code>Hotel Name</code>, <code>Meal details</code> (and optional activities).
             </p>
             <input
               type="file"
@@ -595,10 +599,28 @@ export default function TripEditor({
                 </label>
               </div>
 
-              <label className="form-field">
-                Hotel Name
-                <input value={day.hotelName} onChange={(e) => setDay(dayIndex, "hotelName", e.target.value)} />
-              </label>
+              <div className="field-row">
+                <label className="form-field">
+                  Hotel Name
+                  <input
+                    value={day.hotelName}
+                    onChange={(e) => setDay(dayIndex, "hotelName", e.target.value)}
+                    placeholder="e.g. Hotel Sandakan"
+                  />
+                </label>
+                <label className="form-field">
+                  Meal details
+                  <select
+                    value={day.mealPlan ?? ""}
+                    onChange={(e) => setDay(dayIndex, "mealPlan", e.target.value)}
+                  >
+                    <option value="">Select meal details (optional)</option>
+                    <option value="Breakfast">Breakfast</option>
+                    <option value="Breakfast & Dinner">Breakfast & Dinner</option>
+                    <option value="Breakfast, Lunch & Dinner">Breakfast, Lunch & Dinner</option>
+                  </select>
+                </label>
+              </div>
 
               <label className="form-field">
                 Itinerary

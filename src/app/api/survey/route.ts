@@ -43,6 +43,16 @@ export async function POST(req: NextRequest) {
   const { trip_id, responses } = parsed.data
   const admin = createAdminClient()
 
+  // Verify user role: survey is only available to guests (travellers) and not admins
+  const { data: profile } = await (admin.from('profiles') as any)
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'traveller') {
+    return NextResponse.json({ error: 'Surveys are only available to guests' }, { status: 403 })
+  }
+
   // Verify user is a member of this trip
   const { count } = await admin
     .from('trip_members')

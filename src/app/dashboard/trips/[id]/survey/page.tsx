@@ -10,7 +10,10 @@ type Params = { params: Promise<{ id: string }> };
 
 export default async function SurveyPage({ params }: Params) {
   const { id } = await params;
-  await requireProfile();
+  const profile = await requireProfile();
+  if (profile.role !== "traveller") {
+    redirect(`/dashboard/trips/${id}`);
+  }
   const supabase = await createClient();
 
   const { data: tripData } = await supabase

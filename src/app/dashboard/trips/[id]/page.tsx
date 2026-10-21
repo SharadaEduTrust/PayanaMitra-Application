@@ -75,6 +75,7 @@ export default async function TripPage({ params }: Params) {
         email: contact.email,
       }))}
       canContribute={profile.role === "admin" || profile.role === "leader"}
+      userRole={profile.role}
     />
   );
 }

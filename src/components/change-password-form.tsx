@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function ChangePasswordForm() {
   const router = useRouter();
@@ -89,7 +90,7 @@ export default function ChangePasswordForm() {
             onClick={() => setShowCurrent(!showCurrent)}
             aria-label={showCurrent ? "Hide password" : "Show password"}
           >
-            {showCurrent ? "Hide" : "Show"}
+            {showCurrent ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
         </span>
       </label>
@@ -115,7 +116,7 @@ export default function ChangePasswordForm() {
             onClick={() => setShowNew(!showNew)}
             aria-label={showNew ? "Hide password" : "Show password"}
           >
-            {showNew ? "Hide" : "Show"}
+            {showNew ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
         </span>
       </label>
@@ -138,7 +139,7 @@ export default function ChangePasswordForm() {
             onClick={() => setShowConfirm(!showConfirm)}
             aria-label={showConfirm ? "Hide password" : "Show password"}
           >
-            {showConfirm ? "Hide" : "Show"}
+            {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
         </span>
       </label>

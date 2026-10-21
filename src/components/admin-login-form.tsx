@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import SupabaseSetupNotice from "@/components/supabase-setup-notice";
+import { Eye, EyeOff } from "lucide-react";
 
 /**
  * Administrator sign-in: phone number and password.
@@ -102,7 +103,7 @@ export default function AdminLoginForm() {
             onClick={() => setShowPassword(!showPassword)}
             aria-label={showPassword ? "Hide password" : "Show password"}
           >
-            {showPassword ? "Hide" : "Show"}
+            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
         </span>
       </label>

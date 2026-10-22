@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { TravellerDetails } from "@/lib/types";
 import AvatarUpload from "@/components/avatar-upload";
 import ProfileForm from "@/components/profile-form";
@@ -58,6 +59,15 @@ export default async function ProfilePage() {
 
   const traveller = (details as TravellerDetails | null) ?? null;
   const documentCount = documents?.length ?? 0;
+
+  let hasChangedPassword = false;
+  try {
+    const admin = createAdminClient();
+    const { data: authUserData } = await admin.auth.admin.getUserById(profile.id);
+    hasChangedPassword = Boolean(authUserData?.user?.user_metadata?.password_changed);
+  } catch {
+    hasChangedPassword = false;
+  }
 
   // Decrypt PAN and Passport if stored in documents
   const panDoc = (documents ?? []).find(
@@ -203,12 +213,51 @@ export default async function ProfilePage() {
           </dl>
 
           <h3 className="serif profile-subhead">Security & Password</h3>
-          <p className="panel-note" style={{ marginBottom: "12px" }}>
-            Your initial password is the last 4 digits of your phone number ({profile.phone.slice(-4)}). You can change your password anytime.
-          </p>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-            <Link className="btn btn-secondary" href="/change-password">
-              Change Password
+          {hasChangedPassword ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "10px 14px",
+                background: "#f4fbf6",
+                border: "1px solid #ccebd7",
+                borderRadius: "8px",
+                marginBottom: "12px",
+              }}
+            >
+              <span style={{ fontSize: "1rem" }}>✅</span>
+              <span style={{ fontSize: "0.88rem", color: "#1e5e22", fontWeight: 500 }}>
+                Custom password active. Your identity documents (PAN, Aadhar, Passport) are protected.
+              </span>
+            </div>
+          ) : (
+            <div
+              style={{
+                padding: "12px 16px",
+                background: "#fff9f2",
+                border: "1px solid #e3d5c4",
+                borderLeft: "4px solid #b85d19",
+                borderRadius: "8px",
+                marginBottom: "14px",
+              }}
+            >
+              <strong style={{ display: "block", color: "#934228", fontSize: "0.92rem", marginBottom: "4px" }}>
+                🔒 Default Password in Use ({profile.phone.slice(-4)})
+              </strong>
+              <p style={{ margin: 0, fontSize: "0.86rem", color: "var(--ink, #4a3b2a)", lineHeight: "1.45" }}>
+                Your account currently uses the last 4 digits of your phone number. Because other guests on your trail may know your mobile number, please <strong>create a unique password</strong> to ensure your confidential documents (PAN, Aadhar, Passport) cannot be viewed by other travellers.
+              </p>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", marginTop: "12px" }}>
+            <Link
+              className={hasChangedPassword ? "btn btn-secondary" : "btn btn-primary"}
+              href="/change-password"
+              style={{ padding: "8px 16px", fontSize: "0.88rem" }}
+            >
+              {hasChangedPassword ? "Change Password" : "Create New Password →"}
             </Link>
             <LogoutButton
               redirectTo="/login"

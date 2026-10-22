@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decrypt } from "@/lib/server/crypto";
@@ -9,6 +10,14 @@ export const dynamic = "force-dynamic";
 export default async function DocumentsPage() {
   const profile = await requireProfile();
   const admin = createAdminClient();
+
+  let hasChangedPassword = false;
+  try {
+    const { data: authUserData } = await admin.auth.admin.getUserById(profile.id);
+    hasChangedPassword = Boolean(authUserData?.user?.user_metadata?.password_changed);
+  } catch {
+    hasChangedPassword = false;
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data } = await (admin.from("guest_documents") as any)
@@ -70,6 +79,91 @@ export default async function DocumentsPage() {
           </p>
         </div>
       </header>
+
+      {/* Document Privacy Notice */}
+      {hasChangedPassword ? (
+        <div
+          style={{
+            background: "#f4fbf6",
+            border: "1px solid #ccebd7",
+            borderLeft: "4px solid #2e7d32",
+            borderRadius: "12px",
+            padding: "14px 20px",
+            marginBottom: "24px",
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "14px",
+          }}
+        >
+          <div style={{ flex: "1 1 320px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "1.1rem" }}>✅</span>
+              <strong style={{ color: "#1e5e22", fontSize: "0.92rem" }}>
+                Protected with Custom Password
+              </strong>
+            </div>
+            <p style={{ margin: "2px 0 0", fontSize: "0.86rem", color: "#3d6645", lineHeight: "1.45" }}>
+              Your identity documents (PAN, Aadhar, Passport) are safeguarded with your private password and cannot be accessed using the default mobile number suffix.
+            </p>
+          </div>
+          <Link
+            href="/change-password?from=documents"
+            className="btn btn-secondary"
+            style={{
+              whiteSpace: "nowrap",
+              padding: "6px 14px",
+              fontSize: "0.84rem",
+              textDecoration: "none",
+              display: "inline-block",
+            }}
+          >
+            Update Password
+          </Link>
+        </div>
+      ) : (
+        <div
+          style={{
+            background: "#fff9f2",
+            border: "1px solid #e3d5c4",
+            borderLeft: "4px solid #b85d19",
+            borderRadius: "12px",
+            padding: "16px 20px",
+            marginBottom: "24px",
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "16px",
+          }}
+        >
+          <div style={{ flex: "1 1 320px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+              <span style={{ fontSize: "1.2rem" }}>🔒</span>
+              <strong style={{ color: "#934228", fontSize: "0.98rem" }}>
+                Protect Your Important Documents (PAN, Aadhar, Passport)
+              </strong>
+            </div>
+            <p style={{ margin: 0, fontSize: "0.88rem", color: "var(--ink, #4a3b2a)", lineHeight: "1.45" }}>
+              Your account currently uses the default password (last 4 digits of your phone number). Because other guests on your trail may know your mobile number, please <strong>create a new private password</strong> to ensure your confidential documents (PAN, Aadhar, Passport) cannot be viewed by others.
+            </p>
+          </div>
+          <Link
+            href="/change-password?from=documents"
+            className="btn btn-primary"
+            style={{
+              whiteSpace: "nowrap",
+              padding: "8px 18px",
+              fontSize: "0.88rem",
+              textDecoration: "none",
+              display: "inline-block",
+            }}
+          >
+            Create New Password &rarr;
+          </Link>
+        </div>
+      )}
 
       <div className={profile.role === "admin" ? "trip-columns" : ""} style={{ maxWidth: profile.role === "admin" ? undefined : "800px" }}>
         {profile.role === "admin" && (

@@ -8,6 +8,7 @@ const links = [
   { href: "/dashboard/profile", label: "My Profile" },
   { href: "/dashboard/documents", label: "My Documents" },
   { href: "/dashboard/notifications", label: "Notifications" },
+  { href: "/change-password", label: "Change Password" },
 ];
 
 export default function DashboardNav({ role }: { role: string }) {

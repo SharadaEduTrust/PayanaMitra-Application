@@ -81,7 +81,7 @@ export default function DocumentForm() {
 
       <div className="field-row" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))" }}>
         <label className="form-field">
-          Issued Date
+          Issued Date (Optional)
           <input
             type="date"
             value={issuedDate}
@@ -89,7 +89,7 @@ export default function DocumentForm() {
           />
         </label>
         <label className="form-field">
-          Expiry Date
+          Expiry Date (Optional)
           <input
             type="date"
             value={expiryDate}
@@ -97,7 +97,7 @@ export default function DocumentForm() {
           />
         </label>
         <label className="form-field">
-          Issued at (Place)
+          Issued at (Place) (Optional)
           <input
             value={issuedPlace}
             placeholder="e.g. Bangalore"

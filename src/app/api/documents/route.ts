@@ -13,6 +13,8 @@ const ALLOWED_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 
 const CreateDocSchema = z.object({
+  user_id:        z.string().uuid().optional().nullable(),
+  target_user_id: z.string().uuid().optional().nullable(),
   doc_type:       z.string().min(1, 'Document type required').max(50),
   doc_number:     z.string().max(100).optional().nullable(),
   issued_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
@@ -114,6 +116,7 @@ export async function POST(req: NextRequest) {
   let expiry_date: string | null = null
   let issued_country: string | null = null
   let trip_id: string | null = null
+  let targetUserId = profile.id
 
   let storage_path: string | null = null
   let file_name: string | null = null
@@ -126,6 +129,15 @@ export async function POST(req: NextRequest) {
       formData = await req.formData()
     } catch {
       return NextResponse.json({ error: 'Invalid multipart form data' }, { status: 400 })
+    }
+
+    const requestedUser = (formData.get('user_id') as string)?.trim() || (formData.get('target_user_id') as string)?.trim() || null
+    if (requestedUser && requestedUser !== profile.id) {
+      if (profile.role === 'admin') {
+        targetUserId = requestedUser
+      } else {
+        return NextResponse.json({ error: 'Forbidden: Only administrators can upload documents for other users' }, { status: 403 })
+      }
     }
 
     doc_type = String(formData.get('doc_type') ?? formData.get('type') ?? '').trim()
@@ -156,7 +168,7 @@ export async function POST(req: NextRequest) {
 
         const ext = file.name.split('.').pop() || 'bin'
         const safeDocType = doc_type.toLowerCase().replace(/[^a-z0-9]/g, '_')
-        storage_path = `${profile.id}/${safeDocType}_${Date.now()}_${crypto.randomUUID()}.${ext}`
+        storage_path = `${targetUserId}/${safeDocType}_${Date.now()}_${crypto.randomUUID()}.${ext}`
 
         const buffer = Buffer.from(await file.arrayBuffer())
         const { error: uploadErr } = await admin.storage
@@ -188,6 +200,15 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    const requestedUser = parsed.data.user_id || parsed.data.target_user_id || null
+    if (requestedUser && requestedUser !== profile.id) {
+      if (profile.role === 'admin') {
+        targetUserId = requestedUser
+      } else {
+        return NextResponse.json({ error: 'Forbidden: Only administrators can upload documents for other users' }, { status: 403 })
+      }
+    }
+
     doc_type = parsed.data.doc_type
     doc_number = parsed.data.doc_number ?? null
     issued_date = parsed.data.issued_date ?? null
@@ -215,7 +236,7 @@ export async function POST(req: NextRequest) {
 
   // Insert document record
   const insertPayload: Record<string, unknown> = {
-    user_id: profile.id,
+    user_id: targetUserId,
     trip_id: trip_id || null,
     doc_type,
     doc_number_enc: ciphertext,

@@ -2,6 +2,19 @@
 
 import { useMemo, useState, type FormEvent, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
+import { DOCUMENT_TYPES, formatDocType } from "@/lib/documents";
+
+type AdminDoc = {
+  id: string;
+  doc_type: string;
+  doc_number: string | null;
+  issued_date?: string | null;
+  expiry_date: string | null;
+  issued_country: string | null;
+  file_name: string | null;
+  download_url: string | null;
+  created_at: string;
+};
 
 type UserRow = {
   id: string;
@@ -129,6 +142,124 @@ export default function UsersAdmin({
     const start = (page - 1) * pageSize;
     return filtered.slice(start, start + pageSize);
   }, [filtered, page, pageSize]);
+
+  // Document management modal for a user
+  const [docsUser, setDocsUser] = useState<UserRow | null>(null);
+  const [guestDocs, setGuestDocs] = useState<AdminDoc[]>([]);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [docUploadLoading, setDocUploadLoading] = useState(false);
+  const [docUploadError, setDocUploadError] = useState("");
+  const [docUploadStatus, setDocUploadStatus] = useState("");
+
+  // Document upload form state
+  const [newDocType, setNewDocType] = useState("aadhar");
+  const [newDocNumber, setNewDocNumber] = useState("");
+  const [newIssuedDate, setNewIssuedDate] = useState("");
+  const [newExpiryDate, setNewExpiryDate] = useState("");
+  const [newIssuedPlace, setNewIssuedPlace] = useState("");
+  const [newDocFile, setNewDocFile] = useState<File | null>(null);
+
+  async function openDocsModal(user: UserRow) {
+    setDocsUser(user);
+    setGuestDocs([]);
+    setDocsLoading(true);
+    setDocUploadError("");
+    setDocUploadStatus("");
+    setNewDocType("aadhar");
+    setNewDocNumber("");
+    setNewIssuedDate("");
+    setNewExpiryDate("");
+    setNewIssuedPlace("");
+    setNewDocFile(null);
+
+    try {
+      const res = await fetch(`/api/documents?user_id=${user.id}`);
+      const json = await res.json().catch(() => ({ data: [] }));
+      if (res.ok && json.data) {
+        setGuestDocs(json.data);
+      }
+    } catch {
+      setDocUploadError("Failed to fetch documents for this guest.");
+    } finally {
+      setDocsLoading(false);
+    }
+  }
+
+  async function handleAdminUploadDoc(e: FormEvent) {
+    e.preventDefault();
+    if (!docsUser) return;
+    if (!newDocNumber.trim()) {
+      setDocUploadError("Document number is required.");
+      return;
+    }
+    setDocUploadError("");
+    setDocUploadStatus("");
+    setDocUploadLoading(true);
+
+    try {
+      const formData = new FormData();
+      formData.set("user_id", docsUser.id);
+      formData.set("doc_type", newDocType);
+      formData.set("doc_number", newDocNumber.trim());
+      if (newIssuedDate) formData.set("issued_date", newIssuedDate);
+      if (newExpiryDate) formData.set("expiry_date", newExpiryDate);
+      if (newIssuedPlace.trim()) {
+        formData.set("issued_country", newIssuedPlace.trim());
+        formData.set("issued_place", newIssuedPlace.trim());
+      }
+      if (newDocFile) {
+        formData.set("file", newDocFile);
+      }
+
+      const res = await fetch("/api/documents", {
+        method: "POST",
+        body: formData,
+      });
+
+      const json = await res.json().catch(() => null);
+      setDocUploadLoading(false);
+
+      if (!res.ok) {
+        setDocUploadError(json?.error ?? "Failed to upload document.");
+        return;
+      }
+
+      setDocUploadStatus("Document uploaded successfully.");
+      setNewDocNumber("");
+      setNewIssuedDate("");
+      setNewExpiryDate("");
+      setNewIssuedPlace("");
+      setNewDocFile(null);
+
+      // Refresh documents list
+      const refreshRes = await fetch(`/api/documents?user_id=${docsUser.id}`);
+      const refreshJson = await refreshRes.json().catch(() => ({ data: [] }));
+      if (refreshRes.ok && refreshJson.data) {
+        setGuestDocs(refreshJson.data);
+      }
+      router.refresh();
+    } catch {
+      setDocUploadLoading(false);
+      setDocUploadError("Network error while uploading document.");
+    }
+  }
+
+  async function handleAdminDeleteDoc(docId: string) {
+    if (!window.confirm("Are you sure you want to delete this document?")) return;
+    try {
+      const res = await fetch(`/api/documents/${docId}`, { method: "DELETE" });
+      if (res.ok) {
+        setGuestDocs((prev) => prev.filter((d) => d.id !== docId));
+        setDocUploadStatus("Document deleted.");
+        router.refresh();
+      } else {
+        const json = await res.json().catch(() => null);
+        setDocUploadError(json?.error ?? "Failed to delete document.");
+      }
+    } catch {
+      setDocUploadError("Network error while deleting document.");
+    }
+  }
 
   function startEdit(user: UserRow) {
     setEditingUser(user);
@@ -539,6 +670,9 @@ export default function UsersAdmin({
                       {row.lastActiveAt ? new Date(row.lastActiveAt).toLocaleDateString("en-IN") : "Never"}
                     </td>
                     <td className="row-actions">
+                      <button className="link-btn" onClick={() => openDocsModal(row)}>
+                        Documents
+                      </button>
                       <button className="link-btn" onClick={() => startEdit(row)}>
                         Edit
                       </button>
@@ -774,6 +908,213 @@ export default function UsersAdmin({
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Admin Guest Documents Modal */}
+      {docsUser && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.65)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+          <div className="admin-card" style={{ maxWidth: "680px", width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+            <div className="admin-card-head" style={{ borderBottom: "1px solid var(--color-border, rgba(255,255,255,0.1))", paddingBottom: "12px", marginBottom: "16px" }}>
+              <div>
+                <span className="eyebrow" style={{ color: "var(--forest, #2d5a27)", fontWeight: 700 }}>
+                  Documents · {docsUser.role === "traveller" ? "Guest" : docsUser.role === "leader" ? "Leader" : "Admin"}
+                </span>
+                <h2 className="serif" style={{ margin: "2px 0 0" }}>
+                  {docsUser.firstName} {docsUser.lastName}
+                </h2>
+                <span className="muted small mono">Phone: {docsUser.phone} {docsUser.location ? `· ${docsUser.location}` : ""}</span>
+              </div>
+              <button type="button" className="link-btn" onClick={() => setDocsUser(null)}>✕ Close</button>
+            </div>
+
+            {docUploadStatus && <p className="form-notice" role="status" style={{ marginBottom: "12px" }}>{docUploadStatus}</p>}
+            {docUploadError && <p className="form-error" role="alert" style={{ marginBottom: "12px" }}>{docUploadError}</p>}
+
+            {/* Existing Documents List */}
+            <div style={{ marginBottom: "24px" }}>
+              <h3 className="serif" style={{ fontSize: "16px", marginBottom: "10px" }}>
+                Saved Documents ({guestDocs.length})
+              </h3>
+              {docsLoading ? (
+                <p className="panel-note">Loading documents…</p>
+              ) : guestDocs.length === 0 ? (
+                <p className="panel-note" style={{ background: "rgba(0,0,0,0.03)", padding: "12px", borderRadius: "6px" }}>
+                  No documents have been uploaded for this guest yet.
+                </p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {guestDocs.map((doc) => (
+                    <div
+                      key={doc.id}
+                      style={{
+                        padding: "10px 14px",
+                        border: "1px solid var(--color-border, rgba(255,255,255,0.1))",
+                        borderRadius: "6px",
+                        background: "rgba(0,0,0,0.02)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                        <span
+                          style={{
+                            fontSize: "12px",
+                            fontWeight: 700,
+                            color: "var(--forest, #2d5a27)",
+                            background: "var(--soft, #f7f3ee)",
+                            padding: "2px 8px",
+                            borderRadius: "4px",
+                            border: "1px solid var(--line, #e3d5c4)",
+                          }}
+                        >
+                          {formatDocType(doc.doc_type)}
+                        </span>
+                        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                          {doc.download_url && (
+                            <a
+                              href={doc.download_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="link-btn"
+                              style={{ fontSize: "12px" }}
+                            >
+                              Download {doc.file_name ? doc.file_name : "File"} ↗
+                            </a>
+                          )}
+                          <button
+                            type="button"
+                            className="link-btn"
+                            style={{ fontSize: "12px", color: "var(--color-danger, #ef4444)" }}
+                            onClick={() => handleAdminDeleteDoc(doc.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="mono" style={{ fontSize: "14px", fontWeight: 600 }}>
+                        {doc.doc_number ? (
+                          <>
+                            <span style={{ opacity: 0.6 }}>•••• </span>
+                            <span>{doc.doc_number.slice(-4)}</span>
+                            <span className="muted small" style={{ marginLeft: "8px", fontWeight: "normal" }}>
+                              ({doc.doc_number})
+                            </span>
+                          </>
+                        ) : (
+                          "Document on file"
+                        )}
+                      </div>
+
+                      {(() => {
+                        const details: string[] = [];
+                        if (doc.issued_date) {
+                          try {
+                            details.push(`Issued: ${new Date(doc.issued_date).toLocaleDateString("en-IN")}`);
+                          } catch {
+                            details.push(`Issued: ${doc.issued_date}`);
+                          }
+                        }
+                        if (doc.expiry_date) {
+                          try {
+                            details.push(`Expires: ${new Date(doc.expiry_date).toLocaleDateString("en-IN")}`);
+                          } catch {
+                            details.push(`Expires: ${doc.expiry_date}`);
+                          }
+                        }
+                        if (doc.issued_country) {
+                          details.push(`Issued at: ${doc.issued_country}`);
+                        }
+                        if (details.length === 0) return null;
+                        return <span className="muted small">{details.join(" · ")}</span>;
+                      })()}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Upload Document Form */}
+            <div style={{ borderTop: "1px solid var(--color-border, rgba(255,255,255,0.1))", paddingTop: "18px" }}>
+              <h3 className="serif" style={{ fontSize: "16px", marginBottom: "6px" }}>
+                Upload Document for {docsUser.firstName}
+              </h3>
+              <p className="panel-note" style={{ marginBottom: "14px" }}>
+                Upload verified identity or travel documents on behalf of this guest.
+              </p>
+
+              <form onSubmit={handleAdminUploadDoc}>
+                <label className="form-field">
+                  Document Type
+                  <select value={newDocType} onChange={(e) => setNewDocType(e.target.value)}>
+                    {DOCUMENT_TYPES.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="form-field">
+                  Document Number
+                  <input
+                    required
+                    minLength={4}
+                    value={newDocNumber}
+                    onChange={(e) => setNewDocNumber(e.target.value)}
+                    placeholder="Enter document number (e.g. AAADK9754A)"
+                  />
+                </label>
+
+                <div className="field-row" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))" }}>
+                  <label className="form-field">
+                    Issued Date (Optional)
+                    <input
+                      type="date"
+                      value={newIssuedDate}
+                      onChange={(e) => setNewIssuedDate(e.target.value)}
+                    />
+                  </label>
+                  <label className="form-field">
+                    Expiry Date (Optional)
+                    <input
+                      type="date"
+                      value={newExpiryDate}
+                      onChange={(e) => setNewExpiryDate(e.target.value)}
+                    />
+                  </label>
+                  <label className="form-field">
+                    Issued at (Place) (Optional)
+                    <input
+                      value={newIssuedPlace}
+                      placeholder="e.g. Bangalore"
+                      onChange={(e) => setNewIssuedPlace(e.target.value)}
+                    />
+                  </label>
+                </div>
+
+                <label className="form-field">
+                  Attachment (Optional PDF or Image, Max 10MB)
+                  <input
+                    type="file"
+                    accept=".pdf,image/jpeg,image/png,image/webp"
+                    onChange={(e) => setNewDocFile(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+
+                <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
+                  <button className="btn btn-primary" type="submit" disabled={docUploadLoading}>
+                    {docUploadLoading ? "Uploading & Encrypting…" : "Upload Document"}
+                  </button>
+                  <button className="btn btn-secondary" type="button" onClick={() => setDocsUser(null)}>
+                    Done
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
       )}
 

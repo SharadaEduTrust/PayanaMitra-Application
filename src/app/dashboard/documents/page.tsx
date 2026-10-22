@@ -71,16 +71,23 @@ export default async function DocumentsPage() {
         </div>
       </header>
 
-      <div className="trip-columns">
-        <section className="panel">
-          <h2 className="serif">Add a Document</h2>
-          <p className="panel-note">Aadhar, PAN, Passport, or any other document your trail needs.</p>
-          <DocumentForm />
-        </section>
+      <div className={profile.role === "admin" ? "trip-columns" : ""} style={{ maxWidth: profile.role === "admin" ? undefined : "800px" }}>
+        {profile.role === "admin" && (
+          <section className="panel">
+            <h2 className="serif">Add a Document</h2>
+            <p className="panel-note">Aadhar, PAN, Passport, or any other document your trail needs.</p>
+            <DocumentForm />
+          </section>
+        )}
 
         <section className="panel">
           <h2 className="serif">Saved Documents</h2>
-          <SavedDocumentsList initialDocs={docs} />
+          <p className="panel-note">
+            {profile.role === "admin"
+              ? "All documents uploaded for your account."
+              : "Identity and travel documents uploaded and verified by your trail coordinator."}
+          </p>
+          <SavedDocumentsList initialDocs={docs} isReadOnly={profile.role !== "admin"} />
         </section>
       </div>
     </div>

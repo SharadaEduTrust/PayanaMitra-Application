@@ -251,7 +251,7 @@ export default function SavedDocumentsList({
             </div>
 
             <label className="form-field">
-              Document Type
+              Document Type <span className="req">*</span>
               <select
                 value={editForm.doc_type}
                 onChange={(e) => setEditForm({ ...editForm, doc_type: e.target.value })}
@@ -266,7 +266,7 @@ export default function SavedDocumentsList({
 
             <div className="field-row" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))" }}>
               <label className="form-field">
-                Issued Date (Optional)
+                Issued Date
                 <input
                   type="date"
                   value={editForm.issued_date}
@@ -274,7 +274,7 @@ export default function SavedDocumentsList({
                 />
               </label>
               <label className="form-field">
-                Expiry Date (Optional)
+                Expiry Date
                 <input
                   type="date"
                   value={editForm.expiry_date}
@@ -282,7 +282,7 @@ export default function SavedDocumentsList({
                 />
               </label>
               <label className="form-field">
-                Issued at (Place) (Optional)
+                Issued at (Place)
                 <input
                   value={editForm.issued_country}
                   placeholder="e.g. Bangalore"

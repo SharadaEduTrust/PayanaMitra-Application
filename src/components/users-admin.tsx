@@ -16,6 +16,11 @@ type AdminDoc = {
   created_at: string;
 };
 
+type TrailLeaderInfo = {
+  trailName: string;
+  leaderName: string;
+};
+
 type UserRow = {
   id: string;
   firstName: string;
@@ -33,6 +38,7 @@ type UserRow = {
   emergencyContact: string | null;
   leaderId?: string | null;
   leaderName?: string | null;
+  trailLeaders?: TrailLeaderInfo[] | null;
   dob?: string | null;
   foodAllergy?: string | null;
   emergencyContactName?: string | null;
@@ -58,7 +64,6 @@ const blank = {
   phone: "",
   email: "",
   role: "traveller" as UserRow["role"],
-  leaderId: "",
   location: "",
   remarks: "",
 };
@@ -87,7 +92,6 @@ export default function UsersAdmin({
     lastName: "",
     email: "",
     role: "traveller" as UserRow["role"],
-    leaderId: "",
     location: "",
     remarks: "",
     dob: "",
@@ -125,7 +129,9 @@ export default function UsersAdmin({
         !term ||
         `${row.firstName} ${row.lastName}`.toLowerCase().includes(term) ||
         row.phone.includes(term) ||
-        (row.email ?? "").toLowerCase().includes(term);
+        (row.email ?? "").toLowerCase().includes(term) ||
+        (row.leaderName ?? "").toLowerCase().includes(term) ||
+        (row.trailLeaders ?? []).some((tl) => tl.trailName.toLowerCase().includes(term));
 
       const matchesRole = roleFilter === "all" || row.role === roleFilter;
       const matchesStatus =
@@ -269,7 +275,6 @@ export default function UsersAdmin({
       lastName: user.lastName,
       email: user.email ?? "",
       role: user.role,
-      leaderId: user.leaderId ?? "",
       location: user.location ?? "",
       remarks: user.remarks ?? "",
       dob: user.dob ?? "",
@@ -303,7 +308,6 @@ export default function UsersAdmin({
           first_name: editForm.firstName.trim(),
           last_name: editForm.lastName.trim(),
           role: editForm.role,
-          leader_id: editForm.leaderId || null,
           email: editForm.email.trim() || null,
           location: editForm.location.trim() || null,
           remarks: editForm.remarks.trim() || null,
@@ -335,11 +339,6 @@ export default function UsersAdmin({
         return;
       }
 
-      const assignedLeader = leaders.find((l) => l.id === editForm.leaderId);
-      const assignedLeaderName = assignedLeader
-        ? `${assignedLeader.first_name} ${assignedLeader.last_name}`.trim()
-        : null;
-
       setRows((current) =>
         current.map((r) =>
           r.id === editingUser.id
@@ -349,8 +348,6 @@ export default function UsersAdmin({
                 lastName: editForm.lastName.trim(),
                 email: editForm.email.trim() || null,
                 role: editForm.role,
-                leaderId: editForm.leaderId || null,
-                leaderName: assignedLeaderName,
                 location: editForm.location.trim() || null,
                 remarks: editForm.remarks.trim() || null,
                 dob: editForm.dob || null,
@@ -398,7 +395,6 @@ export default function UsersAdmin({
           first_name: draft.firstName.trim(),
           last_name: draft.lastName.trim(),
           role: draft.role,
-          leader_id: draft.leaderId || null,
           email: draft.email.trim() || null,
           location: draft.location.trim() || null,
           remarks: draft.remarks.trim() || null,
@@ -658,7 +654,22 @@ export default function UsersAdmin({
                       <strong>{row.lastName}</strong>
                     </td>
                     <td style={{ textTransform: "capitalize" }}>{row.role === "traveller" ? "Guest" : row.role === "leader" ? "Trail leader" : "Admin"}</td>
-                    <td>{row.leaderName || "—"}</td>
+                    <td>
+                      <div>{row.leaderName || "—"}</div>
+                      {row.trailLeaders && row.trailLeaders.length > 0 && (
+                        <div
+                          className="muted small"
+                          style={{ fontSize: "0.75rem", marginTop: "3px", lineHeight: 1.3 }}
+                          title={row.trailLeaders.map((tl) => `${tl.trailName}: ${tl.leaderName}`).join("\n")}
+                        >
+                          {row.trailLeaders.map((tl, i) => (
+                            <span key={i} style={{ display: "block" }}>
+                              <span style={{ opacity: 0.75 }}>Trail:</span> {tl.trailName}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
                     <td>{row.location || "—"}</td>
                     <td className="small">{row.email || "—"}</td>
                     <td>
@@ -726,11 +737,11 @@ export default function UsersAdmin({
 
             <div className="field-row">
               <label className="form-field">
-                First Name
+                First Name <span className="req">*</span>
                 <input required value={editForm.firstName} onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })} />
               </label>
               <label className="form-field">
-                Last Name
+                Last Name <span className="req">*</span>
                 <input required value={editForm.lastName} onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })} />
               </label>
             </div>
@@ -748,7 +759,7 @@ export default function UsersAdmin({
 
             <div className="field-row">
               <label className="form-field">
-                Role
+                Role <span className="req">*</span>
                 <select value={editForm.role} onChange={(e) => setEditForm({ ...editForm, role: e.target.value as UserRow["role"] })}>
                   <option value="traveller">Guest</option>
                   <option value="leader">Trail leader</option>
@@ -756,23 +767,12 @@ export default function UsersAdmin({
                 </select>
               </label>
               <label className="form-field">
-                Leader Name
-                <select value={editForm.leaderId} onChange={(e) => setEditForm({ ...editForm, leaderId: e.target.value })}>
-                  <option value="">No leader assigned</option>
-                  {leaders.map((ldr) => (
-                    <option key={ldr.id} value={ldr.id}>
-                      {ldr.first_name} {ldr.last_name}
-                    </option>
-                  ))}
-                </select>
+                Location
+                <input value={editForm.location} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} />
               </label>
             </div>
 
             <div className="field-row">
-              <label className="form-field">
-                Location
-                <input value={editForm.location} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} />
-              </label>
               <label className="form-field">
                 Date of Birth
                 <input type="date" value={editForm.dob} onChange={(e) => setEditForm({ ...editForm, dob: e.target.value })} />
@@ -1047,7 +1047,7 @@ export default function UsersAdmin({
 
               <form onSubmit={handleAdminUploadDoc}>
                 <label className="form-field">
-                  Document Type
+                  Document Type <span className="req">*</span>
                   <select value={newDocType} onChange={(e) => setNewDocType(e.target.value)}>
                     {DOCUMENT_TYPES.map((item) => (
                       <option key={item.value} value={item.value}>
@@ -1058,7 +1058,7 @@ export default function UsersAdmin({
                 </label>
 
                 <label className="form-field">
-                  Document Number
+                  Document Number <span className="req">*</span>
                   <input
                     required
                     minLength={4}
@@ -1070,7 +1070,7 @@ export default function UsersAdmin({
 
                 <div className="field-row" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))" }}>
                   <label className="form-field">
-                    Issued Date (Optional)
+                    Issued Date
                     <input
                       type="date"
                       value={newIssuedDate}
@@ -1078,7 +1078,7 @@ export default function UsersAdmin({
                     />
                   </label>
                   <label className="form-field">
-                    Expiry Date (Optional)
+                    Expiry Date
                     <input
                       type="date"
                       value={newExpiryDate}
@@ -1086,7 +1086,7 @@ export default function UsersAdmin({
                     />
                   </label>
                   <label className="form-field">
-                    Issued at (Place) (Optional)
+                    Issued at (Place)
                     <input
                       value={newIssuedPlace}
                       placeholder="e.g. Bangalore"
@@ -1096,7 +1096,7 @@ export default function UsersAdmin({
                 </div>
 
                 <label className="form-field">
-                  Attachment (Optional PDF or Image, Max 10MB)
+                  Attachment (PDF or Image, Max 10MB)
                   <input
                     type="file"
                     accept=".pdf,image/jpeg,image/png,image/webp"
@@ -1129,22 +1129,22 @@ export default function UsersAdmin({
         <form onSubmit={createUser}>
           <div className="field-row">
             <label className="form-field">
-              First Name
+              First Name <span className="req">*</span>
               <input required value={draft.firstName} onChange={(e) => setDraft({ ...draft, firstName: e.target.value })} />
             </label>
             <label className="form-field">
-              Last Name
+              Last Name <span className="req">*</span>
               <input required value={draft.lastName} onChange={(e) => setDraft({ ...draft, lastName: e.target.value })} />
             </label>
           </div>
 
           <div className="field-row">
             <label className="form-field">
-              Mobile Number
+              Mobile Number <span className="req">*</span>
               <input required type="tel" value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} placeholder="98765 43210 (Used as User Id)" />
             </label>
             <label className="form-field">
-              email id
+              email id <span className="req">*</span>
               <input required type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
             </label>
           </div>
@@ -1160,7 +1160,7 @@ export default function UsersAdmin({
               />
             </label>
             <label className="form-field">
-              Role
+              Role <span className="req">*</span>
               <select value={draft.role} onChange={(e) => setDraft({ ...draft, role: e.target.value as UserRow["role"] })}>
                 <option value="traveller">Guest</option>
                 <option value="leader">Trail leader</option>
@@ -1169,23 +1169,10 @@ export default function UsersAdmin({
             </label>
           </div>
 
-          <div className="field-row">
-            <label className="form-field">
-              Leader Name (Optional)
-              <select value={draft.leaderId} onChange={(e) => setDraft({ ...draft, leaderId: e.target.value })}>
-                <option value="">No leader assigned</option>
-                {leaders.map((ldr) => (
-                  <option key={ldr.id} value={ldr.id}>
-                    {ldr.first_name} {ldr.last_name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="form-field">
-              Location
-              <input value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} />
-            </label>
-          </div>
+          <label className="form-field">
+            Location
+            <input value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} />
+          </label>
 
           <label className="form-field">
             Remarks

@@ -58,7 +58,7 @@ export default function DocumentForm() {
   return (
     <form onSubmit={submit}>
       <label className="form-field">
-        Document Type
+        Document Type <span className="req">*</span>
         <select value={docType} onChange={(event) => setDocType(event.target.value)}>
           {DOCUMENT_TYPES.map((item) => (
             <option key={item.value} value={item.value}>
@@ -69,7 +69,7 @@ export default function DocumentForm() {
       </label>
 
       <label className="form-field">
-        Document Number
+        Document Number <span className="req">*</span>
         <input
           name="doc_number"
           required
@@ -81,7 +81,7 @@ export default function DocumentForm() {
 
       <div className="field-row" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))" }}>
         <label className="form-field">
-          Issued Date (Optional)
+          Issued Date
           <input
             type="date"
             value={issuedDate}
@@ -89,7 +89,7 @@ export default function DocumentForm() {
           />
         </label>
         <label className="form-field">
-          Expiry Date (Optional)
+          Expiry Date
           <input
             type="date"
             value={expiryDate}
@@ -97,7 +97,7 @@ export default function DocumentForm() {
           />
         </label>
         <label className="form-field">
-          Issued at (Place) (Optional)
+          Issued at (Place)
           <input
             value={issuedPlace}
             placeholder="e.g. Bangalore"
@@ -107,7 +107,7 @@ export default function DocumentForm() {
       </div>
 
       <label className="form-field">
-        Attachment (Optional PDF or Image, Max 10MB)
+        Attachment (PDF or Image, Max 10MB)
         <input type="file" name="file" accept=".pdf,image/jpeg,image/png,image/webp" />
       </label>
 

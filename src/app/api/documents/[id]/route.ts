@@ -37,7 +37,23 @@ export async function GET(_req: NextRequest, { params }: Params) {
         .select('leader_id')
         .eq('id', doc.user_id)
         .single()
-      if (guestProfile?.leader_id !== profile.id) {
+
+      let hasLeaderAccess = guestProfile?.leader_id === profile.id
+
+      if (!hasLeaderAccess) {
+        const { data: ledTrips } = await admin.from('trips').select('id').eq('leader_id', profile.id)
+        const tripIds = (ledTrips ?? []).map((t: { id: string }) => t.id)
+        if (tripIds.length > 0) {
+          const { count } = await admin
+            .from('trip_members')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', doc.user_id)
+            .in('trip_id', tripIds)
+          hasLeaderAccess = (count ?? 0) > 0
+        }
+      }
+
+      if (!hasLeaderAccess) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
     } else {

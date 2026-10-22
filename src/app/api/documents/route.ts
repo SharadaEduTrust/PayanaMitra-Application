@@ -38,14 +38,29 @@ export async function GET(req: NextRequest) {
     if (profile.role === 'admin') {
       targetUserId = requestedUserId
     } else if (profile.role === 'leader') {
-      // Verify this guest is assigned to this leader
+      // Verify this guest is assigned to this leader via trail or legacy leader_id
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: guestProfile } = await (admin.from('profiles') as any)
         .select('id, leader_id')
         .eq('id', requestedUserId)
         .single()
 
-      if (!guestProfile || guestProfile.leader_id !== profile.id) {
+      let hasLeaderAccess = guestProfile?.leader_id === profile.id
+
+      if (!hasLeaderAccess) {
+        const { data: ledTrips } = await admin.from('trips').select('id').eq('leader_id', profile.id)
+        const tripIds = (ledTrips ?? []).map((t: { id: string }) => t.id)
+        if (tripIds.length > 0) {
+          const { count } = await admin
+            .from('trip_members')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', requestedUserId)
+            .in('trip_id', tripIds)
+          hasLeaderAccess = (count ?? 0) > 0
+        }
+      }
+
+      if (!hasLeaderAccess) {
         return NextResponse.json({ error: 'Forbidden: You are not assigned to this guest' }, { status: 403 })
       }
       targetUserId = requestedUserId

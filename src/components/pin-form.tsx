@@ -56,7 +56,12 @@ export default function PinForm() {
       }
     }
 
-    router.push(data.role === "admin" ? "/admin" : "/dashboard");
+    const nextUrl = new URLSearchParams(window.location.search).get("next");
+    if (nextUrl && (data.role === "admin" || !nextUrl.startsWith("/admin"))) {
+      router.push(nextUrl);
+    } else {
+      router.push(data.role === "admin" ? "/admin" : "/dashboard");
+    }
     router.refresh();
   }
 

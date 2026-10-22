@@ -14,7 +14,7 @@ export default function LoginPage() {
             Your journey awaits
           </div>
           <h1>Leave room for the places that stay with you.</h1>
-          <p>Sign in with the phone number your trail coordinator registered.</p>
+          <p>Sign in with your registered phone number to access your account.</p>
         </div>
         <small style={{ color: "#D4A373", fontSize: "11px" }}>© 2026 Payana Trails</small>
       </section>
@@ -27,9 +27,6 @@ export default function LoginPage() {
           <div className="auth-switch">
             No account yet? <Link href="/signup">Register first</Link>
           </div>
-          <p className="auth-note">
-            Trail coordinator? <Link href="/admin/login">Administrator sign in</Link>
-          </p>
         </div>
       </section>
     </main>

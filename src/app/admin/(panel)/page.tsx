@@ -33,7 +33,7 @@ export default async function AdminOverviewPage() {
         </div>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <LogoutButton
-            redirectTo="/admin/login"
+            redirectTo="/login"
             className="btn btn-secondary"
             style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13px" }}
           />

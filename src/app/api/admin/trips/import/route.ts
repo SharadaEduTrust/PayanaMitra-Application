@@ -78,22 +78,35 @@ function getField(row: Record<string, string>, ...aliases: string[]): string {
 function parseDateString(dateStr: string): string | null {
   const clean = dateStr.trim()
   if (!clean) return null
-  // DD-MM-YYYY or DD/MM/YYYY
-  const dmy = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/)
-  if (dmy) {
-    const day = dmy[1].padStart(2, '0')
-    const month = dmy[2].padStart(2, '0')
-    const year = dmy[3]
+
+  // DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY (4-digit year)
+  const dmy4 = clean.match(/^(\d{1,2})[-/. ](\d{1,2})[-/. ](\d{4})$/)
+  if (dmy4) {
+    const day = dmy4[1].padStart(2, '0')
+    const month = dmy4[2].padStart(2, '0')
+    const year = dmy4[3]
     return `${year}-${month}-${day}`
   }
-  // YYYY-MM-DD or YYYY/MM/DD
-  const ymd = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/)
+
+  // DD-MM-YY or DD/MM/YY or DD.MM.YY (2-digit year)
+  const dmy2 = clean.match(/^(\d{1,2})[-/. ](\d{1,2})[-/. ](\d{2})$/)
+  if (dmy2) {
+    const day = dmy2[1].padStart(2, '0')
+    const month = dmy2[2].padStart(2, '0')
+    const rawYy = parseInt(dmy2[3], 10)
+    const year = rawYy <= 40 ? 2000 + rawYy : 1900 + rawYy
+    return `${year}-${month}-${day}`
+  }
+
+  // YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD
+  const ymd = clean.match(/^(\d{4})[-/. ](\d{1,2})[-/. ](\d{1,2})$/)
   if (ymd) {
     const year = ymd[1]
     const month = ymd[2].padStart(2, '0')
     const day = ymd[3].padStart(2, '0')
     return `${year}-${month}-${day}`
   }
+
   return null
 }
 
@@ -104,10 +117,10 @@ export async function GET() {
 
   // Uses Field Names matching "Trail Table" in the Table Details specification
   const lines = [
-    'Trail Id,Trail Name,Destination,Start Date,End Date,Leader,Active / Inactive,Remarks',
-    '003,The Asian Amazon Trail,Borneo,15-06-2026,20-06-2026,Devika Mohan,Active,UNESCO wildlife heartland',
-    '004,Hampta Pass Trek,Manali Himachal Pradesh,10-07-2026,16-07-2026,Devika Mohan,Active,Moderate high-altitude summer trail',
-    '005,Kudremukh Trail,Chikmagalur Karnataka,05-09-2026,08-09-2026,,Active,Western Ghats peak trail',
+    'Trail Id,Trail Name,Destination,Start Date,End Date,Leader User Id,Active / Inactive,Remarks',
+    'HIHGOK01,Heritage Gems of Karnataka,Hampi Karnataka,15/06/26,20/06/26,9000000002,Active,Heritage - India - Heritage Gems of Karnataka - Batch 1',
+    'HIHPTR01,Hampta Pass Trek,Manali Himachal Pradesh,10/07/26,16/07/26,9000000002,Active,High-altitude summer mountain pass trail',
+    'WKKUDR01,Kudremukh Peak Trail,Chikmagalur Karnataka,05/09/26,08/09/26,9000000002,Active,Western Ghats peak trail',
   ]
 
   return new NextResponse(lines.join('\n'), {
@@ -202,17 +215,18 @@ export async function POST(req: NextRequest) {
     const rowNum = i + 2
 
     // Supports both Sheet field names ('Trail Id', 'Trail Name', etc.) and legacy keys
-    const trip_code   = getField(raw, 'Trail Id', 'TrailId', 'trip_code', 'code', 'trail_code')
+    const rawCode     = getField(raw, 'Trail Id', 'TrailId', 'trip_code', 'code', 'trail_code')
+    const trip_code   = rawCode ? rawCode.trim().toUpperCase() : ''
     const name        = getField(raw, 'Trail Name', 'TrailName', 'name', 'trail_name', 'title')
     const destination = getField(raw, 'Destination', 'destination', 'location') || null
     const rawStart    = getField(raw, 'Start Date', 'StartDate', 'start_date')
     const rawEnd      = getField(raw, 'End Date', 'EndDate', 'end_date')
-    const leaderInput = getField(raw, 'Leader', 'Leader Name', 'leader_phone', 'leader_id')
+    const leaderInput = getField(raw, 'Leader User Id', "Leader's User Id", 'Leader UserId', 'Leader Phone', 'Leader Mobile', 'Leader', 'Leader Name', 'leader_phone', 'leader_id')
     const activeInput = getField(raw, 'Active / Inactive', 'Active/Inactive', 'Active', 'status', 'is_active')
     const remarks     = getField(raw, 'Remarks', 'remarks', 'itinerary', 'notes') || null
 
     if (!trip_code || trip_code.length > 50) {
-      results.push({ row: rowNum, trip_code: trip_code || 'Row ' + rowNum, status: 'error', error: 'Trail Id is required (max 50 chars)' })
+      results.push({ row: rowNum, trip_code: trip_code || 'Row ' + rowNum, status: 'error', error: 'Trail Id is required (e.g. 8-character code like HIHGOK01)' })
       continue
     }
     if (!name || name.length > 100) {
@@ -227,13 +241,13 @@ export async function POST(req: NextRequest) {
     // Flexible date parsing (DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD)
     const start_date = rawStart ? parseDateString(rawStart) : null
     if (rawStart && !start_date) {
-      results.push({ row: rowNum, trip_code, status: 'error', error: `Start Date "${rawStart}" is invalid. Use DD-MM-YYYY or YYYY-MM-DD.` })
+      results.push({ row: rowNum, trip_code, status: 'error', error: `Start Date "${rawStart}" is invalid. Use DD-MM-YYYY, DD/MM/YYYY or YYYY-MM-DD.` })
       continue
     }
 
     const end_date = rawEnd ? parseDateString(rawEnd) : null
     if (rawEnd && !end_date) {
-      results.push({ row: rowNum, trip_code, status: 'error', error: `End Date "${rawEnd}" is invalid. Use DD-MM-YYYY or YYYY-MM-DD.` })
+      results.push({ row: rowNum, trip_code, status: 'error', error: `End Date "${rawEnd}" is invalid. Use DD-MM-YYYY, DD/MM/YYYY or YYYY-MM-DD.` })
       continue
     }
 
@@ -242,13 +256,13 @@ export async function POST(req: NextRequest) {
       continue
     }
 
-    // Leader lookup by name, phone, or id
+    // Leader lookup by User Id (phone number), name, or id
     let leader_id: string | null = null
     if (leaderInput) {
       const cleanInput = leaderInput.trim().toLowerCase()
       leader_id = leaderMap.get(cleanInput) ?? leaderMap.get(cleanInput.replace(/\s+/g, '')) ?? null
       if (!leader_id) {
-        results.push({ row: rowNum, trip_code, status: 'error', error: `Leader "${leaderInput}" not found. Enter leader's full name or phone number.` })
+        results.push({ row: rowNum, trip_code, status: 'error', error: `Leader "${leaderInput}" not found. Enter leader's User ID (phone number) or full name.` })
         continue
       }
     }

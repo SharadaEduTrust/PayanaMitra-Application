@@ -27,6 +27,7 @@ const PatchUserSchema = z.object({
   email:           z.string().email().nullable().optional(),
   location:        z.string().max(50).nullable().optional(),
   date_of_joining: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  referral_name:   z.string().max(100).nullable().optional(),
   remarks:         z.string().max(2000).nullable().optional(),
   is_active:       z.boolean().optional(),
   reset_pin:       z.boolean().optional(),
@@ -41,6 +42,10 @@ const PatchUserSchema = z.object({
   insurance_company:        z.string().max(50).nullable().optional(),
   insurance_expiry:         z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   passport_issued_location: z.string().max(50).nullable().optional(),
+  passport_issue_date:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  visa_no:                  z.string().trim().max(10).nullable().optional(),
+  visa_expiry:              z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  visa_country:             z.string().trim().max(50).nullable().optional(),
 })
 
 async function requireAdmin() {
@@ -136,7 +141,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   const profileUpdatePayload: Record<string, unknown> = {}
-  const profileKeys = ['first_name', 'last_name', 'role', 'leader_id', 'email', 'location', 'date_of_joining', 'remarks', 'is_active'] as const
+  const profileKeys = ['first_name', 'last_name', 'role', 'leader_id', 'email', 'location', 'date_of_joining', 'referral_name', 'remarks', 'is_active'] as const
   for (const key of profileKeys) {
     if (fields[key] !== undefined) profileUpdatePayload[key] = fields[key]
   }
@@ -156,7 +161,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   // Update guest details if provided
-  const tdKeys = ['dob', 'food_preference', 'food_allergy', 'emergency_contact_name', 'emergency_contact_no', 'travel_insurance_no', 'insurance_company', 'insurance_expiry', 'passport_issued_location'] as const
+  const tdKeys = ['dob', 'food_preference', 'food_allergy', 'emergency_contact_name', 'emergency_contact_no', 'travel_insurance_no', 'insurance_company', 'insurance_expiry', 'passport_issued_location', 'passport_issue_date', 'visa_no', 'visa_expiry', 'visa_country'] as const
   const tdPayload: Record<string, unknown> = { user_id: id }
   let hasTd = false
   for (const k of tdKeys) {

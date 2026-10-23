@@ -7,19 +7,31 @@ export default function TravellerDetailsForm({
   details,
   initialPan = "",
   initialPassportNo = "",
+  initialPassportIssueDate = "",
   initialPassportExpiry = "",
+  initialVisaNo = "",
+  initialVisaExpiry = "",
+  initialVisaCountry = "",
 }: {
   details: TravellerDetails | null;
   initialPan?: string;
   initialPassportNo?: string;
+  initialPassportIssueDate?: string;
   initialPassportExpiry?: string;
+  initialVisaNo?: string;
+  initialVisaExpiry?: string;
+  initialVisaCountry?: string;
 }) {
   const [form, setForm] = useState({
     dob: details?.dob ?? "",
     pan: initialPan,
     passport_no: initialPassportNo,
+    passport_issue_date: initialPassportIssueDate || (details?.passport_issue_date ?? ""),
     passport_expiry: initialPassportExpiry,
     passport_issued_location: details?.passport_issued_location ?? "",
+    visa_no: initialVisaNo || (details?.visa_no ?? ""),
+    visa_expiry: initialVisaExpiry || (details?.visa_expiry ?? ""),
+    visa_country: initialVisaCountry || (details?.visa_country ?? ""),
     travel_insurance_no: details?.travel_insurance_no ?? "",
     insurance_company: details?.insurance_company ?? "",
     insurance_expiry: details?.insurance_expiry ?? "",
@@ -90,6 +102,17 @@ export default function TravellerDetailsForm({
           />
         </label>
         <label className="form-field">
+          Passport Issue Date
+          <input
+            type="date"
+            value={form.passport_issue_date}
+            onChange={(event) => set("passport_issue_date", event.target.value)}
+          />
+        </label>
+      </div>
+
+      <div className="field-row">
+        <label className="form-field">
           Passport Expiry Date
           <input
             type="date"
@@ -97,9 +120,6 @@ export default function TravellerDetailsForm({
             onChange={(event) => set("passport_expiry", event.target.value)}
           />
         </label>
-      </div>
-
-      <div className="field-row">
         <label className="form-field">
           Passport Issued Location
           <input
@@ -107,6 +127,38 @@ export default function TravellerDetailsForm({
             maxLength={20}
             onChange={(event) => set("passport_issued_location", event.target.value)}
             placeholder="e.g. Bangalore"
+          />
+        </label>
+      </div>
+
+      <div className="field-row">
+        <label className="form-field">
+          Visa No.
+          <input
+            value={form.visa_no}
+            maxLength={10}
+            onChange={(event) => set("visa_no", event.target.value.toUpperCase())}
+            placeholder="10 characters (e.g. V123456789)"
+          />
+        </label>
+        <label className="form-field">
+          Visa Expiry Date
+          <input
+            type="date"
+            value={form.visa_expiry}
+            onChange={(event) => set("visa_expiry", event.target.value)}
+          />
+        </label>
+      </div>
+
+      <div className="field-row">
+        <label className="form-field">
+          Country (Visa)
+          <input
+            value={form.visa_country}
+            maxLength={50}
+            onChange={(event) => set("visa_country", event.target.value)}
+            placeholder="e.g. Singapore"
           />
         </label>
         <label className="form-field">

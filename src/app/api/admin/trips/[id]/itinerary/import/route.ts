@@ -109,9 +109,9 @@ export async function GET() {
   // Uses Field Names matching "Trail Table Extension" from the Table Details specification
   const lines = [
     'Trail Id,Trail Name,Day,Destination,Itinerary,Hotel Name,Meal Plan,Activity Title,Activity Description,Start Time,End Time',
-    '003,The Asian Amazon Trail,1,Sandakan,"• Arrive in Sandakan, gateway to wildlife heartland\\n• Transfer to hotel\\n• Welcome dinner",Hotel Sandakan,Breakfast & Dinner,Airport Transfer,Pick-up from Sandakan airport,10:00,12:00',
-    '003,The Asian Amazon Trail,2,Sepilok • Kinabatangan River,"• Visit Orangutan Rehabilitation Centre\\n• Travel to Bilit\\n• Afternoon river cruise",Bilit Rainforest Lodge,Breakfast & Dinner,River Cruise,Afternoon cruise for wildlife spotting,15:00,18:00',
-    '003,The Asian Amazon Trail,3,Kinabatangan River,"• Morning cruise\\n• Jungle walk\\n• Night walk",Bilit Rainforest Lodge,Breakfast, Lunch & Dinner,Morning Cruise,Early morning river safari,06:00,08:30',
+    'HIHGOK01,Heritage Gems of Karnataka,1,Hampi,"• Arrive at Hospet / Hampi\\n• Check-in to hotel\\n• Sunset view at Hemakuta Hill",Heritage Resort Hampi,Breakfast & Dinner,Sunset Walk,Walk up to Hemakuta Hill for panoramic sunset view,16:30,18:30',
+    'HIHGOK01,Heritage Gems of Karnataka,2,Hampi,"• Virupaksha Temple & Bazaar\\n• Vijaya Vittala Temple & Stone Chariot\\n• Tungabhadra River coracle ride",Heritage Resort Hampi,Breakfast, Lunch & Dinner,Temple Tour,Guided exploration of Vijaya Vittala temple complex,08:30,12:00',
+    'HIHGOK01,Heritage Gems of Karnataka,3,Badami,"• Transfer to Badami\\n• Rock-cut Cave Temples\\n• Agastya Lake heritage circuit",The Badami Court,Breakfast & Dinner,Cave Temples Exploration,Guided walk through 6th-century cave temples,09:00,13:00',
   ]
   return new NextResponse(lines.join('\n'), {
     status: 200,

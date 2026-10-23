@@ -32,6 +32,7 @@ export interface Profile {
   last_active_at: string | null    // ISO timestamptz
   location: string | null
   email: string | null
+  referral_name: string | null
   remarks: string | null
   avatar_url: string | null
   created_at: string
@@ -51,6 +52,10 @@ export interface TravellerDetails {
   insurance_company: string | null
   insurance_expiry: string | null
   passport_issued_location: string | null
+  passport_issue_date?: string | null
+  visa_no?: string | null
+  visa_expiry?: string | null
+  visa_country?: string | null
   created_at: string
   updated_at: string
 }

@@ -13,6 +13,7 @@ type UserRow = {
   isActive: boolean;
   mustChangePassword: boolean;
   dateOfJoining: string | null;
+  referralName?: string | null;
   location: string | null;
   remarks: string | null;
   lastActiveAt: string | null;
@@ -28,9 +29,13 @@ type UserRow = {
   insuranceCompany?: string | null;
   insuranceExpiry?: string | null;
   passportIssuedLocation?: string | null;
+  passportIssueDate?: string | null;
   pan?: string | null;
   passportNo?: string | null;
   passportExpiry?: string | null;
+  visaNo?: string | null;
+  visaExpiry?: string | null;
+  visaCountry?: string | null;
 };
 
 type LeaderOption = {
@@ -46,9 +51,23 @@ const blank = {
   email: "",
   role: "traveller" as UserRow["role"],
   leaderId: "",
+  referralName: "",
   location: "",
   remarks: "",
 };
+
+type SortField =
+  | "name"
+  | "role"
+  | "leaderName"
+  | "referralName"
+  | "location"
+  | "email"
+  | "isActive"
+  | "lastActiveAt"
+  | "phone";
+
+type SortOrder = "asc" | "desc";
 
 export default function UsersAdmin({
   users,
@@ -67,6 +86,10 @@ export default function UsersAdmin({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Sorting state
+  const [sortField, setSortField] = useState<SortField>("name");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+
   // Edit modal state
   const [editingUser, setEditingUser] = useState<UserRow | null>(null);
   const [editForm, setEditForm] = useState({
@@ -75,6 +98,7 @@ export default function UsersAdmin({
     email: "",
     role: "traveller" as UserRow["role"],
     leaderId: "",
+    referralName: "",
     location: "",
     remarks: "",
     dob: "",
@@ -86,9 +110,13 @@ export default function UsersAdmin({
     insuranceCompany: "",
     insuranceExpiry: "",
     passportIssuedLocation: "",
+    passportIssueDate: "",
     pan: "",
     passportNo: "",
     passportExpiry: "",
+    visaNo: "",
+    visaExpiry: "",
+    visaCountry: "",
   });
 
   // CSV import modal state
@@ -112,7 +140,10 @@ export default function UsersAdmin({
         !term ||
         `${row.firstName} ${row.lastName}`.toLowerCase().includes(term) ||
         row.phone.includes(term) ||
-        (row.email ?? "").toLowerCase().includes(term);
+        (row.email ?? "").toLowerCase().includes(term) ||
+        (row.location ?? "").toLowerCase().includes(term) ||
+        (row.leaderName ?? "").toLowerCase().includes(term) ||
+        (row.referralName ?? "").toLowerCase().includes(term);
 
       const matchesRole = roleFilter === "all" || row.role === roleFilter;
       const matchesStatus =
@@ -124,21 +155,107 @@ export default function UsersAdmin({
     });
   }, [rows, query, roleFilter, statusFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const sortedRows = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      let comparison = 0;
+      switch (sortField) {
+        case "name": {
+          const nameA = `${a.firstName} ${a.lastName}`.trim().toLowerCase();
+          const nameB = `${b.firstName} ${b.lastName}`.trim().toLowerCase();
+          comparison = nameA.localeCompare(nameB);
+          break;
+        }
+        case "role": {
+          const roleOrder: Record<string, number> = { traveller: 1, leader: 2, admin: 3 };
+          comparison = (roleOrder[a.role] ?? 0) - (roleOrder[b.role] ?? 0);
+          break;
+        }
+        case "leaderName": {
+          const lA = (a.leaderName ?? "").trim().toLowerCase();
+          const lB = (b.leaderName ?? "").trim().toLowerCase();
+          comparison = lA.localeCompare(lB);
+          break;
+        }
+        case "referralName": {
+          const rA = (a.referralName ?? "").trim().toLowerCase();
+          const rB = (b.referralName ?? "").trim().toLowerCase();
+          comparison = rA.localeCompare(rB);
+          break;
+        }
+        case "location": {
+          const locA = (a.location ?? "").trim().toLowerCase();
+          const locB = (b.location ?? "").trim().toLowerCase();
+          comparison = locA.localeCompare(locB);
+          break;
+        }
+        case "email": {
+          const emA = (a.email ?? "").trim().toLowerCase();
+          const emB = (b.email ?? "").trim().toLowerCase();
+          comparison = emA.localeCompare(emB);
+          break;
+        }
+        case "isActive": {
+          comparison = (a.isActive === b.isActive ? 0 : a.isActive ? -1 : 1);
+          break;
+        }
+        case "lastActiveAt": {
+          const tA = a.lastActiveAt ? new Date(a.lastActiveAt).getTime() : 0;
+          const tB = b.lastActiveAt ? new Date(b.lastActiveAt).getTime() : 0;
+          comparison = tA - tB;
+          break;
+        }
+        case "phone": {
+          comparison = a.phone.localeCompare(b.phone);
+          break;
+        }
+      }
+      return sortOrder === "asc" ? comparison : -comparison;
+    });
+  }, [filtered, sortField, sortOrder]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
   const paginatedRows = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, page, pageSize]);
+    return sortedRows.slice(start, start + pageSize);
+  }, [sortedRows, page, pageSize]);
+
+  function toggleSort(field: SortField) {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  }
+
+  function renderSortHeader(label: string, field: SortField) {
+    const isSorted = sortField === field;
+    return (
+      <th
+        onClick={() => toggleSort(field)}
+        style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+        title={`Sort by ${label} (${isSorted ? (sortOrder === "asc" ? "Descending" : "Ascending") : "Ascending"})`}
+        aria-sort={isSorted ? (sortOrder === "asc" ? "ascending" : "descending") : "none"}
+      >
+        <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+          {label}
+          <span style={{ fontSize: "11px", color: isSorted ? "var(--forest, #2d5a27)" : "var(--color-muted, #94a3b8)", opacity: isSorted ? 1 : 0.4 }}>
+            {isSorted ? (sortOrder === "asc" ? "▲" : "▼") : "⇅"}
+          </span>
+        </span>
+      </th>
+    );
+  }
 
   function startEdit(user: UserRow) {
     setEditingUser(user);
     const emergencyParts = (user.emergencyContact ?? "").split(" · ");
-    setEditForm({
-      firstName: user.firstName,
+    setEditForm({      firstName: user.firstName,
       lastName: user.lastName,
       email: user.email ?? "",
       role: user.role,
       leaderId: user.leaderId ?? "",
+      referralName: user.referralName ?? "",
       location: user.location ?? "",
       remarks: user.remarks ?? "",
       dob: user.dob ?? "",
@@ -150,9 +267,13 @@ export default function UsersAdmin({
       insuranceCompany: user.insuranceCompany ?? "",
       insuranceExpiry: user.insuranceExpiry ?? "",
       passportIssuedLocation: user.passportIssuedLocation ?? "",
+      passportIssueDate: user.passportIssueDate ?? "",
       pan: user.pan ?? "",
       passportNo: user.passportNo ?? "",
       passportExpiry: user.passportExpiry ?? "",
+      visaNo: user.visaNo ?? "",
+      visaExpiry: user.visaExpiry ?? "",
+      visaCountry: user.visaCountry ?? "",
     });
   }
 
@@ -173,21 +294,26 @@ export default function UsersAdmin({
           last_name: editForm.lastName.trim(),
           role: editForm.role,
           leader_id: editForm.leaderId || null,
+          referral_name: editForm.referralName.trim() || null,
           email: editForm.email.trim() || null,
           location: editForm.location.trim() || null,
           remarks: editForm.remarks.trim() || null,
           dob: editForm.dob || null,
           food_preference: editForm.foodPreference || null,
           food_allergy: editForm.foodAllergy.trim() || null,
-          emergency_contact_name: editForm.emergencyContactName.trim() || null,
-          emergency_contact_no: editForm.emergencyContactNo.trim() || null,
-          travel_insurance_no: editForm.travelInsuranceNo.trim() || null,
-          insurance_company: editForm.insuranceCompany.trim() || null,
-          insurance_expiry: editForm.insuranceExpiry || null,
-          passport_issued_location: editForm.passportIssuedLocation.trim() || null,
+          emergencyContactName: editForm.emergencyContactName.trim() || null,
+          emergencyContactNo: editForm.emergencyContactNo.trim() || null,
+          travelInsuranceNo: editForm.travelInsuranceNo.trim() || null,
+          insuranceCompany: editForm.insuranceCompany.trim() || null,
+          insuranceExpiry: editForm.insuranceExpiry || null,
+          passportIssuedLocation: editForm.passportIssuedLocation.trim() || null,
+          passport_issue_date: editForm.passportIssueDate || null,
           pan: editForm.pan.trim().toUpperCase() || null,
-          passport_no: editForm.passportNo.trim().toUpperCase() || null,
-          passport_expiry: editForm.passportExpiry || null,
+          passportNo: editForm.passportNo.trim().toUpperCase() || null,
+          passportExpiry: editForm.passportExpiry || null,
+          visa_no: editForm.visaNo.trim().toUpperCase() || null,
+          visa_expiry: editForm.visaExpiry || null,
+          visa_country: editForm.visaCountry.trim() || null,
         }),
       });
 
@@ -220,6 +346,7 @@ export default function UsersAdmin({
                 role: editForm.role,
                 leaderId: editForm.leaderId || null,
                 leaderName: assignedLeaderName,
+                referralName: editForm.referralName.trim() || null,
                 location: editForm.location.trim() || null,
                 remarks: editForm.remarks.trim() || null,
                 dob: editForm.dob || null,
@@ -235,9 +362,13 @@ export default function UsersAdmin({
                 insuranceCompany: editForm.insuranceCompany.trim() || null,
                 insuranceExpiry: editForm.insuranceExpiry || null,
                 passportIssuedLocation: editForm.passportIssuedLocation.trim() || null,
+                passportIssueDate: editForm.passportIssueDate || null,
                 pan: editForm.pan.trim().toUpperCase() || null,
                 passportNo: editForm.passportNo.trim().toUpperCase() || null,
                 passportExpiry: editForm.passportExpiry || null,
+                visaNo: editForm.visaNo.trim().toUpperCase() || null,
+                visaExpiry: editForm.visaExpiry || null,
+                visaCountry: editForm.visaCountry.trim() || null,
               }
             : r,
         ),
@@ -268,6 +399,7 @@ export default function UsersAdmin({
           last_name: draft.lastName.trim(),
           role: draft.role,
           leader_id: draft.leaderId || null,
+          referral_name: draft.referralName.trim() || null,
           email: draft.email.trim() || null,
           location: draft.location.trim() || null,
           remarks: draft.remarks.trim() || null,
@@ -397,15 +529,95 @@ export default function UsersAdmin({
         <div className="admin-card-head" style={{ flexWrap: "wrap", gap: "12px" }}>
           <h2 className="serif">Accounts</h2>
           <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-            <input
-              className="admin-search"
-              placeholder="Search name, phone or email"
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setPage(1);
-              }}
-            />
+            {/* Search Input with Magnifying Glass */}
+            <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{
+                  position: "absolute",
+                  left: "12px",
+                  color: "var(--color-muted, #94a3b8)",
+                  pointerEvents: "none",
+                }}
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                className="admin-search"
+                placeholder="Search name, phone, email, city…"
+                value={query}
+                style={{ paddingLeft: "36px", paddingRight: query ? "30px" : "12px", minWidth: "240px" }}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setPage(1);
+                }}
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuery("");
+                    setPage(1);
+                  }}
+                  style={{
+                    position: "absolute",
+                    right: "8px",
+                    background: "none",
+                    border: "none",
+                    color: "var(--color-muted, #94a3b8)",
+                    cursor: "pointer",
+                    padding: "2px 6px",
+                    fontSize: "14px",
+                    lineHeight: 1,
+                  }}
+                  title="Clear search"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Sort Key Controls */}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span className="muted small" style={{ whiteSpace: "nowrap" }}>Sort by:</span>
+              <select
+                value={sortField}
+                onChange={(e) => {
+                  setSortField(e.target.value as SortField);
+                  setPage(1);
+                }}
+                style={{ padding: "6px 12px", borderRadius: "6px" }}
+                aria-label="Sort by field"
+              >
+                <option value="name">Names</option>
+                <option value="role">Role</option>
+                <option value="leaderName">Leader Name</option>
+                <option value="referralName">Referral</option>
+                <option value="location">Location</option>
+                <option value="email">email id</option>
+                <option value="isActive">Active / Inactive</option>
+                <option value="lastActiveAt">Date Last Active</option>
+                <option value="phone">Mobile Number</option>
+              </select>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))}
+                style={{ padding: "6px 10px", fontSize: "13px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                title={`Sort ${sortOrder === "asc" ? "Ascending" : "Descending"} (Click to flip)`}
+              >
+                {sortOrder === "asc" ? "▲ Asc" : "▼ Desc"}
+              </button>
+            </div>
+
             <select
               value={roleFilter}
               onChange={(e) => {
@@ -447,7 +659,7 @@ export default function UsersAdmin({
               <div>
                 <h3 className="serif" style={{ margin: 0, fontSize: "1.15rem" }}>Bulk Import Guests (CSV)</h3>
                 <p className="admin-hint" style={{ margin: "4px 0 0" }}>
-                  Upload a UTF-8 CSV with columns: <code>User Id</code>, <code>First Name</code>, <code>Last Name</code>, <code>Role</code>, <code>Leader Name</code>, <code>Date of Joining</code>, <code>Active / Inactive</code>, <code>Location</code>, <code>email id</code>, <code>Mobile Number</code>.
+                  Upload a UTF-8 CSV with columns: <code>Mobile Number</code>, <code>First Name</code>, <code>Last Name</code>, <code>Role</code>, <code>Leader Name</code>, <code>Date of Joining</code>, <code>Location</code>, <code>email id</code>, <code>Referral&apos;s Name</code>. (Active status is automatically set in the backend).
                 </p>
               </div>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -504,15 +716,16 @@ export default function UsersAdmin({
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th>User Id / Mobile Number</th>
-                  <th>First Name</th>
+                  {renderSortHeader("User Id / Mobile Number", "phone")}
+                  {renderSortHeader("First Name", "name")}
                   <th>Last Name</th>
-                  <th>Role</th>
-                  <th>Leader Name</th>
-                  <th>Location</th>
-                  <th>email id</th>
-                  <th>Active / Inactive</th>
-                  <th>Date Last Active</th>
+                  {renderSortHeader("Role", "role")}
+                  {renderSortHeader("Leader Name", "leaderName")}
+                  {renderSortHeader("Referral", "referralName")}
+                  {renderSortHeader("Location", "location")}
+                  {renderSortHeader("email id", "email")}
+                  {renderSortHeader("Active / Inactive", "isActive")}
+                  {renderSortHeader("Date Last Active", "lastActiveAt")}
                   <th aria-label="Actions" />
                 </tr>
               </thead>
@@ -528,6 +741,7 @@ export default function UsersAdmin({
                     </td>
                     <td style={{ textTransform: "capitalize" }}>{row.role === "traveller" ? "Guest" : row.role === "leader" ? "Trail leader" : "Admin"}</td>
                     <td>{row.leaderName || "—"}</td>
+                    <td>{row.referralName || "—"}</td>
                     <td>{row.location || "—"}</td>
                     <td className="small">{row.email || "—"}</td>
                     <td>
@@ -636,6 +850,15 @@ export default function UsersAdmin({
 
             <div className="field-row">
               <label className="form-field">
+                Referral&apos;s Name
+                <input
+                  value={editForm.referralName}
+                  maxLength={100}
+                  onChange={(e) => setEditForm({ ...editForm, referralName: e.target.value })}
+                  placeholder="e.g. Ramesh Bhat"
+                />
+              </label>
+              <label className="form-field">
                 Location
                 <input value={editForm.location} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} />
               </label>
@@ -668,6 +891,14 @@ export default function UsersAdmin({
 
             <div className="field-row">
               <label className="form-field">
+                Passport Issue Date
+                <input
+                  type="date"
+                  value={editForm.passportIssueDate}
+                  onChange={(e) => setEditForm({ ...editForm, passportIssueDate: e.target.value })}
+                />
+              </label>
+              <label className="form-field">
                 Passport Expiry Date
                 <input
                   type="date"
@@ -675,13 +906,45 @@ export default function UsersAdmin({
                   onChange={(e) => setEditForm({ ...editForm, passportExpiry: e.target.value })}
                 />
               </label>
+            </div>
+
+            <div className="field-row">
               <label className="form-field">
                 Passport Issued Location
                 <input
                   value={editForm.passportIssuedLocation}
-                  maxLength={20}
+                  maxLength={50}
                   onChange={(e) => setEditForm({ ...editForm, passportIssuedLocation: e.target.value })}
                   placeholder="e.g. Bangalore"
+                />
+              </label>
+              <label className="form-field">
+                Visa No.
+                <input
+                  value={editForm.visaNo}
+                  maxLength={10}
+                  onChange={(e) => setEditForm({ ...editForm, visaNo: e.target.value.toUpperCase() })}
+                  placeholder="10 characters (e.g. V123456789)"
+                />
+              </label>
+            </div>
+
+            <div className="field-row">
+              <label className="form-field">
+                Visa Expiry Date
+                <input
+                  type="date"
+                  value={editForm.visaExpiry}
+                  onChange={(e) => setEditForm({ ...editForm, visaExpiry: e.target.value })}
+                />
+              </label>
+              <label className="form-field">
+                Country (Visa)
+                <input
+                  value={editForm.visaCountry}
+                  maxLength={50}
+                  onChange={(e) => setEditForm({ ...editForm, visaCountry: e.target.value })}
+                  placeholder="e.g. Singapore"
                 />
               </label>
             </div>
@@ -839,6 +1102,15 @@ export default function UsersAdmin({
                   </option>
                 ))}
               </select>
+            </label>
+            <label className="form-field">
+              Referral&apos;s Name (Optional)
+              <input
+                value={draft.referralName}
+                maxLength={100}
+                onChange={(e) => setDraft({ ...draft, referralName: e.target.value })}
+                placeholder="e.g. Ramesh Bhat"
+              />
             </label>
             <label className="form-field">
               Location

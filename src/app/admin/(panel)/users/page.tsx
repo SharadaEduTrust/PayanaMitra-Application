@@ -18,7 +18,7 @@ export default async function AdminUsersPage() {
     supabase.from("profiles").select("*").order("last_name", { ascending: true }),
     supabase.from("traveller_details").select("*"),
     supabase.from("profiles").select("id, first_name, last_name").eq("role", "leader").order("first_name", { ascending: true }),
-    (admin.from("guest_documents") as any).select("user_id, doc_type, doc_number_enc, iv, auth_tag, expiry_date"),
+    (admin.from("guest_documents") as any).select("user_id, doc_type, doc_number_enc, iv, auth_tag, expiry_date, issued_date, issued_country"),
   ]);
 
   const leaderMap = new Map((leaders ?? []).map((l) => [l.id, `${l.first_name} ${l.last_name}`.trim()]));
@@ -29,13 +29,17 @@ export default async function AdminUsersPage() {
 
   const panByUser = new Map<string, string>();
   const passportByUser = new Map<string, string>();
+  const passportIssueDateByUser = new Map<string, string>();
   const passportExpiryByUser = new Map<string, string>();
+  const visaByUser = new Map<string, string>();
+  const visaExpiryByUser = new Map<string, string>();
+  const visaCountryByUser = new Map<string, string>();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await Promise.all(
     (documents ?? []).map(async (doc: any) => {
       const docType = String(doc.doc_type || "").toLowerCase();
-      if (docType === "pan" || docType === "passport") {
+      if (docType === "pan" || docType === "passport" || docType === "visa") {
         let docNum = "";
         if (doc.doc_number_enc && doc.iv && doc.auth_tag) {
           try {
@@ -52,8 +56,19 @@ export default async function AdminUsersPage() {
           panByUser.set(doc.user_id, docNum);
         } else if (docType === "passport" && docNum) {
           passportByUser.set(doc.user_id, docNum);
+          if (doc.issued_date) {
+            passportIssueDateByUser.set(doc.user_id, String(doc.issued_date).slice(0, 10));
+          }
           if (doc.expiry_date) {
             passportExpiryByUser.set(doc.user_id, String(doc.expiry_date).slice(0, 10));
+          }
+        } else if (docType === "visa" && docNum) {
+          visaByUser.set(doc.user_id, docNum);
+          if (doc.expiry_date) {
+            visaExpiryByUser.set(doc.user_id, String(doc.expiry_date).slice(0, 10));
+          }
+          if (doc.issued_country) {
+            visaCountryByUser.set(doc.user_id, String(doc.issued_country));
           }
         }
       }
@@ -72,6 +87,7 @@ export default async function AdminUsersPage() {
       isActive: profile.is_active,
       mustChangePassword: profile.must_change_password,
       dateOfJoining: profile.date_of_joining,
+      referralName: profile.referral_name ?? null,
       location: profile.location,
       remarks: profile.remarks,
       lastActiveAt: profile.last_active_at,
@@ -90,9 +106,13 @@ export default async function AdminUsersPage() {
       insuranceCompany: detail?.insurance_company ?? null,
       insuranceExpiry: detail?.insurance_expiry ?? null,
       passportIssuedLocation: detail?.passport_issued_location ?? null,
+      passportIssueDate: passportIssueDateByUser.get(profile.id) ?? detail?.passport_issue_date ?? null,
       pan: panByUser.get(profile.id) ?? null,
       passportNo: passportByUser.get(profile.id) ?? null,
       passportExpiry: passportExpiryByUser.get(profile.id) ?? null,
+      visaNo: visaByUser.get(profile.id) ?? detail?.visa_no ?? null,
+      visaExpiry: visaExpiryByUser.get(profile.id) ?? detail?.visa_expiry ?? null,
+      visaCountry: visaCountryByUser.get(profile.id) ?? detail?.visa_country ?? null,
     };
   });
 

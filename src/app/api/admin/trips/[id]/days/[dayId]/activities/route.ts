@@ -55,7 +55,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   const guard = await requireAdmin()
   if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })
 
-  const { dayId } = await params
+  const resolvedParams = await params
+  const { id: _trip_id, dayId } = resolvedParams
 
   let body: unknown
   try { body = await req.json() } catch {

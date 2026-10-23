@@ -34,20 +34,69 @@ const GuestDetailsSchema = z.object({
   insurance_company:        z.string().max(50, 'Max 50 characters').nullable().optional(),
   insurance_expiry:         z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').nullable().optional(),
   passport_issued_location: z.string().max(50, 'Max 50 characters').nullable().optional(),
+  passport_issue_date:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').nullable().optional(),
   pan:                      z.string().trim().max(10).nullable().optional(),
   passport_no:              z.string().trim().max(10).nullable().optional(),
   passport_expiry:          z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  visa_no:                  z.string().trim().max(10).nullable().optional(),
+  visa_expiry:              z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  visa_country:             z.string().trim().max(50).nullable().optional(),
 }).optional()
 
+const OptionalEmailSchema = z.preprocess(
+  (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+  z.string().email('Invalid email address').nullable().optional(),
+)
+
+const OptionalUuidSchema = z.preprocess(
+  (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+  z.string().uuid('Invalid leader ID').nullable().optional(),
+)
+
+const PhoneInputSchema = z.preprocess(
+  (val) => (typeof val === 'string' ? val.trim().replace(/[\s\-\(\)]/g, '') : val),
+  z.string()
+    .min(10, 'Phone number must be at least 10 digits (e.g. 9876543210 or +919876543210)')
+    .max(16, 'Phone number cannot exceed 15 digits')
+    .regex(PHONE_REGEX, 'Phone must be a valid 10-15 digit number (e.g. 9876543210 or +919876543210)'),
+)
+
+export function formatZodError(error: z.ZodError) {
+  const flattened = error.flatten()
+  const fieldErrors = flattened.fieldErrors as Record<string, string[] | undefined>
+  const formErrors = flattened.formErrors
+
+  const messages: string[] = []
+
+  for (const [field, errs] of Object.entries(fieldErrors)) {
+    if (Array.isArray(errs) && errs.length > 0) {
+      const fieldName = field.replace(/_/g, ' ')
+      messages.push(`${fieldName}: ${errs.join(', ')}`)
+    }
+  }
+
+  if (Array.isArray(formErrors) && formErrors.length > 0) {
+    messages.push(formErrors.join(', '))
+  }
+
+  const detailedMessage = messages.join('; ')
+  return {
+    error: detailedMessage ? `Validation failed: ${detailedMessage}` : 'Validation failed',
+    fieldErrors,
+    formErrors,
+  }
+}
+
 const CreateUserSchema = z.object({
-  phone:           z.string().regex(PHONE_REGEX, 'Phone must be a valid 10-15 digit number (e.g. 9876543210 or +919876543210)'),
+  phone:           PhoneInputSchema,
   first_name:      z.string().min(1, 'First name is required').max(50, 'First name cannot exceed 50 characters'),
   last_name:       z.string().min(1, 'Last name is required').max(50, 'Last name cannot exceed 50 characters'),
   role:            RoleInputSchema.default('traveller'),
-  leader_id:       z.string().uuid('Invalid leader ID').nullable().optional(),
-  email:           z.string().email('Invalid email address').nullable().optional(),
+  leader_id:       OptionalUuidSchema,
+  email:           OptionalEmailSchema,
   location:        z.string().max(50, 'Location cannot exceed 50 characters').nullable().optional(),
   date_of_joining: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date of joining must be YYYY-MM-DD').nullable().optional(),
+  referral_name:   z.string().max(100, 'Referral name cannot exceed 100 characters').nullable().optional(),
   remarks:         z.string().max(2000, 'Remarks cannot exceed 2000 characters').nullable().optional(),
   // Optional nested or flat guest details
   guest_details:   GuestDetailsSchema,
@@ -60,9 +109,13 @@ const CreateUserSchema = z.object({
   insurance_company:        z.string().max(50).nullable().optional(),
   insurance_expiry:         z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   passport_issued_location: z.string().max(50).nullable().optional(),
+  passport_issue_date:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   pan:                      z.string().trim().max(10).nullable().optional(),
   passport_no:              z.string().trim().max(10).nullable().optional(),
   passport_expiry:          z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  visa_no:                  z.string().trim().max(10).nullable().optional(),
+  visa_expiry:              z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  visa_country:             z.string().trim().max(50).nullable().optional(),
 })
 
 const PatchUserSchema = z.object({
@@ -70,10 +123,11 @@ const PatchUserSchema = z.object({
   first_name:      z.string().min(1).max(50).optional(),
   last_name:       z.string().min(1).max(50).optional(),
   role:            RoleInputSchema.optional(),
-  leader_id:       z.string().uuid('Invalid leader ID').nullable().optional(),
-  email:           z.string().email().nullable().optional(),
+  leader_id:       OptionalUuidSchema,
+  email:           OptionalEmailSchema,
   location:        z.string().max(50).nullable().optional(),
   date_of_joining: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  referral_name:   z.string().max(100).nullable().optional(),
   remarks:         z.string().max(2000).nullable().optional(),
   is_active:       z.boolean().optional(),
   reset_pin:       z.boolean().optional(),
@@ -89,9 +143,13 @@ const PatchUserSchema = z.object({
   insurance_company:        z.string().max(50).nullable().optional(),
   insurance_expiry:         z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   passport_issued_location: z.string().max(50).nullable().optional(),
+  passport_issue_date:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   pan:                      z.string().trim().max(10).nullable().optional(),
   passport_no:              z.string().trim().max(10).nullable().optional(),
   passport_expiry:          z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  visa_no:                  z.string().trim().max(10).nullable().optional(),
+  visa_expiry:              z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  visa_country:             z.string().trim().max(50).nullable().optional(),
 })
 
 async function requireAdmin() {
@@ -119,7 +177,7 @@ export async function GET(req: NextRequest) {
   let query = admin
     .from('profiles')
     .select(
-      'id, phone, first_name, last_name, role, is_active, must_change_password, leader_id, date_of_joining, last_active_at, location, email, remarks, created_at, updated_at, leader:profiles!leader_id(id, first_name, last_name, phone), traveller_details(*)',
+      'id, phone, first_name, last_name, role, is_active, must_change_password, leader_id, date_of_joining, referral_name, last_active_at, location, email, remarks, created_at, updated_at, leader:profiles!leader_id(id, first_name, last_name, phone), traveller_details(*)',
       { count: 'exact' }
     )
     .order('created_at', { ascending: false })
@@ -170,10 +228,7 @@ export async function POST(req: NextRequest) {
 
   const parsed = CreateUserSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Validation failed', fieldErrors: parsed.error.flatten().fieldErrors },
-      { status: 422 },
-    )
+    return NextResponse.json(formatZodError(parsed.error), { status: 422 })
   }
 
   const data = parsed.data
@@ -251,6 +306,7 @@ export async function POST(req: NextRequest) {
       email: data.email ?? null,
       location: data.location ?? null,
       date_of_joining: data.date_of_joining ?? null,
+      referral_name: data.referral_name ?? null,
       remarks: data.remarks ?? null,
       must_change_password: false,
       is_active: true,
@@ -274,6 +330,10 @@ export async function POST(req: NextRequest) {
     insurance_company: data.insurance_company,
     insurance_expiry: data.insurance_expiry,
     passport_issued_location: data.passport_issued_location,
+    passport_issue_date: data.passport_issue_date,
+    visa_no: data.visa_no,
+    visa_expiry: data.visa_expiry,
+    visa_country: data.visa_country,
   }
 
   const hasDetails = Object.values(detailsSource).some(v => v !== undefined && v !== null)
@@ -319,10 +379,7 @@ export async function PATCH(req: NextRequest) {
 
   const parsed = PatchUserSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Validation failed', fieldErrors: parsed.error.flatten().fieldErrors },
-      { status: 422 },
-    )
+    return NextResponse.json(formatZodError(parsed.error), { status: 422 })
   }
 
   const { id, reset_pin, reset_password, guest_details, ...fields } = parsed.data
@@ -374,7 +431,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const profileUpdatePayload: Record<string, unknown> = {}
-  const profileKeys = ['first_name', 'last_name', 'role', 'leader_id', 'email', 'location', 'date_of_joining', 'remarks', 'is_active'] as const
+  const profileKeys = ['first_name', 'last_name', 'role', 'leader_id', 'email', 'location', 'date_of_joining', 'referral_name', 'remarks', 'is_active'] as const
   for (const key of profileKeys) {
     if (fields[key] !== undefined) profileUpdatePayload[key] = fields[key]
   }
@@ -404,6 +461,10 @@ export async function PATCH(req: NextRequest) {
     insurance_company: fields.insurance_company,
     insurance_expiry: fields.insurance_expiry,
     passport_issued_location: fields.passport_issued_location,
+    passport_issue_date: fields.passport_issue_date,
+    visa_no: fields.visa_no,
+    visa_expiry: fields.visa_expiry,
+    visa_country: fields.visa_country,
   }
 
   const hasDetailUpdates = Object.values(detailsSource).some(v => v !== undefined)
@@ -468,6 +529,7 @@ export async function PATCH(req: NextRequest) {
   // Handle Passport in guest_documents
   const passportVal = fields.passport_no !== undefined ? fields.passport_no : guest_details?.passport_no
   const passportExpVal = fields.passport_expiry !== undefined ? fields.passport_expiry : guest_details?.passport_expiry
+  const passportIssueVal = fields.passport_issue_date !== undefined ? fields.passport_issue_date : guest_details?.passport_issue_date
   const passportLocVal = (fields.passport_issued_location ?? guest_details?.passport_issued_location) || 'India'
 
   if (passportVal) {
@@ -486,6 +548,7 @@ export async function PATCH(req: NextRequest) {
           doc_number_enc: enc.ciphertext,
           iv: enc.iv,
           auth_tag: enc.authTag,
+          issued_date: passportIssueVal || null,
           expiry_date: passportExpVal || null,
           issued_country: passportLocVal,
           updated_at: new Date().toISOString(),
@@ -498,12 +561,55 @@ export async function PATCH(req: NextRequest) {
           doc_number_enc: enc.ciphertext,
           iv: enc.iv,
           auth_tag: enc.authTag,
+          issued_date: passportIssueVal || null,
           expiry_date: passportExpVal || null,
           issued_country: passportLocVal,
         })
       }
     } catch (passErr) {
       console.error('Failed to encrypt Passport in admin user PATCH:', passErr)
+    }
+  }
+
+  // Handle Visa in guest_documents
+  const visaVal = fields.visa_no !== undefined ? fields.visa_no : guest_details?.visa_no
+  const visaExpVal = fields.visa_expiry !== undefined ? fields.visa_expiry : guest_details?.visa_expiry
+  const visaCountryVal = fields.visa_country !== undefined ? fields.visa_country : guest_details?.visa_country
+
+  if (visaVal) {
+    try {
+      const enc = await encrypt(visaVal.trim())
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: existingVisa } = await (admin.from('guest_documents') as any)
+        .select('id')
+        .eq('user_id', id)
+        .eq('doc_type', 'visa')
+        .maybeSingle()
+
+      if (existingVisa) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from('guest_documents') as any).update({
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+          expiry_date: visaExpVal || null,
+          issued_country: visaCountryVal || null,
+          updated_at: new Date().toISOString(),
+        }).eq('id', existingVisa.id)
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from('guest_documents') as any).insert({
+          user_id: id,
+          doc_type: 'visa',
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+          expiry_date: visaExpVal || null,
+          issued_country: visaCountryVal || null,
+        })
+      }
+    } catch (visaErr) {
+      console.error('Failed to encrypt Visa in admin user PATCH:', visaErr)
     }
   }
 

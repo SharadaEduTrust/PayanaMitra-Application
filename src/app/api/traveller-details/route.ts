@@ -10,8 +10,12 @@ const schema = z.object({
   dob: z.string().optional().nullable(),
   pan: z.string().trim().max(10).optional().nullable(),
   passport_no: z.string().trim().max(10).optional().nullable(),
+  passport_issue_date: z.string().optional().nullable(),
   passport_expiry: z.string().optional().nullable(),
   passport_issued_location: z.string().trim().max(120).optional().nullable(),
+  visa_no: z.string().trim().max(10).optional().nullable(),
+  visa_expiry: z.string().optional().nullable(),
+  visa_country: z.string().trim().max(120).optional().nullable(),
   travel_insurance_no: z.string().trim().max(80).optional().nullable(),
   insurance_company: z.string().trim().max(120).optional().nullable(),
   insurance_expiry: z.string().optional().nullable(),
@@ -49,6 +53,10 @@ export async function POST(request: Request) {
     insurance_company: emptyToNull(parsed.data.insurance_company),
     insurance_expiry: emptyToNull(parsed.data.insurance_expiry),
     passport_issued_location: emptyToNull(parsed.data.passport_issued_location),
+    passport_issue_date: emptyToNull(parsed.data.passport_issue_date),
+    visa_no: emptyToNull(parsed.data.visa_no),
+    visa_expiry: emptyToNull(parsed.data.visa_expiry),
+    visa_country: emptyToNull(parsed.data.visa_country),
     updated_at: new Date().toISOString(),
   };
 
@@ -107,6 +115,7 @@ export async function POST(request: Request) {
 
   // Handle Passport in guest_documents
   const passportNo = emptyToNull(parsed.data.passport_no);
+  const passportIssueDate = emptyToNull(parsed.data.passport_issue_date);
   const passportExpiry = emptyToNull(parsed.data.passport_expiry);
   const passportLocation = emptyToNull(parsed.data.passport_issued_location) || "India";
 
@@ -126,6 +135,7 @@ export async function POST(request: Request) {
           doc_number_enc: enc.ciphertext,
           iv: enc.iv,
           auth_tag: enc.authTag,
+          issued_date: passportIssueDate,
           expiry_date: passportExpiry,
           issued_country: passportLocation,
           updated_at: new Date().toISOString(),
@@ -138,12 +148,55 @@ export async function POST(request: Request) {
           doc_number_enc: enc.ciphertext,
           iv: enc.iv,
           auth_tag: enc.authTag,
+          issued_date: passportIssueDate,
           expiry_date: passportExpiry,
           issued_country: passportLocation,
         });
       }
     } catch (passErr) {
       console.error("Failed to encrypt Passport:", passErr);
+    }
+  }
+
+  // Handle Visa in guest_documents
+  const visaNo = emptyToNull(parsed.data.visa_no);
+  const visaExpiry = emptyToNull(parsed.data.visa_expiry);
+  const visaCountry = emptyToNull(parsed.data.visa_country);
+
+  if (visaNo) {
+    try {
+      const enc = await encrypt(visaNo);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: existingVisa } = await (admin.from("guest_documents") as any)
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("doc_type", "visa")
+        .maybeSingle();
+
+      if (existingVisa) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from("guest_documents") as any).update({
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+          expiry_date: visaExpiry,
+          issued_country: visaCountry,
+          updated_at: new Date().toISOString(),
+        }).eq("id", existingVisa.id);
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from("guest_documents") as any).insert({
+          user_id: user.id,
+          doc_type: "visa",
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+          expiry_date: visaExpiry,
+          issued_country: visaCountry,
+        });
+      }
+    } catch (visaErr) {
+      console.error("Failed to encrypt Visa:", visaErr);
     }
   }
 

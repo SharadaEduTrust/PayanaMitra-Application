@@ -66,6 +66,9 @@ export default async function ProfilePage() {
   const passportDoc = (documents ?? []).find(
     (d: Record<string, unknown>) => String(d.doc_type || "").toLowerCase() === "passport",
   );
+  const visaDoc = (documents ?? []).find(
+    (d: Record<string, unknown>) => String(d.doc_type || "").toLowerCase() === "visa",
+  );
 
   let initialPan = "";
   if (panDoc && panDoc.doc_number_enc && panDoc.iv && panDoc.auth_tag) {
@@ -93,7 +96,29 @@ export default async function ProfilePage() {
     }
   }
 
+  const initialPassportIssueDate = passportDoc?.issued_date
+    ? String(passportDoc.issued_date).slice(0, 10)
+    : (traveller?.passport_issue_date ?? "");
   const initialPassportExpiry = passportDoc?.expiry_date ? String(passportDoc.expiry_date).slice(0, 10) : "";
+
+  let initialVisaNo = traveller?.visa_no ?? "";
+  if (visaDoc && visaDoc.doc_number_enc && visaDoc.iv && visaDoc.auth_tag) {
+    try {
+      initialVisaNo = await decrypt({
+        ciphertext: String(visaDoc.doc_number_enc),
+        iv: String(visaDoc.iv),
+        authTag: String(visaDoc.auth_tag),
+      });
+    } catch {
+      initialVisaNo = traveller?.visa_no ?? "";
+    }
+  }
+  const initialVisaExpiry = visaDoc?.expiry_date
+    ? String(visaDoc.expiry_date).slice(0, 10)
+    : (traveller?.visa_expiry ?? "");
+  const initialVisaCountry = visaDoc?.issued_country
+    ? String(visaDoc.issued_country)
+    : (traveller?.visa_country ?? "");
 
   const columns = "id, start_date, end_date, status, is_active";
   type TripRow = {
@@ -226,7 +251,11 @@ export default async function ProfilePage() {
             details={traveller}
             initialPan={initialPan}
             initialPassportNo={initialPassportNo}
+            initialPassportIssueDate={initialPassportIssueDate}
             initialPassportExpiry={initialPassportExpiry}
+            initialVisaNo={initialVisaNo}
+            initialVisaExpiry={initialVisaExpiry}
+            initialVisaCountry={initialVisaCountry}
           />
         </section>
       </div>

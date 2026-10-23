@@ -119,10 +119,15 @@ export default function TripDetailView({
                   <span className="day-number">Day {day.dayNumber}</span>
                   <div>
                     <h3>{day.destination ?? `Day ${day.dayNumber}`}</h3>
+<<<<<<< HEAD
                     <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
                       {day.hotelName && <p className="muted small" style={{ margin: 0 }}>Stay: {day.hotelName}</p>}
                       {day.mealPlan && <p className="muted small" style={{ margin: 0 }}>Meals: {day.mealPlan}</p>}
                     </div>
+=======
+                    {day.hotelName && <p className="muted small">Accommodations: {day.hotelName}</p>}
+                    {day.mealPlan && <p className="muted small">Meals Included: {day.mealPlan}</p>}
+>>>>>>> origin/main
                   </div>
                 </div>
 
@@ -134,14 +139,16 @@ export default function TripDetailView({
                       <li key={activity.id}>
                         <span className="timing-time">
                           {activity.startTime ? activity.startTime.slice(0, 5) : "—"}
+                          {activity.endTime && (
+                            <span className="timing-meta" style={{ display: "block", marginTop: "2px" }}>
+                              to {activity.endTime.slice(0, 5)}
+                            </span>
+                          )}
                         </span>
                         <div className="timing-body">
-                          <strong>{activity.title}</strong>
-                          {activity.description && <p>{activity.description}</p>}
-                          {activity.endTime && (
-                            <span className="timing-meta">
-                              until {activity.endTime.slice(0, 5)}
-                            </span>
+                          <strong>{activity.description || activity.title}</strong>
+                          {activity.description && activity.title && activity.description !== activity.title && (
+                            <p>{activity.description}</p>
                           )}
                         </div>
                       </li>

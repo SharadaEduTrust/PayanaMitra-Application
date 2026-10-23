@@ -10,15 +10,22 @@ import { encrypt, decrypt } from '@/lib/server/crypto'
  */
 
 const ALLOWED_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_FILE_SIZE = 1 * 1024 * 1024 // 1MB maximum limit to avoid database and storage overload
 
 const CreateDocSchema = z.object({
   doc_type:       z.string().min(1, 'Document type required').max(50),
   doc_number:     z.string().max(100).optional().nullable(),
+<<<<<<< HEAD
   issued_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   expiry_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   issued_country: z.string().max(100).optional().nullable(),
   issued_place:   z.string().max(100).optional().nullable(),
+=======
+  expiry_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expiry_date must be YYYY-MM-DD').optional().nullable(),
+  issued_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'issued_date must be YYYY-MM-DD').optional().nullable(),
+  issued_place:   z.string().max(100, 'issued_place cannot exceed 100 characters').optional().nullable(),
+  issued_country: z.string().max(100, 'issued_country cannot exceed 100 characters').optional().nullable(),
+>>>>>>> origin/main
   trip_id:        z.string().uuid().optional().nullable(),
 })
 
@@ -88,11 +95,18 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      // Backward-compatible mapping: preserve issued_place and legacy issued_country
+      const placeVal = (doc.issued_place as string | null) ?? (doc.issued_country as string | null) ?? null
+      const countryVal = (doc.issued_country as string | null) ?? (doc.issued_place as string | null) ?? null
+
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { doc_number_enc, iv, auth_tag, ...safe } = doc
       return {
         ...safe,
         doc_number,
+        issued_date: (doc.issued_date as string | null) ?? null,
+        issued_place: placeVal,
+        issued_country: countryVal,
         download_url,
       }
     }),
@@ -112,6 +126,8 @@ export async function POST(req: NextRequest) {
   let doc_number: string | null = null
   let issued_date: string | null = null
   let expiry_date: string | null = null
+  let issued_date: string | null = null
+  let issued_place: string | null = null
   let issued_country: string | null = null
   let trip_id: string | null = null
 
@@ -132,11 +148,27 @@ export async function POST(req: NextRequest) {
     doc_number = (formData.get('doc_number') as string)?.trim() || (formData.get('document_number') as string)?.trim() || null
     issued_date = (formData.get('issued_date') as string)?.trim() || null
     expiry_date = (formData.get('expiry_date') as string)?.trim() || null
+<<<<<<< HEAD
     issued_country = (formData.get('issued_place') as string)?.trim() || (formData.get('issued_country') as string)?.trim() || (formData.get('country') as string)?.trim() || null
+=======
+    issued_date = (formData.get('issued_date') as string)?.trim() || null
+
+    const rawPlace = (formData.get('issued_place') as string)?.trim() || (formData.get('place') as string)?.trim() || null
+    const rawCountry = (formData.get('issued_country') as string)?.trim() || (formData.get('country') as string)?.trim() || null
+    issued_place = rawPlace || rawCountry || null
+    issued_country = rawCountry || rawPlace || null
+
+>>>>>>> origin/main
     trip_id = (formData.get('trip_id') as string)?.trim() || null
 
     if (!doc_type) {
       return NextResponse.json({ error: 'Validation failed', fieldErrors: { doc_type: ['doc_type is required'] } }, { status: 422 })
+    }
+    if (issued_date && !/^\d{4}-\d{2}-\d{2}$/.test(issued_date)) {
+      return NextResponse.json({ error: 'Validation failed', fieldErrors: { issued_date: ['issued_date must be YYYY-MM-DD'] } }, { status: 422 })
+    }
+    if (expiry_date && !/^\d{4}-\d{2}-\d{2}$/.test(expiry_date)) {
+      return NextResponse.json({ error: 'Validation failed', fieldErrors: { expiry_date: ['expiry_date must be YYYY-MM-DD'] } }, { status: 422 })
     }
 
     const fileEntry = formData.get('file')
@@ -144,7 +176,10 @@ export async function POST(req: NextRequest) {
       const file = fileEntry as File
       if (file.size > 0) {
         if (file.size > MAX_FILE_SIZE) {
-          return NextResponse.json({ error: 'File size exceeds maximum allowed limit (10MB)' }, { status: 422 })
+          return NextResponse.json(
+            { error: 'File size exceeds maximum allowed limit of 1MB. Please upload a smaller document.' },
+            { status: 422 }
+          )
         }
         if (!ALLOWED_MIME_TYPES.includes(file.type)) {
           return NextResponse.json({ error: 'Invalid file type. Allowed types: PDF, JPEG, PNG, WebP' }, { status: 422 })
@@ -192,7 +227,13 @@ export async function POST(req: NextRequest) {
     doc_number = parsed.data.doc_number ?? null
     issued_date = parsed.data.issued_date ?? null
     expiry_date = parsed.data.expiry_date ?? null
+<<<<<<< HEAD
     issued_country = parsed.data.issued_place ?? parsed.data.issued_country ?? null
+=======
+    issued_date = parsed.data.issued_date ?? null
+    issued_place = parsed.data.issued_place ?? parsed.data.issued_country ?? null
+    issued_country = parsed.data.issued_country ?? parsed.data.issued_place ?? null
+>>>>>>> origin/main
     trip_id = parsed.data.trip_id ?? null
   }
 
@@ -223,6 +264,8 @@ export async function POST(req: NextRequest) {
     auth_tag: authTag,
     issued_date: issued_date || null,
     expiry_date: expiry_date || null,
+    issued_date: issued_date || null,
+    issued_place: issued_place || null,
     issued_country: issued_country || null,
   }
 
@@ -237,6 +280,7 @@ export async function POST(req: NextRequest) {
     .select()
     .single()
 
+<<<<<<< HEAD
   if (insertResult.error && (insertResult.error.message.includes('column') || insertResult.error.message.includes('storage_path') || insertResult.error.message.includes('issued_date'))) {
     // Fallback if issued_date or storage columns have not been migrated
     if (insertResult.error.message.includes('issued_date')) {
@@ -248,6 +292,21 @@ export async function POST(req: NextRequest) {
       delete insertPayload.file_size
       delete insertPayload.mime_type
     }
+=======
+  // Graceful degradation if new columns have not been migrated on the target database yet
+  if (insertResult.error && (
+    insertResult.error.message.includes('column') ||
+    insertResult.error.message.includes('issued_date') ||
+    insertResult.error.message.includes('issued_place') ||
+    insertResult.error.message.includes('storage_path')
+  )) {
+    delete insertPayload.issued_date
+    delete insertPayload.issued_place
+    delete insertPayload.storage_path
+    delete insertPayload.file_name
+    delete insertPayload.file_size
+    delete insertPayload.mime_type
+>>>>>>> origin/main
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     insertResult = await (admin.from('guest_documents') as any)
       .insert(insertPayload)
@@ -276,7 +335,9 @@ export async function POST(req: NextRequest) {
       doc_type: createdDoc.doc_type,
       doc_number,
       expiry_date: createdDoc.expiry_date,
-      issued_country: createdDoc.issued_country,
+      issued_date: createdDoc.issued_date ?? issued_date ?? null,
+      issued_place: createdDoc.issued_place ?? createdDoc.issued_country ?? issued_place ?? null,
+      issued_country: createdDoc.issued_country ?? createdDoc.issued_place ?? issued_country ?? null,
       trip_id: createdDoc.trip_id,
       storage_path,
       file_name,
@@ -286,3 +347,4 @@ export async function POST(req: NextRequest) {
     },
   }, { status: 201 })
 }
+

@@ -9,7 +9,7 @@ import { getSession } from '@/lib/server/auth'
  */
 
 const CreateTripSchema = z.object({
-  trip_code:   z.string().min(1, 'Trip code is required').max(50, 'Trip code cannot exceed 50 characters'),
+  trip_code:   z.string().trim().min(1, 'Trail ID is required').max(50, 'Trail ID cannot exceed 50 characters').transform(v => v.toUpperCase()),
   name:        z.string().min(1, 'Name is required').max(100, 'Name cannot exceed 100 characters'),
   destination: z.string().max(100, 'Destination cannot exceed 100 characters').optional().nullable(),
   start_date:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').optional().nullable(),

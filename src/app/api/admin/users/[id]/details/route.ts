@@ -17,6 +17,10 @@ const GuestDetailsSchema = z.object({
   insurance_company:        z.string().max(50, 'Max 50 characters').nullable().optional(),
   insurance_expiry:         z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').nullable().optional(),
   passport_issued_location: z.string().max(50, 'Max 50 characters').nullable().optional(),
+  passport_issue_date:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').nullable().optional(),
+  visa_no:                  z.string().trim().max(10).nullable().optional(),
+  visa_expiry:              z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').nullable().optional(),
+  visa_country:             z.string().trim().max(50).nullable().optional(),
 })
 
 async function requireAdmin() {

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 export type EditableDay = {
-  id: string;
+  id?: string;
   dayNumber: number;
   destination: string;
   itineraryText: string;
@@ -12,7 +12,7 @@ export type EditableDay = {
   mealPlan?: string;
   activities: {
     id?: string;
-    title: string;
+    title?: string;
     description: string;
     startTime: string;
     endTime: string;
@@ -45,6 +45,8 @@ export default function TripEditor({
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [savingDayIndex, setSavingDayIndex] = useState<number | null>(null);
+  const [dayMessages, setDayMessages] = useState<Record<number, { type: "success" | "error"; text: string }>>({});
 
   // Itinerary CSV import state
   const [showItineraryImport, setShowItineraryImport] = useState(false);
@@ -106,20 +108,26 @@ export default function TripEditor({
     setRows((current) =>
       current.map((day, i) =>
         i === dayIndex
-          ? { ...day, activities: [...day.activities, { title: "", description: "", startTime: "", endTime: "" }] }
+          ? { ...day, activities: [...day.activities, { description: "", startTime: "", endTime: "" }] }
           : day,
       ),
     );
   }
 
-  function setActivity(dayIndex: number, activityIndex: number, key: string, value: string) {
+  function setActivity(dayIndex: number, activityIndex: number, key: "description" | "startTime" | "endTime", value: string) {
     setRows((current) =>
       current.map((day, i) =>
         i === dayIndex
           ? {
               ...day,
               activities: day.activities.map((activity, j) =>
-                j === activityIndex ? { ...activity, [key]: value } : activity,
+                j === activityIndex
+                  ? {
+                      ...activity,
+                      [key]: value,
+                      ...(key === "description" ? { title: value } : {}),
+                    }
+                  : activity,
               ),
             }
           : day,
@@ -180,9 +188,15 @@ export default function TripEditor({
     }
   }
 
-  async function saveDay(day: EditableDay) {
+  async function saveDay(day: EditableDay, dayIndex: number) {
     setError("");
     setStatus("");
+    setSavingDayIndex(dayIndex);
+    setDayMessages((prev) => {
+      const next = { ...prev };
+      delete next[day.dayNumber];
+      return next;
+    });
 
     try {
       const formatTime = (t: string) => {
@@ -191,15 +205,18 @@ export default function TripEditor({
       };
 
       const validActivities = day.activities
-        .filter((a) => a.title.trim())
-        .map((a, idx) => ({
-          id: a.id,
-          title: a.title.trim(),
-          description: a.description?.trim() || null,
-          start_time: formatTime(a.startTime),
-          end_time: formatTime(a.endTime),
-          activity_order: idx + 1,
-        }));
+        .filter((a) => Boolean(a.description?.trim() || a.title?.trim()))
+        .map((a, idx) => {
+          const desc = (a.description?.trim() || a.title?.trim()) ?? "";
+          return {
+            id: a.id,
+            title: desc,
+            description: desc,
+            start_time: formatTime(a.startTime),
+            end_time: formatTime(a.endTime),
+            activity_order: idx + 1,
+          };
+        });
 
       let dayId = day.id;
 
@@ -220,7 +237,12 @@ export default function TripEditor({
 
         const json = await res.json().catch(() => null);
         if (!res.ok) {
-          setError(json?.error ?? "Failed to create itinerary day.");
+          const errMsg = json?.error ?? "Failed to create itinerary day.";
+          setError(errMsg);
+          setDayMessages((prev) => ({
+            ...prev,
+            [day.dayNumber]: { type: "error", text: errMsg },
+          }));
           return;
         }
 
@@ -228,7 +250,7 @@ export default function TripEditor({
         const savedActs = (json.data.activities ?? []).map((sa: { id: string; title: string; description?: string; start_time?: string; end_time?: string }) => ({
           id: sa.id,
           title: sa.title,
-          description: sa.description ?? "",
+          description: sa.description || sa.title || "",
           startTime: (sa.start_time ?? "").slice(0, 5),
           endTime: (sa.end_time ?? "").slice(0, 5),
         }));
@@ -252,7 +274,12 @@ export default function TripEditor({
 
         if (!dayRes.ok) {
           const json = await dayRes.json().catch(() => null);
-          setError(json?.error ?? "Failed to update day details.");
+          const errMsg = json?.error ?? "Failed to update day details.";
+          setError(errMsg);
+          setDayMessages((prev) => ({
+            ...prev,
+            [day.dayNumber]: { type: "error", text: errMsg },
+          }));
           return;
         }
 
@@ -313,7 +340,7 @@ export default function TripEditor({
                   activities: updatedActivities.map((ua) => ({
                     id: ua.id,
                     title: ua.title,
-                    description: ua.description ?? "",
+                    description: ua.description || ua.title || "",
                     startTime: (ua.start_time ?? "").slice(0, 5),
                     endTime: (ua.end_time ?? "").slice(0, 5),
                   })),
@@ -323,10 +350,22 @@ export default function TripEditor({
         );
       }
 
-      setStatus(`Day ${day.dayNumber} saved.`);
+      const successText = `Day ${day.dayNumber} saved successfully.`;
+      setStatus(successText);
+      setDayMessages((prev) => ({
+        ...prev,
+        [day.dayNumber]: { type: "success", text: `✓ ${successText}` },
+      }));
       router.refresh();
     } catch {
-      setError("Network error while saving day.");
+      const netErr = "Network error while saving day.";
+      setError(netErr);
+      setDayMessages((prev) => ({
+        ...prev,
+        [day.dayNumber]: { type: "error", text: netErr },
+      }));
+    } finally {
+      setSavingDayIndex(null);
     }
   }
 
@@ -461,7 +500,14 @@ export default function TripEditor({
         <div className="field-row">
           <label className="form-field">
             Trail Id
-            <input required value={form.tripCode} onChange={(e) => set("tripCode", e.target.value)} placeholder="003 or PM-2026-HAM-01" />
+            <input
+              required
+              value={form.tripCode}
+              onChange={(e) => set("tripCode", e.target.value.toUpperCase())}
+              placeholder="e.g. HIHGOK01 (8-char alphanumeric)"
+              maxLength={8}
+              style={{ textTransform: "uppercase" }}
+            />
           </label>
           <label className="form-field">
             Trail Name
@@ -594,11 +640,39 @@ export default function TripEditor({
                   />
                 </label>
                 <label className="form-field">
-                  Destination
-                  <input value={day.destination} onChange={(e) => setDay(dayIndex, "destination", e.target.value)} />
+                  Title / Destination
+                  <input
+                    placeholder="e.g. Arrival in Hubballi – The Gateway to Karnataka's Heritage"
+                    value={day.destination}
+                    onChange={(e) => setDay(dayIndex, "destination", e.target.value)}
+                  />
                 </label>
               </div>
 
+              <div className="field-row">
+                <label className="form-field">
+                  Accommodations
+                  <input
+                    placeholder="e.g. The Fern Residency, Hubballi or similar"
+                    value={day.hotelName}
+                    onChange={(e) => setDay(dayIndex, "hotelName", e.target.value)}
+                  />
+                </label>
+                <label className="form-field">
+                  Meals Included
+                  <select
+                    value={day.mealPlan ?? ""}
+                    onChange={(e) => setDay(dayIndex, "mealPlan", e.target.value)}
+                  >
+                    <option value="">None specified</option>
+                    <option value="Breakfast">Breakfast</option>
+                    <option value="Breakfast & Dinner">Breakfast & Dinner</option>
+                    <option value="Breakfast, Lunch & Dinner">Breakfast, Lunch & Dinner</option>
+                  </select>
+                </label>
+              </div>
+
+<<<<<<< HEAD
               <div className="field-row">
                 <label className="form-field">
                   Hotel Name
@@ -624,8 +698,13 @@ export default function TripEditor({
 
               <label className="form-field">
                 Itinerary
+=======
+              <label className="form-field">
+                Day Highlights
+>>>>>>> origin/main
                 <textarea
                   rows={3}
+                  placeholder="Overview and key highlights of the day..."
                   value={day.itineraryText}
                   onChange={(e) => setDay(dayIndex, "itineraryText", e.target.value)}
                 />
@@ -638,47 +717,77 @@ export default function TripEditor({
                 </button>
               </div>
 
-              {day.activities.map((activity, activityIndex) => (
-                <div className="activity-row" key={activity.id ?? `new-activity-${activityIndex}`}>
-                  <input
-                    placeholder="Start"
-                    type="time"
-                    value={activity.startTime ?? ""}
-                    onChange={(e) => setActivity(dayIndex, activityIndex, "startTime", e.target.value)}
-                  />
-                  <input
-                    placeholder="End"
-                    type="time"
-                    value={activity.endTime ?? ""}
-                    onChange={(e) => setActivity(dayIndex, activityIndex, "endTime", e.target.value)}
-                  />
-                  <input
-                    placeholder="Title"
-                    value={activity.title}
-                    onChange={(e) => setActivity(dayIndex, activityIndex, "title", e.target.value)}
-                  />
-                  <input
-                    placeholder="Description"
-                    value={activity.description ?? ""}
-                    onChange={(e) => setActivity(dayIndex, activityIndex, "description", e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="link-btn"
-                    onClick={() => removeActivity(dayIndex, activityIndex)}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
+              {day.activities.length === 0 ? (
+                <p className="panel-note" style={{ margin: "4px 0 16px", fontStyle: "italic", fontSize: "13px" }}>
+                  No activities added for this day yet. Click &ldquo;+ Add activity&rdquo; to add one.
+                </p>
+              ) : (
+                <>
+                  <div className="activity-row activity-headers" aria-hidden="true">
+                    <span className="activity-col-label">Start Time</span>
+                    <span className="activity-col-label">End Time</span>
+                    <span className="activity-col-label">Description</span>
+                    <span className="activity-col-label"></span>
+                  </div>
+
+                  {day.activities.map((activity, activityIndex) => (
+                    <div className="activity-row" key={activity.id ?? `new-activity-${activityIndex}`}>
+                      <input
+                        aria-label="Start Time"
+                        title="Start Time"
+                        type="time"
+                        value={activity.startTime ?? ""}
+                        onChange={(e) => setActivity(dayIndex, activityIndex, "startTime", e.target.value)}
+                        className="activity-time-input"
+                      />
+                      <input
+                        aria-label="End Time"
+                        title="End Time"
+                        type="time"
+                        value={activity.endTime ?? ""}
+                        onChange={(e) => setActivity(dayIndex, activityIndex, "endTime", e.target.value)}
+                        className="activity-time-input"
+                      />
+                      <input
+                        aria-label="Description"
+                        placeholder="Description of activity (e.g. Visit Chandramouleshwara Temple)"
+                        value={activity.description || activity.title || ""}
+                        onChange={(e) => setActivity(dayIndex, activityIndex, "description", e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="link-btn"
+                        onClick={() => removeActivity(dayIndex, activityIndex)}
+                        title="Remove activity"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </>
+              )}
 
               <div className="day-actions">
-                <button type="button" className="btn btn-primary" onClick={() => saveDay(day)}>
-                  Save day {day.dayNumber}
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={savingDayIndex === dayIndex}
+                  onClick={() => saveDay(day, dayIndex)}
+                >
+                  {savingDayIndex === dayIndex ? "Saving day…" : `Save day ${day.dayNumber}`}
                 </button>
                 <button type="button" className="link-btn" onClick={() => removeDay(dayIndex)}>
                   Remove this day
                 </button>
+                {dayMessages[day.dayNumber] && (
+                  <span
+                    className={dayMessages[day.dayNumber].type === "success" ? "form-notice" : "form-error"}
+                    role="status"
+                    style={{ margin: 0, padding: "6px 14px", display: "inline-flex", alignItems: "center" }}
+                  >
+                    {dayMessages[day.dayNumber].text}
+                  </span>
+                )}
               </div>
             </article>
           ))}

@@ -431,35 +431,79 @@ export async function POST(req: NextRequest) {
 
           if (pan) {
             const enc = encryptDocumentNumber(pan)
-            await admin.from('guest_documents').insert({
-              user_id: existingUserId,
-              doc_type: 'pan',
-              ...enc,
-            })
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: existingPan } = await (admin.from('guest_documents') as any)
+              .select('id')
+              .eq('user_id', existingUserId)
+              .eq('doc_type', 'pan')
+              .maybeSingle()
+
+            if (existingPan) {
+              await admin.from('guest_documents').update({ ...enc, updated_at: new Date().toISOString() }).eq('id', existingPan.id)
+            } else {
+              await admin.from('guest_documents').insert({
+                user_id: existingUserId,
+                doc_type: 'pan',
+                ...enc,
+              })
+            }
           }
           if (passportNo) {
             const enc = encryptDocumentNumber(passportNo)
             const expiry_date = rawPassExp ? parseDateString(rawPassExp) : null
             const issued_date = rawPassIssue ? parseDateString(rawPassIssue) : null
-            await admin.from('guest_documents').insert({
-              user_id: existingUserId,
-              doc_type: 'passport',
-              issued_date,
-              expiry_date,
-              issued_country: passLoc || 'India',
-              ...enc,
-            })
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: existingPass } = await (admin.from('guest_documents') as any)
+              .select('id')
+              .eq('user_id', existingUserId)
+              .eq('doc_type', 'passport')
+              .maybeSingle()
+
+            if (existingPass) {
+              await admin.from('guest_documents').update({
+                issued_date,
+                expiry_date,
+                issued_country: passLoc || 'India',
+                ...enc,
+                updated_at: new Date().toISOString(),
+              }).eq('id', existingPass.id)
+            } else {
+              await admin.from('guest_documents').insert({
+                user_id: existingUserId,
+                doc_type: 'passport',
+                issued_date,
+                expiry_date,
+                issued_country: passLoc || 'India',
+                ...enc,
+              })
+            }
           }
           if (cleanVisaNo) {
             const enc = encryptDocumentNumber(cleanVisaNo)
             const expiry_date = rawVisaExp ? parseDateString(rawVisaExp) : null
-            await admin.from('guest_documents').insert({
-              user_id: existingUserId,
-              doc_type: 'visa',
-              expiry_date,
-              issued_country: visaCountry || null,
-              ...enc,
-            })
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: existingVisa } = await (admin.from('guest_documents') as any)
+              .select('id')
+              .eq('user_id', existingUserId)
+              .eq('doc_type', 'visa')
+              .maybeSingle()
+
+            if (existingVisa) {
+              await admin.from('guest_documents').update({
+                expiry_date,
+                issued_country: visaCountry || null,
+                ...enc,
+                updated_at: new Date().toISOString(),
+              }).eq('id', existingVisa.id)
+            } else {
+              await admin.from('guest_documents').insert({
+                user_id: existingUserId,
+                doc_type: 'visa',
+                expiry_date,
+                issued_country: visaCountry || null,
+                ...enc,
+              })
+            }
           }
           results.push({ row: rowNum, phone: rawPhone, status: 'created', id: existingUserId })
           continue

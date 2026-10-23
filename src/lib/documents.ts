@@ -38,3 +38,16 @@ export function formatDocType(type?: string | null): string {
         .join(" ");
   }
 }
+
+export function normalizeDocType(type?: string | null): string {
+  if (!type) return "";
+  const norm = type.toLowerCase().trim();
+  if (norm === "aadhaar") return "aadhar";
+  if (norm === "driving_license") return "driving_licence";
+  return norm;
+}
+
+export function areDocTypesEqual(typeA?: string | null, typeB?: string | null): boolean {
+  if (!typeA || !typeB) return false;
+  return normalizeDocType(typeA) === normalizeDocType(typeB);
+}

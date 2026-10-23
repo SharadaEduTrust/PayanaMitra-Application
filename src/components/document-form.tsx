@@ -2,14 +2,24 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useRef, type FormEvent, type ChangeEvent } from "react";
-import { DOCUMENT_TYPES } from "@/lib/documents";
+import { DOCUMENT_TYPES, formatDocType, areDocTypesEqual } from "@/lib/documents";
 
 const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB limit
 
-export default function DocumentForm() {
+interface DocumentFormProps {
+  existingDocTypes?: string[];
+}
+
+export default function DocumentForm({ existingDocTypes = [] }: DocumentFormProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [docType, setDocType] = useState("aadhar");
+
+  // Pick the first document type that hasn't already been uploaded
+  const defaultType =
+    DOCUMENT_TYPES.find((item) => !existingDocTypes.some((t) => areDocTypesEqual(t, item.value)))?.value ??
+    "aadhar";
+
+  const [docType, setDocType] = useState(defaultType);
   const [issuedDate, setIssuedDate] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
   const [issuedPlace, setIssuedPlace] = useState("");
@@ -17,6 +27,9 @@ export default function DocumentForm() {
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const isDuplicateType = existingDocTypes.some((t) => areDocTypesEqual(t, docType));
+
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -45,6 +58,13 @@ export default function DocumentForm() {
 
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
+
+    if (isDuplicateType) {
+      setError(
+        `A ${formatDocType(docType)} document is already saved for your account. You cannot upload another ${formatDocType(docType)} unless the earlier document is deleted.`
+      );
+      return;
+    }
 
     const file = form.get("file") as File | null;
     if (file && file.size > 0 && file.size > MAX_FILE_SIZE) {
@@ -85,7 +105,11 @@ export default function DocumentForm() {
 
     formElement.reset();
     setStatus("Document saved and securely encrypted.");
-    setDocType("aadhar");
+    const nextAvailable =
+      DOCUMENT_TYPES.find(
+        (item) => !existingDocTypes.some((t) => areDocTypesEqual(t, item.value)) && !areDocTypesEqual(docType, item.value)
+      )?.value ?? "aadhar";
+    setDocType(nextAvailable);
     setIssuedDate("");
     setExpiryDate("");
     setIssuedPlace("");
@@ -99,12 +123,31 @@ export default function DocumentForm() {
       <label className="form-field">
         Document Type
         <select value={docType} onChange={(event) => setDocType(event.target.value)}>
-          {DOCUMENT_TYPES.map((item) => (
-            <option key={item.value} value={item.value}>
-              {item.label}
-            </option>
-          ))}
+          {DOCUMENT_TYPES.map((item) => {
+            const alreadyUploaded = existingDocTypes.some((t) => areDocTypesEqual(t, item.value));
+            return (
+              <option key={item.value} value={item.value}>
+                {item.label} {alreadyUploaded ? "— Already uploaded (delete to replace)" : ""}
+              </option>
+            );
+          })}
         </select>
+        {isDuplicateType && (
+          <div
+            style={{
+              marginTop: "8px",
+              padding: "10px 14px",
+              backgroundColor: "#fff7ed",
+              border: "1px solid #fdba74",
+              borderRadius: "6px",
+              color: "#9a3412",
+              fontSize: "13px",
+              lineHeight: "1.4",
+            }}
+          >
+            ⚠️ A <strong>{formatDocType(docType)}</strong> document is already saved for your account. You cannot upload another {formatDocType(docType)} unless the earlier document is deleted from the Saved Documents list.
+          </div>
+        )}
       </label>
 
       <label className="form-field">
@@ -167,8 +210,20 @@ export default function DocumentForm() {
       {error && <p className="form-error" role="alert">{error}</p>}
       {status && <p className="form-notice" role="status">{status}</p>}
 
-      <button className="btn btn-primary" type="submit" disabled={loading}>
-        {loading ? "Encrypting & Uploading…" : "Save Document"}
+      <button
+        className="btn btn-primary"
+        type="submit"
+        disabled={loading || isDuplicateType}
+        style={{
+          opacity: isDuplicateType ? 0.6 : 1,
+          cursor: isDuplicateType ? "not-allowed" : "pointer",
+        }}
+      >
+        {loading
+          ? "Encrypting & Uploading…"
+          : isDuplicateType
+          ? `${formatDocType(docType)} Already Uploaded`
+          : "Save Document"}
       </button>
     </form>
   );

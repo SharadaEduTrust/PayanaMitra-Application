@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/server/auth'
 
+import { formatDocType, areDocTypesEqual } from '@/lib/documents'
+
 interface Params { params: Promise<{ id: string }> }
 
 const UpdateDocSchema = z.object({
@@ -100,6 +102,32 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!doc) return NextResponse.json({ error: 'Document not found' }, { status: 404 })
   if (doc.user_id !== profile.id && profile.role !== 'admin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  // If changing document type, ensure user doesn't already have another document of this type
+  if (parsed.data.doc_type) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existingDocs } = await (admin.from('guest_documents') as any)
+      .select('id, doc_type')
+      .eq('user_id', doc.user_id)
+      .neq('id', id)
+
+    const isDuplicate = (existingDocs ?? []).some((d: { id: string; doc_type?: string | null }) =>
+      areDocTypesEqual(d.doc_type, parsed.data.doc_type)
+    )
+
+    if (isDuplicate) {
+      const displayType = formatDocType(parsed.data.doc_type)
+      return NextResponse.json(
+        {
+          error: `A ${displayType} document already exists for this account. You cannot have multiple documents of the same type.`,
+          fieldErrors: {
+            doc_type: [`A ${displayType} document is already uploaded.`],
+          },
+        },
+        { status: 409 }
+      )
+    }
   }
 
   const updatePayload: Record<string, unknown> = {

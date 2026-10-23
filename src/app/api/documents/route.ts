@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/server/auth'
 import { encrypt, decrypt } from '@/lib/server/crypto'
+import { formatDocType, areDocTypesEqual } from '@/lib/documents'
 
 /**
  * GET  /api/documents — list documents for the user (or authorized leader/admin) with decrypted doc numbers & signed download URLs
@@ -13,6 +14,7 @@ const ALLOWED_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image
 const MAX_FILE_SIZE = 1 * 1024 * 1024 // 1MB maximum limit to avoid database and storage overload
 
 const CreateDocSchema = z.object({
+  user_id:        z.string().uuid().optional().nullable(),
   doc_type:       z.string().min(1, 'Document type required').max(50),
   doc_number:     z.string().max(100).optional().nullable(),
   expiry_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expiry_date must be YYYY-MM-DD').optional().nullable(),
@@ -115,6 +117,7 @@ export async function POST(req: NextRequest) {
   const contentType = req.headers.get('content-type') ?? ''
   const admin = createAdminClient()
 
+  let targetUserId = profile.id
   let doc_type = ''
   let doc_number: string | null = null
   let expiry_date: string | null = null
@@ -134,6 +137,11 @@ export async function POST(req: NextRequest) {
       formData = await req.formData()
     } catch {
       return NextResponse.json({ error: 'Invalid multipart form data' }, { status: 400 })
+    }
+
+    const requestedUserId = (formData.get('user_id') as string)?.trim() || null
+    if (requestedUserId && (profile.role === 'admin' || profile.role === 'leader')) {
+      targetUserId = requestedUserId
     }
 
     doc_type = String(formData.get('doc_type') ?? formData.get('type') ?? '').trim()
@@ -158,6 +166,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Validation failed', fieldErrors: { expiry_date: ['expiry_date must be YYYY-MM-DD'] } }, { status: 422 })
     }
 
+    // Check if document of the same type already exists for this user
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existingDocs } = await (admin.from('guest_documents') as any)
+      .select('id, doc_type')
+      .eq('user_id', targetUserId)
+
+    const isDuplicate = (existingDocs ?? []).some((d: { id: string; doc_type?: string | null }) =>
+      areDocTypesEqual(d.doc_type, doc_type)
+    )
+
+    if (isDuplicate) {
+      const displayType = formatDocType(doc_type)
+      return NextResponse.json(
+        {
+          error: `A ${displayType} document already exists for this account. You cannot upload another ${displayType} unless the earlier document is deleted.`,
+          fieldErrors: {
+            doc_type: [`A ${displayType} document is already uploaded. Delete the earlier document to replace it.`],
+          },
+        },
+        { status: 409 }
+      )
+    }
+
     const fileEntry = formData.get('file')
     if (fileEntry && typeof fileEntry === 'object' && 'arrayBuffer' in fileEntry) {
       const file = fileEntry as File
@@ -178,7 +209,7 @@ export async function POST(req: NextRequest) {
 
         const ext = file.name.split('.').pop() || 'bin'
         const safeDocType = doc_type.toLowerCase().replace(/[^a-z0-9]/g, '_')
-        storage_path = `${profile.id}/${safeDocType}_${Date.now()}_${crypto.randomUUID()}.${ext}`
+        storage_path = `${targetUserId}/${safeDocType}_${Date.now()}_${crypto.randomUUID()}.${ext}`
 
         const buffer = Buffer.from(await file.arrayBuffer())
         const { error: uploadErr } = await admin.storage
@@ -210,6 +241,10 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    if (parsed.data.user_id && (profile.role === 'admin' || profile.role === 'leader')) {
+      targetUserId = parsed.data.user_id
+    }
+
     doc_type = parsed.data.doc_type
     doc_number = parsed.data.doc_number ?? null
     expiry_date = parsed.data.expiry_date ?? null
@@ -217,6 +252,29 @@ export async function POST(req: NextRequest) {
     issued_place = parsed.data.issued_place ?? parsed.data.issued_country ?? null
     issued_country = parsed.data.issued_country ?? parsed.data.issued_place ?? null
     trip_id = parsed.data.trip_id ?? null
+
+    // Check if document of the same type already exists for this user
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existingDocs } = await (admin.from('guest_documents') as any)
+      .select('id, doc_type')
+      .eq('user_id', targetUserId)
+
+    const isDuplicate = (existingDocs ?? []).some((d: { id: string; doc_type?: string | null }) =>
+      areDocTypesEqual(d.doc_type, doc_type)
+    )
+
+    if (isDuplicate) {
+      const displayType = formatDocType(doc_type)
+      return NextResponse.json(
+        {
+          error: `A ${displayType} document already exists for this account. You cannot upload another ${displayType} unless the earlier document is deleted.`,
+          fieldErrors: {
+            doc_type: [`A ${displayType} document is already uploaded. Delete the earlier document to replace it.`],
+          },
+        },
+        { status: 409 }
+      )
+    }
   }
 
   // Encrypt document number if provided
@@ -238,7 +296,7 @@ export async function POST(req: NextRequest) {
 
   // Insert document record
   const insertPayload: Record<string, unknown> = {
-    user_id: profile.id,
+    user_id: targetUserId,
     trip_id: trip_id || null,
     doc_type,
     doc_number_enc: ciphertext,

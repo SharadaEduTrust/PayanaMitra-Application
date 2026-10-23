@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { DOCUMENT_TYPES, formatDocType } from "@/lib/documents";
+import { DOCUMENT_TYPES, formatDocType, areDocTypesEqual } from "@/lib/documents";
 
 export type SavedDoc = {
   id: string;
@@ -58,6 +58,17 @@ export default function SavedDocumentsList({
     e.preventDefault();
     if (!editingDoc) return;
     setEditError("");
+
+    const isDup = docs.some(
+      (d) => d.id !== editingDoc.id && areDocTypesEqual(d.doc_type, editForm.doc_type)
+    );
+    if (isDup) {
+      setEditError(
+        `A ${formatDocType(editForm.doc_type)} document already exists for your account. You cannot have multiple documents of the same type.`
+      );
+      return;
+    }
+
     setEditLoading(true);
 
     try {
@@ -254,11 +265,16 @@ export default function SavedDocumentsList({
                 value={editForm.doc_type}
                 onChange={(e) => setEditForm({ ...editForm, doc_type: e.target.value })}
               >
-                {DOCUMENT_TYPES.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
+                {DOCUMENT_TYPES.map((item) => {
+                  const isUsedByOther = docs.some(
+                    (d) => d.id !== editingDoc.id && areDocTypesEqual(d.doc_type, item.value)
+                  );
+                  return (
+                    <option key={item.value} value={item.value} disabled={isUsedByOther}>
+                      {item.label} {isUsedByOther ? "— Already uploaded (cannot duplicate)" : ""}
+                    </option>
+                  );
+                })}
               </select>
             </label>
 

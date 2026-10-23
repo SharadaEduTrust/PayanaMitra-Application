@@ -1,8 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import LogoutButton from "@/components/logout-button";
 
-export default function MobileNav({ title = "Menu" }: { title?: string }) {
+export default function MobileNav({
+  title = "Menu",
+  redirectTo = "/login",
+}: {
+  title?: string;
+  redirectTo?: string;
+}) {
   const [open, setOpen] = useState(false);
 
   function toggle() {
@@ -33,6 +40,18 @@ export default function MobileNav({ title = "Menu" }: { title?: string }) {
         >
           <span>☰</span> {title}
         </button>
+        <LogoutButton
+          redirectTo={redirectTo}
+          className="btn btn-secondary"
+          style={{
+            marginLeft: "auto",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "6px 12px",
+            fontSize: "13px",
+          }}
+        />
       </div>
       {open && (
         <div
@@ -49,3 +68,4 @@ export default function MobileNav({ title = "Menu" }: { title?: string }) {
     </>
   );
 }
+

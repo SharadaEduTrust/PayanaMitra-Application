@@ -10,7 +10,7 @@ import { encrypt, decrypt } from '@/lib/server/crypto'
  */
 
 const ALLOWED_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_FILE_SIZE = 1 * 1024 * 1024 // 1MB maximum limit to avoid database and storage overload
 
 const CreateDocSchema = z.object({
   doc_type:       z.string().min(1, 'Document type required').max(50),
@@ -163,7 +163,10 @@ export async function POST(req: NextRequest) {
       const file = fileEntry as File
       if (file.size > 0) {
         if (file.size > MAX_FILE_SIZE) {
-          return NextResponse.json({ error: 'File size exceeds maximum allowed limit (10MB)' }, { status: 422 })
+          return NextResponse.json(
+            { error: 'File size exceeds maximum allowed limit of 1MB. Please upload a smaller document.' },
+            { status: 422 }
+          )
         }
         if (!ALLOWED_MIME_TYPES.includes(file.type)) {
           return NextResponse.json({ error: 'Invalid file type. Allowed types: PDF, JPEG, PNG, WebP' }, { status: 422 })

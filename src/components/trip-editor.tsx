@@ -500,7 +500,14 @@ export default function TripEditor({
         <div className="field-row">
           <label className="form-field">
             Trail Id
-            <input required value={form.tripCode} onChange={(e) => set("tripCode", e.target.value)} placeholder="003 or PM-2026-HAM-01" />
+            <input
+              required
+              value={form.tripCode}
+              onChange={(e) => set("tripCode", e.target.value.toUpperCase())}
+              placeholder="e.g. HIHGOK01 (8-char alphanumeric)"
+              maxLength={8}
+              style={{ textTransform: "uppercase" }}
+            />
           </label>
           <label className="form-field">
             Trail Name
@@ -517,7 +524,7 @@ export default function TripEditor({
             Status / Visibility
             <select value={form.status} onChange={(e) => set("status", e.target.value)}>
               <option value="draft">Draft — hidden from guests</option>
-              <option value="published">Published — visible to members</option>
+              <option value="published">Published — visible to guests</option>
               <option value="archived">Archived</option>
             </select>
           </label>
@@ -594,7 +601,7 @@ export default function TripEditor({
               </a>
             </div>
             <p className="admin-hint">
-              Upload a UTF-8 CSV containing columns: <code>Trail Id</code>, <code>Trail Name</code>, <code>Day</code>, <code>Destination</code>, <code>Itinerary</code>, <code>Hotel Name</code> (and optional activities).
+              Upload a UTF-8 CSV containing columns: <code>Trail Id</code>, <code>Trail Name</code>, <code>Day</code>, <code>Destination</code>, <code>Itinerary</code>, <code>Hotel Name</code>, <code>Meal details</code> (and optional activities).
             </p>
             <input
               type="file"
@@ -660,13 +667,12 @@ export default function TripEditor({
                     <option value="">None specified</option>
                     <option value="Breakfast">Breakfast</option>
                     <option value="Breakfast & Dinner">Breakfast & Dinner</option>
-                    <option value="Breakfast, Lunch & Dinner">Breakfast, Lunch & Dinner</option>
                   </select>
                 </label>
               </div>
 
               <label className="form-field">
-                Day Highlights
+                Itinerary / Day Highlights
                 <textarea
                   rows={3}
                   placeholder="Overview and key highlights of the day..."
@@ -760,7 +766,7 @@ export default function TripEditor({
       </section>
  
       <section className="admin-card">
-        <h2 className="serif">Broadcast to Trail Members</h2>
+        <h2 className="serif">Broadcast to Trail Guests</h2>
         <p className="admin-hint">
           Send an announcement to all guests enrolled in this trail via in-app alerts, Web Push,
           and optionally direct WhatsApp message.
@@ -793,7 +799,7 @@ export default function TripEditor({
               checked={sendWhatsapp}
               onChange={(e) => setSendWhatsapp(e.target.checked)}
             />
-            <span>Also send as WhatsApp message to all members</span>
+            <span>Also send as WhatsApp message to all guests</span>
           </label>
 
           {broadcastStatus && <p className="form-notice" role="status">{broadcastStatus}</p>}

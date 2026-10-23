@@ -181,7 +181,7 @@ export async function POST(req: NextRequest) {
 
   if (membersErr) return NextResponse.json({ error: membersErr.message }, { status: 500 })
   if (!members || members.length === 0) {
-    return NextResponse.json({ sent: 0, failed: 0, inAppCreated: 0, message: 'No members in this trip' })
+    return NextResponse.json({ sent: 0, failed: 0, inAppCreated: 0, message: 'No guests enrolled in this trail' })
   }
 
   const userIds = (members as Array<{ user_id: string }>).map(m => m.user_id)

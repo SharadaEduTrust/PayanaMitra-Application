@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession, derivePassword, PHONE_REGEX } from '@/lib/server/auth'
-import { formatZodError } from '@/app/api/admin/users/route'
+import { formatZodError } from '@/lib/server/zod-error'
 
 interface Params { params: Promise<{ id: string }> }
 
@@ -38,9 +38,11 @@ const PatchUserSchema = z.object({
   email:           OptionalEmailSchema,
   location:        z.string().max(50).nullable().optional(),
   date_of_joining: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  referral_name:   z.string().max(100).nullable().optional(),
   remarks:         z.string().max(2000).nullable().optional(),
   is_active:       z.boolean().optional(),
   reset_pin:       z.boolean().optional(),
+  reset_password:  z.boolean().optional(),
   // Guest details
   dob:                      z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   food_preference:          FoodPrefSchema,
@@ -51,6 +53,10 @@ const PatchUserSchema = z.object({
   insurance_company:        z.string().max(50).nullable().optional(),
   insurance_expiry:         z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   passport_issued_location: z.string().max(50).nullable().optional(),
+  passport_issue_date:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  visa_no:                  z.string().trim().max(10).nullable().optional(),
+  visa_expiry:              z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  visa_country:             z.string().trim().max(50).nullable().optional(),
 })
 
 async function requireAdmin() {
@@ -130,20 +136,24 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
   }
 
-  if (reset_pin) {
+  const shouldResetPassword = Boolean(reset_pin || (fields as Record<string, unknown>).reset_password)
+  if (shouldResetPassword) {
     const phone = current.phone
     const initialPin = phone.slice(-4)
     const password = await derivePassword(phone, initialPin)
-    const { error: pwErr } = await admin.auth.admin.updateUserById(id, { password })
-    if (pwErr) return NextResponse.json({ error: `PIN reset failed: ${pwErr.message}` }, { status: 500 })
+    const { error: pwErr } = await admin.auth.admin.updateUserById(id, {
+      password,
+      user_metadata: { password_changed: false },
+    })
+    if (pwErr) return NextResponse.json({ error: `Password reset failed: ${pwErr.message}` }, { status: 500 })
   }
 
   const profileUpdatePayload: Record<string, unknown> = {}
-  const profileKeys = ['first_name', 'last_name', 'role', 'leader_id', 'email', 'location', 'date_of_joining', 'remarks', 'is_active'] as const
+  const profileKeys = ['first_name', 'last_name', 'role', 'leader_id', 'email', 'location', 'date_of_joining', 'referral_name', 'remarks', 'is_active'] as const
   for (const key of profileKeys) {
     if (fields[key] !== undefined) profileUpdatePayload[key] = fields[key]
   }
-  if (reset_pin) profileUpdatePayload['must_change_password'] = false
+  if (shouldResetPassword) profileUpdatePayload['must_change_password'] = false
 
   let updatedProfile = current
   if (Object.keys(profileUpdatePayload).length > 0) {
@@ -159,7 +169,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   // Update guest details if provided
-  const tdKeys = ['dob', 'food_preference', 'food_allergy', 'emergency_contact_name', 'emergency_contact_no', 'travel_insurance_no', 'insurance_company', 'insurance_expiry', 'passport_issued_location'] as const
+  const tdKeys = ['dob', 'food_preference', 'food_allergy', 'emergency_contact_name', 'emergency_contact_no', 'travel_insurance_no', 'insurance_company', 'insurance_expiry', 'passport_issued_location', 'passport_issue_date', 'visa_no', 'visa_expiry', 'visa_country'] as const
   const tdPayload: Record<string, unknown> = { user_id: id }
   let hasTd = false
   for (const k of tdKeys) {

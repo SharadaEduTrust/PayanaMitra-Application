@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     .eq('user_id', profile.id)
 
   if ((memberCount ?? 0) === 0) {
-    return NextResponse.json({ error: 'Not a member of this trip' }, { status: 403 })
+    return NextResponse.json({ error: 'You are not enrolled as a guest on this trail' }, { status: 403 })
   }
 
   // Guard: one feedback per user per trip

@@ -15,7 +15,7 @@ export default function NewTripForm() {
 
     const form = new FormData(event.currentTarget);
     const payload = {
-      trip_code: String(form.get("trip_code") || "").trim(),
+      trip_code: String(form.get("trip_code") || "").trim().toUpperCase(),
       name: String(form.get("name") || "").trim(),
       destination: String(form.get("destination") || "").trim() || null,
       start_date: String(form.get("start_date") || "").trim() || null,
@@ -54,13 +54,19 @@ export default function NewTripForm() {
       <h2 className="serif">New trail</h2>
       <p className="admin-hint">
         Trails are created as drafts. Guests only see a trail once you set the status to published
-        and add them as members.
+        and add them as guests.
       </p>
 
       <div className="field-row">
         <label className="form-field">
           Trail Id
-          <input required name="trip_code" placeholder="003 or PM-2026-HAM-01" />
+          <input
+            required
+            name="trip_code"
+            placeholder="e.g. HIHGOK01 (8-char alphanumeric)"
+            maxLength={8}
+            style={{ textTransform: "uppercase" }}
+          />
         </label>
         <label className="form-field">
           Trail Name

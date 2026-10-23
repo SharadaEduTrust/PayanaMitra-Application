@@ -1,22 +1,28 @@
-/**
- * POST /api/change-pin
- *
- * Retired: Under the phone-suffix login architecture, custom PIN changes are disabled.
- * Every user authenticates using their registered phone number and its last 4 digits.
- */
+import { type NextRequest, NextResponse } from 'next/server'
+import { POST as changePasswordPost } from '@/app/api/change-password/route'
 
-import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/server/auth'
+export const runtime = 'nodejs'
 
-export async function POST() {
-  const profile = await getSession()
-  if (!profile) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+export async function POST(req: NextRequest) {
+  let body: Record<string, unknown> = {}
+  try {
+    body = await req.json()
+  } catch {
+    body = {}
+  }
 
-  return NextResponse.json(
-    {
-      ok: false,
-      error: 'Custom PINs are disabled. Your PIN is permanently the last 4 digits of your phone number.',
-    },
-    { status: 400 },
-  )
+  // Normalize legacy pin keys to password keys
+  const normalizedBody = {
+    current_password: body.current_password ?? body.current_pin ?? body.old_password ?? body.old_pin,
+    new_password: body.new_password ?? body.new_pin ?? body.password ?? body.pin,
+    confirm_password: body.confirm_password ?? body.confirm_pin,
+  }
+
+  const modifiedReq = new Request(req.url, {
+    method: 'POST',
+    headers: req.headers,
+    body: JSON.stringify(normalizedBody),
+  })
+
+  return changePasswordPost(modifiedReq as unknown as NextRequest)
 }

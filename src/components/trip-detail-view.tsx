@@ -39,6 +39,7 @@ export default function TripDetailView({
   days,
   contacts,
   canContribute,
+  userRole,
 }: {
   trip: {
     id: string;
@@ -53,6 +54,7 @@ export default function TripDetailView({
   days: DayView[];
   contacts: ContactView[];
   canContribute: boolean;
+  userRole?: string;
 }) {
   return (
     <div className="trip-detail">
@@ -117,8 +119,10 @@ export default function TripDetailView({
                   <span className="day-number">Day {day.dayNumber}</span>
                   <div>
                     <h3>{day.destination ?? `Day ${day.dayNumber}`}</h3>
-                    {day.hotelName && <p className="muted small">Accommodations: {day.hotelName}</p>}
-                    {day.mealPlan && <p className="muted small">Meals Included: {day.mealPlan}</p>}
+                    <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
+                      {day.hotelName && <p className="muted small" style={{ margin: 0 }}>Stay: {day.hotelName}</p>}
+                      {day.mealPlan && <p className="muted small" style={{ margin: 0 }}>Meals: {day.mealPlan}</p>}
+                    </div>
                   </div>
                 </div>
 
@@ -153,12 +157,16 @@ export default function TripDetailView({
       </section>
 
       <div className="trip-footer-actions">
-        <Link className="btn btn-secondary" href={`/dashboard/trips/${trip.id}/feedback`}>
-          Leave feedback
-        </Link>
-        <Link className="btn btn-secondary" href={`/dashboard/trips/${trip.id}/survey`}>
-          Trail survey
-        </Link>
+        {userRole === "traveller" && (
+          <>
+            <Link className="btn btn-secondary" href={`/dashboard/trips/${trip.id}/feedback`}>
+              Leave feedback
+            </Link>
+            <Link className="btn btn-secondary" href={`/dashboard/trips/${trip.id}/survey`}>
+              Trail survey
+            </Link>
+          </>
+        )}
         {canContribute && (
           <Link className="btn btn-secondary" href={`/admin/trips/${trip.id}`}>
             Edit in admin

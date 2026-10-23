@@ -2,28 +2,33 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { encrypt } from "@/lib/server/crypto";
 
 export const runtime = "nodejs";
 
 const schema = z.object({
-  dob: z.string().optional(),
+  dob: z.string().optional().nullable(),
+  pan: z.string().trim().max(10).optional().nullable(),
+  passport_no: z.string().trim().max(10).optional().nullable(),
+  passport_issue_date: z.string().optional().nullable(),
+  passport_expiry: z.string().optional().nullable(),
+  passport_issued_location: z.string().trim().max(120).optional().nullable(),
+  visa_no: z.string().trim().max(10).optional().nullable(),
+  visa_expiry: z.string().optional().nullable(),
+  visa_country: z.string().trim().max(120).optional().nullable(),
+  travel_insurance_no: z.string().trim().max(80).optional().nullable(),
+  insurance_company: z.string().trim().max(120).optional().nullable(),
+  insurance_expiry: z.string().optional().nullable(),
   food_preference: z.enum(["veg", "non_veg"]).optional().nullable(),
-  food_allergy: z.string().trim().max(200).optional(),
-  emergency_contact_name: z.string().trim().max(120).optional(),
-  emergency_contact_no: z.string().trim().max(20).optional(),
-  travel_insurance_no: z.string().trim().max(80).optional(),
-  insurance_company: z.string().trim().max(120).optional(),
-  insurance_expiry: z.string().optional(),
-  passport_issued_location: z.string().trim().max(120).optional(),
+  food_allergy: z.string().trim().max(200).optional().nullable(),
+  emergency_contact_name: z.string().trim().max(120).optional().nullable(),
+  emergency_contact_no: z.string().trim().max(20).optional().nullable(),
 });
 
-const emptyToNull = (value?: string) => (value && value.length > 0 ? value : null);
+const emptyToNull = (value?: string | null) => (value && value.trim().length > 0 ? value.trim() : null);
 
 /**
- * Create-or-update for the caller's own traveller_details row.
- *
- * The migrations grant travellers SELECT and UPDATE but not INSERT, so the
- * first save needs the service role to create the row.
+ * Create-or-update for the caller's own traveller_details and linked documents.
  */
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -48,6 +53,10 @@ export async function POST(request: Request) {
     insurance_company: emptyToNull(parsed.data.insurance_company),
     insurance_expiry: emptyToNull(parsed.data.insurance_expiry),
     passport_issued_location: emptyToNull(parsed.data.passport_issued_location),
+    passport_issue_date: emptyToNull(parsed.data.passport_issue_date),
+    visa_no: emptyToNull(parsed.data.visa_no),
+    visa_expiry: emptyToNull(parsed.data.visa_expiry),
+    visa_country: emptyToNull(parsed.data.visa_country),
     updated_at: new Date().toISOString(),
   };
 
@@ -62,13 +71,134 @@ export async function POST(request: Request) {
   if (existing) {
     const { error } = await admin.from("traveller_details").update(values).eq("id", existing.id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true, updated: true });
+  } else {
+    const { error } = await admin
+      .from("traveller_details")
+      .insert({ ...values, user_id: user.id });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const { error } = await admin
-    .from("traveller_details")
-    .insert({ ...values, user_id: user.id });
+  // Handle PAN in guest_documents
+  const pan = emptyToNull(parsed.data.pan);
+  if (pan) {
+    try {
+      const enc = await encrypt(pan);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: existingPan } = await (admin.from("guest_documents") as any)
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("doc_type", "pan")
+        .maybeSingle();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, created: true }, { status: 201 });
+      if (existingPan) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from("guest_documents") as any).update({
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+          updated_at: new Date().toISOString(),
+        }).eq("id", existingPan.id);
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from("guest_documents") as any).insert({
+          user_id: user.id,
+          doc_type: "pan",
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+        });
+      }
+    } catch (panErr) {
+      console.error("Failed to encrypt PAN:", panErr);
+    }
+  }
+
+  // Handle Passport in guest_documents
+  const passportNo = emptyToNull(parsed.data.passport_no);
+  const passportIssueDate = emptyToNull(parsed.data.passport_issue_date);
+  const passportExpiry = emptyToNull(parsed.data.passport_expiry);
+  const passportLocation = emptyToNull(parsed.data.passport_issued_location) || "India";
+
+  if (passportNo) {
+    try {
+      const enc = await encrypt(passportNo);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: existingPassport } = await (admin.from("guest_documents") as any)
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("doc_type", "passport")
+        .maybeSingle();
+
+      if (existingPassport) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from("guest_documents") as any).update({
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+          issued_date: passportIssueDate,
+          expiry_date: passportExpiry,
+          issued_country: passportLocation,
+          updated_at: new Date().toISOString(),
+        }).eq("id", existingPassport.id);
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from("guest_documents") as any).insert({
+          user_id: user.id,
+          doc_type: "passport",
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+          issued_date: passportIssueDate,
+          expiry_date: passportExpiry,
+          issued_country: passportLocation,
+        });
+      }
+    } catch (passErr) {
+      console.error("Failed to encrypt Passport:", passErr);
+    }
+  }
+
+  // Handle Visa in guest_documents
+  const visaNo = emptyToNull(parsed.data.visa_no);
+  const visaExpiry = emptyToNull(parsed.data.visa_expiry);
+  const visaCountry = emptyToNull(parsed.data.visa_country);
+
+  if (visaNo) {
+    try {
+      const enc = await encrypt(visaNo);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: existingVisa } = await (admin.from("guest_documents") as any)
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("doc_type", "visa")
+        .maybeSingle();
+
+      if (existingVisa) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from("guest_documents") as any).update({
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+          expiry_date: visaExpiry,
+          issued_country: visaCountry,
+          updated_at: new Date().toISOString(),
+        }).eq("id", existingVisa.id);
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from("guest_documents") as any).insert({
+          user_id: user.id,
+          doc_type: "visa",
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+          expiry_date: visaExpiry,
+          issued_country: visaCountry,
+        });
+      }
+    } catch (visaErr) {
+      console.error("Failed to encrypt Visa:", visaErr);
+    }
+  }
+
+  return NextResponse.json({ ok: true, saved: true });
 }

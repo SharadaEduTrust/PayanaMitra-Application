@@ -6,13 +6,10 @@ import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import SupabaseSetupNotice from "@/components/supabase-setup-notice";
 
-const passwordRule = "At least 8 characters";
-
 export default function SignupForm() {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -25,42 +22,40 @@ export default function SignupForm() {
       lastName: String(form.get("lastName") || ""),
       phone: String(form.get("phone") || ""),
       email: String(form.get("email") || ""),
-      password: String(form.get("password") || ""),
       location: String(form.get("location") || ""),
     };
 
-    const supabase = createClient();
-    const { error: signUpError } = await supabase.auth.signUp({
-      email: payload.email,
-      password: payload.password,
-    });
+    try {
+      const response = await fetch("/api/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    if (signUpError) {
-      setError(
-        signUpError.message === "User already registered"
-          ? "An account already exists for that email. Try logging in."
-          : signUpError.message,
-      );
-      setLoading(false);
-      return;
-    }
-
-    // profiles is insert-protected, so the row is written server-side.
-    const response = await fetch("/api/profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
       const data = await response.json().catch(() => null);
-      setError(data?.error ?? "We could not finish setting up your account.");
-      setLoading(false);
-      return;
-    }
 
-    router.push("/dashboard");
-    router.refresh();
+      if (!response.ok || !data?.ok) {
+        setError(data?.error ?? "We could not finish setting up your account.");
+        setLoading(false);
+        return;
+      }
+
+      const supabase = createClient();
+      if (data.session) {
+        await supabase.auth.setSession(data.session);
+      } else if (data.tokenHash) {
+        await supabase.auth.verifyOtp({
+          token_hash: data.tokenHash,
+          type: "email",
+        });
+      }
+
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      setError("Network error while creating account. Please try again.");
+      setLoading(false);
+    }
   }
 
   if (!isSupabaseConfigured()) return <SupabaseSetupNotice />;
@@ -83,32 +78,26 @@ export default function SignupForm() {
         <input required name="phone" type="tel" inputMode="numeric" autoComplete="tel" placeholder="98765 43210" />
       </label>
 
-      <label className="form-field">
-        Email address
-        <input required name="email" type="email" autoComplete="email" placeholder="you@example.com" />
-      </label>
+      <div
+        style={{
+          margin: "12px 0",
+          padding: "12px 14px",
+          background: "rgba(212, 163, 115, 0.12)",
+          border: "1px solid rgba(212, 163, 115, 0.3)",
+          borderRadius: "8px",
+          fontSize: "13px",
+          lineHeight: "1.5",
+        }}
+      >
+        <strong style={{ display: "block", marginBottom: "3px", color: "var(--accent, #D4A373)" }}>
+          System-Allocated Password
+        </strong>
+        Your initial password is the <strong>last 4 digits</strong> of your phone number. You can change your password anytime after signing in.
+      </div>
 
       <label className="form-field">
-        Password
-        <span className="password-input">
-          <input
-            required
-            name="password"
-            type={showPassword ? "text" : "password"}
-            minLength={8}
-            autoComplete="new-password"
-            placeholder={passwordRule}
-          />
-          <button
-            type="button"
-            className="password-toggle"
-            onClick={() => setShowPassword((current) => !current)}
-            aria-label={showPassword ? "Hide password" : "Show password"}
-            aria-pressed={showPassword}
-          >
-            {showPassword ? "Hide" : "Show"}
-          </button>
-        </span>
+        Email address <span style={{ fontWeight: 400, color: "var(--muted)" }}>(optional)</span>
+        <input name="email" type="email" autoComplete="email" placeholder="you@example.com" />
       </label>
 
       <label className="form-field">

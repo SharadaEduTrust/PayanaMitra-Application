@@ -11,6 +11,9 @@ type Params = { params: Promise<{ id: string }> };
 export default async function FeedbackPage({ params }: Params) {
   const { id } = await params;
   const profile = await requireProfile();
+  if (profile.role !== "traveller") {
+    redirect(`/dashboard/trips/${id}`);
+  }
   const supabase = await createClient();
 
   const { data: tripData } = await supabase

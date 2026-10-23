@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
+import LogoutButton from "@/components/logout-button";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,13 @@ export default async function AdminOverviewPage() {
           <h1>Overview</h1>
           <small>Signed in as {admin.first_name} {admin.last_name}</small>
         </div>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <LogoutButton
+            redirectTo="/admin/login"
+            className="btn btn-secondary"
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13px" }}
+          />
+        </div>
       </header>
       <div className="admin-body">
         <div className="admin-stats">
@@ -47,8 +55,8 @@ export default async function AdminOverviewPage() {
             <li>Create guest accounts in <Link href="/admin/users">Guests</Link> or bulk upload via <Link href="/admin/import?tab=guests">CSV Import</Link>.</li>
             <li>Create a trail in <Link href="/admin/trips">Trails</Link> or bulk import via <Link href="/admin/import?tab=trails">CSV Import</Link>.</li>
             <li>Add day plans and activities to the itinerary.</li>
-            <li>Add the guests as members.</li>
-            <li>Set the trail status to <strong>published</strong> so members can see it.</li>
+            <li>Add the guests to the trail.</li>
+            <li>Set the trail status to <strong>published</strong> so guests can see it.</li>
           </ol>
         </section>
       </div>

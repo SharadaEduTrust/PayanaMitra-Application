@@ -4,10 +4,15 @@ import { loginWithPhonePin } from "@/lib/server/auth";
 
 export const runtime = "nodejs";
 
-const schema = z.object({
-  phone: z.string().trim().min(8).max(20),
-  pin: z.string().trim().regex(/^\d{4}$/, "Enter the last 4 digits of your phone number."),
-});
+const schema = z
+  .object({
+    phone: z.string().trim().min(8).max(20),
+    password: z.string().optional(),
+    pin: z.string().optional(),
+  })
+  .refine((data) => (data.password?.trim().length ?? 0) >= 4 || (data.pin?.trim().length ?? 0) >= 4, {
+    message: "Enter your password (at least 4 characters).",
+  });
 
 function clientIp(request: Request) {
   return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
@@ -39,14 +44,16 @@ export async function verifyPinLogin(
   if (!parsed.success) {
     return {
       ok: false,
-      error: "Enter a valid phone number and 4-digit PIN.",
+      error: "Enter a valid phone number and password.",
       status: 400,
     };
   }
 
+  const password = (parsed.data.password || parsed.data.pin || "").trim();
+
   const result = await loginWithPhonePin(
     parsed.data.phone,
-    parsed.data.pin,
+    password,
     ip,
     options,
   );

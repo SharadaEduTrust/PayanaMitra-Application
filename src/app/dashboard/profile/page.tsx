@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { TravellerDetails } from "@/lib/types";
@@ -5,6 +6,8 @@ import AvatarUpload from "@/components/avatar-upload";
 import ProfileForm from "@/components/profile-form";
 import ProfileSummary, { type CompletionItem } from "@/components/profile-summary";
 import TravellerDetailsForm from "@/components/traveller-details-form";
+import LogoutButton from "@/components/logout-button";
+import { decrypt } from "@/lib/server/crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -48,13 +51,74 @@ export default async function ProfilePage() {
       .eq("user_id", profile.id)
       .maybeSingle(),
     // RLS ("Users read own documents") already limits this to the caller.
-    supabase.from("guest_documents").select("id").eq("user_id", profile.id),
+    supabase.from("guest_documents").select("*").eq("user_id", profile.id),
     // RLS ("Users see own trip memberships") already limits this too.
     supabase.from("trip_members").select("trip_id").eq("user_id", profile.id),
   ]);
 
   const traveller = (details as TravellerDetails | null) ?? null;
   const documentCount = documents?.length ?? 0;
+
+  // Decrypt PAN and Passport if stored in documents
+  const panDoc = (documents ?? []).find(
+    (d: Record<string, unknown>) => String(d.doc_type || "").toLowerCase() === "pan",
+  );
+  const passportDoc = (documents ?? []).find(
+    (d: Record<string, unknown>) => String(d.doc_type || "").toLowerCase() === "passport",
+  );
+  const visaDoc = (documents ?? []).find(
+    (d: Record<string, unknown>) => String(d.doc_type || "").toLowerCase() === "visa",
+  );
+
+  let initialPan = "";
+  if (panDoc && panDoc.doc_number_enc && panDoc.iv && panDoc.auth_tag) {
+    try {
+      initialPan = await decrypt({
+        ciphertext: String(panDoc.doc_number_enc),
+        iv: String(panDoc.iv),
+        authTag: String(panDoc.auth_tag),
+      });
+    } catch {
+      initialPan = "";
+    }
+  }
+
+  let initialPassportNo = "";
+  if (passportDoc && passportDoc.doc_number_enc && passportDoc.iv && passportDoc.auth_tag) {
+    try {
+      initialPassportNo = await decrypt({
+        ciphertext: String(passportDoc.doc_number_enc),
+        iv: String(passportDoc.iv),
+        authTag: String(passportDoc.auth_tag),
+      });
+    } catch {
+      initialPassportNo = "";
+    }
+  }
+
+  const initialPassportIssueDate = passportDoc?.issued_date
+    ? String(passportDoc.issued_date).slice(0, 10)
+    : (traveller?.passport_issue_date ?? "");
+  const initialPassportExpiry = passportDoc?.expiry_date ? String(passportDoc.expiry_date).slice(0, 10) : "";
+
+  let initialVisaNo = traveller?.visa_no ?? "";
+  if (visaDoc && visaDoc.doc_number_enc && visaDoc.iv && visaDoc.auth_tag) {
+    try {
+      initialVisaNo = await decrypt({
+        ciphertext: String(visaDoc.doc_number_enc),
+        iv: String(visaDoc.iv),
+        authTag: String(visaDoc.auth_tag),
+      });
+    } catch {
+      initialVisaNo = traveller?.visa_no ?? "";
+    }
+  }
+  const initialVisaExpiry = visaDoc?.expiry_date
+    ? String(visaDoc.expiry_date).slice(0, 10)
+    : (traveller?.visa_expiry ?? "");
+  const initialVisaCountry = visaDoc?.issued_country
+    ? String(visaDoc.issued_country)
+    : (traveller?.visa_country ?? "");
 
   const columns = "id, start_date, end_date, status, is_active";
   type TripRow = {
@@ -93,12 +157,12 @@ export default async function ProfilePage() {
     { label: "Location", done: Boolean(profile.location), href: PANEL_ACCOUNT },
     // Not traveller-editable, so the checklist says who to ask rather than
     // linking to a field that cannot be changed here.
-    { label: "email id (ask your coordinator)", done: Boolean(profile.email), href: PANEL_ACCOUNT },
+    { label: "Email ID (ask your coordinator)", done: Boolean(profile.email), href: PANEL_ACCOUNT },
     { label: "Date of Birth", done: Boolean(traveller?.dob), href: PANEL_TRAVEL },
     { label: "Food Preference", done: Boolean(traveller?.food_preference), href: PANEL_TRAVEL },
     { label: "Emergency Contact", done: Boolean(traveller?.emergency_contact_name && traveller?.emergency_contact_no), href: PANEL_TRAVEL },
     { label: "Travel Insurance", done: Boolean(traveller?.travel_insurance_no), href: PANEL_TRAVEL },
-    { label: "At least one document", done: documentCount > 0, href: "/dashboard/documents" },
+    { label: "At Least One Document", done: documentCount > 0, href: "/dashboard/documents" },
   ];
   const missing = completion.filter((item) => !item.done);
 
@@ -150,7 +214,7 @@ export default async function ProfilePage() {
           <h3 className="serif profile-subhead">Account history</h3>
           <dl className="fact-list">
             <div>
-              <dt>Member since</dt>
+              <dt>Guest since</dt>
               <dd>{formatDate(profile.date_of_joining)}</dd>
             </div>
             <div>
@@ -162,12 +226,37 @@ export default async function ProfilePage() {
               <dd>{profile.is_active ? "Active" : "Deactivated by your coordinator"}</dd>
             </div>
           </dl>
+
+          <h3 className="serif profile-subhead">Security & Password</h3>
+          <p className="panel-note" style={{ marginBottom: "12px" }}>
+            Your initial password is the last 4 digits of your phone number ({profile.phone.slice(-4)}). You can change your password anytime.
+          </p>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+            <Link className="btn btn-secondary" href="/change-password">
+              Change Password
+            </Link>
+            <LogoutButton
+              redirectTo="/login"
+              className="btn btn-secondary"
+              label="Log out"
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+            />
+          </div>
         </section>
 
         <section className="panel" id="travel">
           <h2 className="serif">Guest details</h2>
-          <p className="panel-note">Food needs, allergies, emergency contact and insurance.</p>
-          <TravellerDetailsForm details={traveller} />
+          <p className="panel-note">Identity, travel insurance, food preferences and emergency contact.</p>
+          <TravellerDetailsForm
+            details={traveller}
+            initialPan={initialPan}
+            initialPassportNo={initialPassportNo}
+            initialPassportIssueDate={initialPassportIssueDate}
+            initialPassportExpiry={initialPassportExpiry}
+            initialVisaNo={initialVisaNo}
+            initialVisaExpiry={initialVisaExpiry}
+            initialVisaCountry={initialVisaCountry}
+          />
         </section>
       </div>
     </div>

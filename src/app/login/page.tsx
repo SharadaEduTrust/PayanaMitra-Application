@@ -22,7 +22,7 @@ export default function LoginPage() {
         <div className="auth-card">
           <Brand size={36} />
           <h2>Welcome back.</h2>
-          <p>Enter your phone number and the last four digits of it as your PIN.</p>
+          <p>Sign in with your registered phone number and password.</p>
           <PinForm />
           <div className="auth-switch">
             No account yet? <Link href="/signup">Register first</Link>

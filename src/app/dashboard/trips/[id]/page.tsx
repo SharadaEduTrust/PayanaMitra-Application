@@ -55,7 +55,7 @@ export default async function TripPage({ params }: Params) {
         destination: day.destination,
         itineraryText: day.itinerary_text,
         hotelName: day.hotel_name,
-        mealPlan: (day as unknown as { meal_plan?: string | null }).meal_plan ?? null,
+        mealPlan: (day as { meal_plan?: string | null }).meal_plan ?? null,
         activities: activities
           .filter((activity) => activity.itinerary_day_id === day.id)
           .map((activity) => ({
@@ -75,6 +75,7 @@ export default async function TripPage({ params }: Params) {
         email: contact.email,
       }))}
       canContribute={profile.role === "admin" || profile.role === "leader"}
+      userRole={profile.role}
     />
   );
 }

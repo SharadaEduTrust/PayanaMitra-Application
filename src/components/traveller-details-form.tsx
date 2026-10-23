@@ -1,37 +1,44 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { createClient } from "@/lib/supabase/client";
 import type { TravellerDetails } from "@/lib/types";
 
-const empty = {
-  dob: "",
-  food_preference: "" as "" | "veg" | "non_veg",
-  food_allergy: "",
-  emergency_contact_name: "",
-  emergency_contact_no: "",
-  travel_insurance_no: "",
-  insurance_company: "",
-  insurance_expiry: "",
-  passport_issued_location: "",
-};
-
-/**
- * RLS on traveller_details grants the user SELECT and UPDATE on their own row
- * only. There is no INSERT policy, so an insert here would be rejected. The
- * API route below handles create-or-update with the service role.
- */
-export default function TravellerDetailsForm({ details }: { details: TravellerDetails | null }) {
+export default function TravellerDetailsForm({
+  details,
+  initialPan = "",
+  initialPassportNo = "",
+  initialPassportIssueDate = "",
+  initialPassportExpiry = "",
+  initialVisaNo = "",
+  initialVisaExpiry = "",
+  initialVisaCountry = "",
+}: {
+  details: TravellerDetails | null;
+  initialPan?: string;
+  initialPassportNo?: string;
+  initialPassportIssueDate?: string;
+  initialPassportExpiry?: string;
+  initialVisaNo?: string;
+  initialVisaExpiry?: string;
+  initialVisaCountry?: string;
+}) {
   const [form, setForm] = useState({
-    dob: details?.dob ?? empty.dob,
-    food_preference: details?.food_preference ?? empty.food_preference,
-    food_allergy: details?.food_allergy ?? empty.food_allergy,
-    emergency_contact_name: details?.emergency_contact_name ?? empty.emergency_contact_name,
-    emergency_contact_no: details?.emergency_contact_no ?? empty.emergency_contact_no,
-    travel_insurance_no: details?.travel_insurance_no ?? empty.travel_insurance_no,
-    insurance_company: details?.insurance_company ?? empty.insurance_company,
-    insurance_expiry: details?.insurance_expiry ?? empty.insurance_expiry,
-    passport_issued_location: details?.passport_issued_location ?? empty.passport_issued_location,
+    dob: details?.dob ?? "",
+    pan: initialPan,
+    passport_no: initialPassportNo,
+    passport_issue_date: initialPassportIssueDate || (details?.passport_issue_date ?? ""),
+    passport_expiry: initialPassportExpiry,
+    passport_issued_location: details?.passport_issued_location ?? "",
+    visa_no: initialVisaNo || (details?.visa_no ?? ""),
+    visa_expiry: initialVisaExpiry || (details?.visa_expiry ?? ""),
+    visa_country: initialVisaCountry || (details?.visa_country ?? ""),
+    travel_insurance_no: details?.travel_insurance_no ?? "",
+    insurance_company: details?.insurance_company ?? "",
+    insurance_expiry: details?.insurance_expiry ?? "",
+    food_preference: (details?.food_preference ?? "") as "" | "veg" | "non_veg",
+    food_allergy: details?.food_allergy ?? "",
+    emergency_contact_name: details?.emergency_contact_name ?? "",
+    emergency_contact_no: details?.emergency_contact_no ?? "",
   });
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -59,7 +66,7 @@ export default function TravellerDetailsForm({ details }: { details: TravellerDe
       setError(data?.error ?? "Could not save your travel details.");
       return;
     }
-    setStatus("Saved.");
+    setStatus("Guest details saved successfully.");
   }
 
   return (
@@ -67,8 +74,125 @@ export default function TravellerDetailsForm({ details }: { details: TravellerDe
       <div className="field-row">
         <label className="form-field">
           Date of Birth
-          <input type="date" value={form.dob} onChange={(event) => set("dob", event.target.value)} />
+          <input
+            type="date"
+            value={form.dob}
+            onChange={(event) => set("dob", event.target.value)}
+          />
         </label>
+        <label className="form-field">
+          PAN
+          <input
+            value={form.pan}
+            maxLength={10}
+            onChange={(event) => set("pan", event.target.value.toUpperCase())}
+            placeholder="10 characters (e.g. AAADK9754A)"
+          />
+        </label>
+      </div>
+
+      <div className="field-row">
+        <label className="form-field">
+          Passport No.
+          <input
+            value={form.passport_no}
+            maxLength={10}
+            onChange={(event) => set("passport_no", event.target.value.toUpperCase())}
+            placeholder="10 characters (e.g. ZA495775)"
+          />
+        </label>
+        <label className="form-field">
+          Passport Issue Date
+          <input
+            type="date"
+            value={form.passport_issue_date}
+            onChange={(event) => set("passport_issue_date", event.target.value)}
+          />
+        </label>
+      </div>
+
+      <div className="field-row">
+        <label className="form-field">
+          Passport Expiry Date
+          <input
+            type="date"
+            value={form.passport_expiry}
+            onChange={(event) => set("passport_expiry", event.target.value)}
+          />
+        </label>
+        <label className="form-field">
+          Passport Issued Location
+          <input
+            value={form.passport_issued_location}
+            maxLength={20}
+            onChange={(event) => set("passport_issued_location", event.target.value)}
+            placeholder="e.g. Bangalore"
+          />
+        </label>
+      </div>
+
+      <div className="field-row">
+        <label className="form-field">
+          Visa No.
+          <input
+            value={form.visa_no}
+            maxLength={10}
+            onChange={(event) => set("visa_no", event.target.value.toUpperCase())}
+            placeholder="10 characters (e.g. V123456789)"
+          />
+        </label>
+        <label className="form-field">
+          Visa Expiry Date
+          <input
+            type="date"
+            value={form.visa_expiry}
+            onChange={(event) => set("visa_expiry", event.target.value)}
+          />
+        </label>
+      </div>
+
+      <div className="field-row">
+        <label className="form-field">
+          Country (Visa)
+          <input
+            value={form.visa_country}
+            maxLength={50}
+            onChange={(event) => set("visa_country", event.target.value)}
+            placeholder="e.g. Singapore"
+          />
+        </label>
+        <label className="form-field">
+          Travel Insurance No.
+          <input
+            value={form.travel_insurance_no}
+            maxLength={20}
+            onChange={(event) => set("travel_insurance_no", event.target.value)}
+            placeholder="e.g. 7103167389"
+          />
+        </label>
+      </div>
+
+      <div className="field-row">
+        <label className="form-field">
+          Travel Insurance Company
+          <input
+            value={form.insurance_company}
+            maxLength={20}
+            onChange={(event) => set("insurance_company", event.target.value)}
+            placeholder="e.g. TATA AIG"
+          />
+        </label>
+        <label className="form-field">
+          Travel Insurance Expiry Date
+          <input
+            type="date"
+            value={form.insurance_expiry}
+            onChange={(event) => set("insurance_expiry", event.target.value)}
+          />
+        </label>
+      </div>
+
+      <div className="field-row">
         <label className="form-field">
           Food Preference
           <select
@@ -76,47 +200,40 @@ export default function TravellerDetailsForm({ details }: { details: TravellerDe
             onChange={(event) => set("food_preference", event.target.value)}
           >
             <option value="">No preference</option>
-            <option value="veg">Vegetarian</option>
-            <option value="non_veg">Non-vegetarian</option>
+            <option value="veg">Veg</option>
+            <option value="non_veg">Non Veg</option>
           </select>
         </label>
+        <label className="form-field">
+          Food Allergy
+          <input
+            value={form.food_allergy}
+            maxLength={30}
+            onChange={(event) => set("food_allergy", event.target.value)}
+            placeholder="e.g. Peanuts and Milk"
+          />
+        </label>
       </div>
-
-      <label className="form-field">
-        Food Allergy
-        <input value={form.food_allergy} onChange={(event) => set("food_allergy", event.target.value)} placeholder="Peanuts, shellfish…" />
-      </label>
 
       <div className="field-row">
         <label className="form-field">
           Emergency Contact Name
-          <input value={form.emergency_contact_name} onChange={(event) => set("emergency_contact_name", event.target.value)} />
+          <input
+            value={form.emergency_contact_name}
+            maxLength={20}
+            onChange={(event) => set("emergency_contact_name", event.target.value)}
+            placeholder="e.g. Anita Kamath"
+          />
         </label>
         <label className="form-field">
           Emergency Contact Number
-          <input type="tel" value={form.emergency_contact_no} onChange={(event) => set("emergency_contact_no", event.target.value)} />
-        </label>
-      </div>
-
-      <div className="field-row">
-        <label className="form-field">
-          Travel Insurance No.
-          <input value={form.travel_insurance_no} onChange={(event) => set("travel_insurance_no", event.target.value)} />
-        </label>
-        <label className="form-field">
-          Travel Insurance Company
-          <input value={form.insurance_company} onChange={(event) => set("insurance_company", event.target.value)} />
-        </label>
-      </div>
-
-      <div className="field-row">
-        <label className="form-field">
-          Travel Insurance Expiry Date
-          <input type="date" value={form.insurance_expiry} onChange={(event) => set("insurance_expiry", event.target.value)} />
-        </label>
-        <label className="form-field">
-          Passport Issued Location
-          <input value={form.passport_issued_location} onChange={(event) => set("passport_issued_location", event.target.value)} />
+          <input
+            type="tel"
+            value={form.emergency_contact_no}
+            maxLength={10}
+            onChange={(event) => set("emergency_contact_no", event.target.value.replace(/\D/g, ""))}
+            placeholder="10 digits (e.g. 9019911700)"
+          />
         </label>
       </div>
 
@@ -124,7 +241,7 @@ export default function TravellerDetailsForm({ details }: { details: TravellerDe
       {status && <p className="form-notice" role="status">{status}</p>}
 
       <button className="btn btn-primary" type="submit" disabled={loading}>
-        {loading ? "Saving…" : "Save guest details"}
+        {loading ? "Saving…" : "Save Guest Details"}
       </button>
     </form>
   );

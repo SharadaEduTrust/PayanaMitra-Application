@@ -91,9 +91,9 @@ export default function ProfileSummary({
           <StatTile
             value={String(documents)}
             label={documents === 1 ? "Document saved" : "Documents saved"}
-            note="PAN, passport, visa and anything else your trail needs"
+            note="Aadhar, PAN, Passport and anything else your trail needs"
             href="/dashboard/documents"
-            cta="Manage documents"
+            cta="Manage Documents"
           />
         </div>
       </section>

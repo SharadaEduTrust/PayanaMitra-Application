@@ -106,22 +106,36 @@ function getField(row: Record<string, string>, ...aliases: string[]): string {
 function parseDateString(dateStr: string): string | null {
   const clean = dateStr.trim()
   if (!clean) return null
-  // DD-MM-YYYY or DD/MM/YYYY
-  const dmy = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/)
-  if (dmy) {
-    const day = dmy[1].padStart(2, '0')
-    const month = dmy[2].padStart(2, '0')
-    const year = dmy[3]
+
+  // DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY (4-digit year)
+  const dmy4 = clean.match(/^(\d{1,2})[-/. ](\d{1,2})[-/. ](\d{4})$/)
+  if (dmy4) {
+    const day = dmy4[1].padStart(2, '0')
+    const month = dmy4[2].padStart(2, '0')
+    const year = dmy4[3]
     return `${year}-${month}-${day}`
   }
-  // YYYY-MM-DD or YYYY/MM/DD
-  const ymd = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/)
+
+  // DD-MM-YY or DD/MM/YY or DD.MM.YY (2-digit year)
+  const dmy2 = clean.match(/^(\d{1,2})[-/. ](\d{1,2})[-/. ](\d{2})$/)
+  if (dmy2) {
+    const day = dmy2[1].padStart(2, '0')
+    const month = dmy2[2].padStart(2, '0')
+    const rawYy = parseInt(dmy2[3], 10)
+    // 00-40 -> 2000-2040, 41-99 -> 1941-1999
+    const year = rawYy <= 40 ? 2000 + rawYy : 1900 + rawYy
+    return `${year}-${month}-${day}`
+  }
+
+  // YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD
+  const ymd = clean.match(/^(\d{4})[-/. ](\d{1,2})[-/. ](\d{1,2})$/)
   if (ymd) {
     const year = ymd[1]
     const month = ymd[2].padStart(2, '0')
     const day = ymd[3].padStart(2, '0')
     return `${year}-${month}-${day}`
   }
+
   return null
 }
 
@@ -135,9 +149,9 @@ export async function GET(req: NextRequest) {
   if (type === 'details' || type === 'guest_details') {
     // Template matching "Guest Details Table"
     const lines = [
-      'User Id,First Name,Last Name,Date of Birth,PAN,Passport No.,Passport Expiry Date,Passport Issued Location,Travel Insurance No.,Travel Insurance Company,Travel Insurance Expiry Date,Food Preference,Food Allergy,Emergency Contact Name,Emergency Contact Number',
-      '9019911700,Arvind,Kamath,18-06-1965,AAADK9754A,ZA495775,18-07-2030,Bangalore,7103167389,TATA AIG,10-09-2026,Veg,Peanuts and Milk,Anita Kamath,9019911700',
-      '9876543210,Sunita,Sharma,12-04-1985,,,,,ICICI Lombard,15-08-2027,Non Veg,,Ramesh Sharma,9876543211',
+      'Mobile Number,First Name,Last Name,Date of Birth,PAN,Passport No.,Passport Issue Date,Passport Expiry Date,Passport Issued Location,Visa No.,Visa Expiry Date,Country,Travel Insurance No.,Travel Insurance Company,Travel Insurance Expiry Date,Food Preference,Food Allergy,Emergency Contact Name,Emergency Contact Number',
+      '9019911700,Arvind,Kamath,18/06/65,AAADK9754A,ZA495775,19/07/20,18/07/30,Bangalore,V123456789,15/08/28,Singapore,7103167389,TATA AIG,10/09/26,Veg,Peanuts and Milk,Anita Kamath,9019911700',
+      '9876543210,Sunita,Sharma,12/04/85,,,,,,,,ICICI Lombard,15/08/27,Non Veg,,Ramesh Sharma,9876543211',
     ]
     return new NextResponse(lines.join('\n'), {
       status: 200,
@@ -148,13 +162,13 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  // Unified User Table template containing core profile and extended guest columns
+  // Template matching User Table: Mobile Number is user id (single column), Active is handled on backend, DD/MM/YY supported, Referral's Name included
   const lines = [
-    'phone,first_name,last_name,role,leader_phone,email,location,date_of_joining,remarks,dob,food_preference,food_allergy,emergency_contact_name,emergency_contact_no',
-    '9876543210,Amit,Sharma,guest,9000000002,amit.sharma@example.com,Mumbai,2024-01-15,Group A,1990-05-15,veg,Peanuts,Sunita Sharma,9876500001',
-    '9876543211,Priya,Mehta,leader,,priya.mehta@example.com,Delhi,2024-02-01,Trail Leader,,,,,',
-    '9876543212,Rahul,Verma,traveller,9000000002,,Delhi,2024-03-10,VIP guest,1995-11-20,non_veg,,Sunil Verma,9876500002',
-    '9876543213,Sunita,Nair,traveller,,,Bangalore,,,,,,,',
+    'Mobile Number,First Name,Last Name,Role,Leader Name,Date of Joining,Location,email id,Referral\'s Name',
+    '9019911700,Arvind,Kamath,Guest,Anushree Kini,18/06/25,Bengaluru,arvindakamath@gmail.com,Ramesh Bhat',
+    '9000000002,Anushree,Kini,Leader,,01/01/25,Bengaluru,anushree@payana.app,',
+    '9876543210,Sunita,Sharma,Guest,Anushree Kini,10/02/25,Mysuru,sunita.sharma@example.com,Anita Rao',
+    '9876543211,Rahul,Verma,Guest,Anushree Kini,15/03/25,Delhi,rahul.verma@example.com,',
   ]
   return new NextResponse(lines.join('\n'), {
     status: 200,
@@ -259,20 +273,25 @@ export async function POST(req: NextRequest) {
     const rawDoj      = getField(raw, 'Date of Joining', 'DateOfJoining', 'date_of_joining', 'doj')
     const email       = getField(raw, 'email id', 'email_id', 'email', 'e-mail') || null
     const remarks     = getField(raw, 'Remarks', 'remarks', 'notes') || null
+    const referral_name = getField(raw, "Referral's Name", 'Referrals Name', 'Referral Name', 'Referral', 'Referred By', 'referral_name', 'referred_by') || null
 
     // Guest Details fields
-    const rawDob      = getField(raw, 'Date of Birth', 'DateOfBirth', 'dob')
-    const pan         = getField(raw, 'PAN', 'pan') || null
-    const passportNo  = getField(raw, 'Passport No.', 'Passport No', 'Passport Number', 'passport_no') || null
-    const rawPassExp  = getField(raw, 'Passport Expiry Date', 'Passport Expiry', 'passport_expiry')
-    const passLoc     = getField(raw, 'Passport Issued Location', 'Passport Issue Location', 'passport_issued_location') || null
-    const insNo       = getField(raw, 'Travel Insurance No.', 'Travel Insurance No', 'travel_insurance_no') || null
-    const insCo       = getField(raw, 'Travel Insurance Company', 'insurance_company') || null
-    const rawInsExp   = getField(raw, 'Travel Insurance Expiry Date', 'insurance_expiry')
-    const rawFoodPref = getField(raw, 'Food Preference', 'FoodPreference', 'food_preference', 'food_pref')
-    const foodAllergy = getField(raw, 'Food Allergy', 'Food Allergies', 'food_allergy') || null
-    const emgName     = getField(raw, 'Emergency Contact Name', 'emergency_contact_name', 'emergency_name') || null
-    const emgNo       = getField(raw, 'Emergency Contact Number', 'Emergency Contact No', 'emergency_contact_no', 'emergency_phone') || null
+    const rawDob         = getField(raw, 'Date of Birth', 'DateOfBirth', 'dob')
+    const pan            = getField(raw, 'PAN', 'pan') || null
+    const passportNo     = getField(raw, 'Passport No.', 'Passport No', 'Passport Number', 'passport_no') || null
+    const rawPassIssue   = getField(raw, 'Passport Issue Date', 'Passport Issued Date', 'Passport Issue', 'passport_issue_date', 'passport_issued_date')
+    const rawPassExp     = getField(raw, 'Passport Expiry Date', 'Passport Expiry', 'passport_expiry')
+    const passLoc        = getField(raw, 'Passport Issued Location', 'Passport Issue Location', 'passport_issued_location') || null
+    const visaNo         = getField(raw, 'Visa No.', 'Visa No', 'Visa Number', 'visa_no', 'visa_number') || null
+    const rawVisaExp     = getField(raw, 'Visa Expiry Date', 'Visa Expiry', 'visa_expiry', 'visa_expiry_date')
+    const visaCountry    = getField(raw, 'Country', 'Visa Country', 'visa_country', 'Visa Issued Country') || null
+    const insNo          = getField(raw, 'Travel Insurance No.', 'Travel Insurance No', 'travel_insurance_no') || null
+    const insCo          = getField(raw, 'Travel Insurance Company', 'insurance_company') || null
+    const rawInsExp      = getField(raw, 'Travel Insurance Expiry Date', 'insurance_expiry')
+    const rawFoodPref    = getField(raw, 'Food Preference', 'FoodPreference', 'food_preference', 'food_pref')
+    const foodAllergy    = getField(raw, 'Food Allergy', 'Food Allergies', 'food_allergy') || null
+    const emgName        = getField(raw, 'Emergency Contact Name', 'emergency_contact_name', 'emergency_name') || null
+    const emgNo          = getField(raw, 'Emergency Contact Number', 'Emergency Contact No', 'emergency_contact_no', 'emergency_phone') || null
 
     // Field validation
     if (!PHONE_REGEX.test(rawPhone)) {
@@ -289,7 +308,8 @@ export async function POST(req: NextRequest) {
     }
 
     const mappedRole = ROLE_MAP[rawRole.toLowerCase().trim()] || 'traveller'
-    const isInactive = activeInput.toLowerCase() === 'inactive' || activeInput.toLowerCase() === 'no' || activeInput.toLowerCase() === 'off'
+    // Active is captured directly on the backend (default: active/true)
+    const isInactive = activeInput ? (activeInput.toLowerCase() === 'inactive' || activeInput.toLowerCase() === 'no' || activeInput.toLowerCase() === 'off') : false
     const is_active = !isInactive
 
     if (location && location.length > 50) {
@@ -299,7 +319,7 @@ export async function POST(req: NextRequest) {
 
     const date_of_joining = rawDoj ? parseDateString(rawDoj) : null
     if (rawDoj && !date_of_joining) {
-      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: `Date of Joining "${rawDoj}" is invalid. Use DD-MM-YYYY or YYYY-MM-DD.` })
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: `Date of Joining "${rawDoj}" is invalid. Use DD/MM/YY, DD-MM-YYYY, or YYYY-MM-DD.` })
       continue
     }
 
@@ -356,14 +376,49 @@ export async function POST(req: NextRequest) {
     // Duplicate detection / handling
     const existingUserId = existingPhoneMap.get(rawPhone)
     if (existingUserId) {
-      if (isDetailsOnlyImport) {
-        // If user already exists and this is details table import, update details
-        if (dob || mappedFoodPref || foodAllergy || emgName || emgNo || insNo || insCo || passLoc) {
+      // Update referral name if present
+      if (referral_name) {
+        try {
+          await (admin.from('profiles') as any).update({ referral_name }).eq('id', existingUserId)
+        } catch {
+          // Ignore if column not yet added
+        }
+      }
+
+      // If user already exists and this is details table import or row contains guest details, update details
+      const hasExistingGuestDetails = isDetailsOnlyImport || Boolean(
+        dob || mappedFoodPref || rawFoodPref || foodAllergy || emgName || emgNo || insNo || insCo || passLoc || passportNo || rawPassIssue || rawPassExp || visaNo || rawVisaExp || visaCountry || pan
+      )
+
+      if (hasExistingGuestDetails) {
+        try {
+          const food_preference = mappedFoodPref ?? (rawFoodPref ? (rawFoodPref.toLowerCase().includes('non') ? 'non_veg' : 'veg') : null)
+          const passport_issue_date = rawPassIssue ? parseDateString(rawPassIssue) : null
+          const visa_expiry = rawVisaExp ? parseDateString(rawVisaExp) : null
+          const cleanVisaNo = visaNo ? visaNo.trim().toUpperCase() : null
+
           try {
-            await admin.from('traveller_details').upsert({
+            await (admin.from('traveller_details') as any).upsert({
               user_id: existingUserId,
               dob,
-              food_preference: mappedFoodPref,
+              food_preference,
+              food_allergy: foodAllergy,
+              emergency_contact_name: emgName,
+              emergency_contact_no: emgNo,
+              travel_insurance_no: insNo,
+              insurance_company: insCo,
+              insurance_expiry,
+              passport_issued_location: passLoc,
+              passport_issue_date,
+              visa_no: cleanVisaNo,
+              visa_expiry,
+              visa_country: visaCountry,
+            }, { onConflict: 'user_id' })
+          } catch {
+            await (admin.from('traveller_details') as any).upsert({
+              user_id: existingUserId,
+              dob,
+              food_preference,
               food_allergy: foodAllergy,
               emergency_contact_name: emgName,
               emergency_contact_no: emgNo,
@@ -372,32 +427,45 @@ export async function POST(req: NextRequest) {
               insurance_expiry,
               passport_issued_location: passLoc,
             }, { onConflict: 'user_id' })
-
-            if (pan) {
-              const enc = encryptDocumentNumber(pan)
-              await admin.from('guest_documents').insert({
-                user_id: existingUserId,
-                doc_type: 'pan',
-                ...enc,
-              })
-            }
-            if (passportNo) {
-              const enc = encryptDocumentNumber(passportNo)
-              const expiry_date = rawPassExp ? parseDateString(rawPassExp) : null
-              await admin.from('guest_documents').insert({
-                user_id: existingUserId,
-                doc_type: 'passport',
-                expiry_date,
-                issued_country: passLoc || 'India',
-                ...enc,
-              })
-            }
-            results.push({ row: rowNum, phone: rawPhone, status: 'created', id: existingUserId })
-            continue
-          } catch (detailErr) {
-            results.push({ row: rowNum, phone: rawPhone, status: 'error', error: String(detailErr) })
-            continue
           }
+
+          if (pan) {
+            const enc = encryptDocumentNumber(pan)
+            await admin.from('guest_documents').insert({
+              user_id: existingUserId,
+              doc_type: 'pan',
+              ...enc,
+            })
+          }
+          if (passportNo) {
+            const enc = encryptDocumentNumber(passportNo)
+            const expiry_date = rawPassExp ? parseDateString(rawPassExp) : null
+            const issued_date = rawPassIssue ? parseDateString(rawPassIssue) : null
+            await admin.from('guest_documents').insert({
+              user_id: existingUserId,
+              doc_type: 'passport',
+              issued_date,
+              expiry_date,
+              issued_country: passLoc || 'India',
+              ...enc,
+            })
+          }
+          if (cleanVisaNo) {
+            const enc = encryptDocumentNumber(cleanVisaNo)
+            const expiry_date = rawVisaExp ? parseDateString(rawVisaExp) : null
+            await admin.from('guest_documents').insert({
+              user_id: existingUserId,
+              doc_type: 'visa',
+              expiry_date,
+              issued_country: visaCountry || null,
+              ...enc,
+            })
+          }
+          results.push({ row: rowNum, phone: rawPhone, status: 'created', id: existingUserId })
+          continue
+        } catch (detailErr) {
+          results.push({ row: rowNum, phone: rawPhone, status: 'error', error: String(detailErr) })
+          continue
         }
       }
 
@@ -423,24 +491,37 @@ export async function POST(req: NextRequest) {
         continue
       }
 
+      const insertPayload: Record<string, unknown> = {
+        id: authData.user.id,
+        phone: rawPhone,
+        first_name,
+        last_name,
+        role: mappedRole,
+        leader_id,
+        email,
+        location,
+        date_of_joining,
+        referral_name,
+        remarks,
+        must_change_password: false,
+        is_active,
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: profileData, error: profileErr } = await (admin.from('profiles') as any)
-        .insert({
-          id: authData.user.id,
-          phone: rawPhone,
-          first_name,
-          last_name,
-          role: mappedRole,
-          leader_id,
-          email,
-          location,
-          date_of_joining,
-          remarks,
-          must_change_password: false,
-          is_active,
-        })
+      let { data: profileData, error: profileErr } = await (admin.from('profiles') as any)
+        .insert(insertPayload)
         .select('id')
         .single()
+
+      if (profileErr && profileErr.message?.includes('referral_name')) {
+        delete insertPayload.referral_name
+        const retry = await (admin.from('profiles') as any)
+          .insert(insertPayload)
+          .select('id')
+          .single()
+        profileData = retry.data
+        profileErr = retry.error
+      }
 
       if (profileErr) {
         await admin.auth.admin.deleteUser(authData.user.id)
@@ -450,25 +531,54 @@ export async function POST(req: NextRequest) {
 
       const createdUserId = profileData.id
 
-      // Only write guest-specific details for Guest/traveller users
+      // Only write guest-specific details for Guest/traveller users if provided
+      const food_preference = mappedFoodPref ?? (rawFoodPref ? (rawFoodPref.toLowerCase().includes('non') ? 'non_veg' : 'veg') : null)
+      const passport_issue_date = rawPassIssue ? parseDateString(rawPassIssue) : null
+      const visa_expiry = rawVisaExp ? parseDateString(rawVisaExp) : null
+      const cleanVisaNo = visaNo ? visaNo.trim().toUpperCase() : null
+
       const hasGuestDetails = mappedRole === 'traveller' && Boolean(
-        dob || mappedFoodPref || foodAllergy || emgName || emgNo || insNo || insCo || passLoc
+        dob || food_preference || foodAllergy || emgName || emgNo || insNo || insCo || passLoc || passport_issue_date || cleanVisaNo || visa_expiry || visaCountry
       )
 
       if (hasGuestDetails) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: tdErr } = await (admin.from('traveller_details') as any).upsert({
-          user_id: createdUserId,
-          dob,
-          food_preference: mappedFoodPref,
-          food_allergy: foodAllergy,
-          emergency_contact_name: emgName,
-          emergency_contact_no: emgNo,
-          travel_insurance_no: insNo,
-          insurance_company: insCo,
-          insurance_expiry,
-          passport_issued_location: passLoc,
-        }, { onConflict: 'user_id' })
+        let tdErr: any = null
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const res = await (admin.from('traveller_details') as any).upsert({
+            user_id: createdUserId,
+            dob,
+            food_preference,
+            food_allergy: foodAllergy,
+            emergency_contact_name: emgName,
+            emergency_contact_no: emgNo,
+            travel_insurance_no: insNo,
+            insurance_company: insCo,
+            insurance_expiry,
+            passport_issued_location: passLoc,
+            passport_issue_date,
+            visa_no: cleanVisaNo,
+            visa_expiry,
+            visa_country: visaCountry,
+          }, { onConflict: 'user_id' })
+          tdErr = res.error
+        } catch {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const res = await (admin.from('traveller_details') as any).upsert({
+            user_id: createdUserId,
+            dob,
+            food_preference,
+            food_allergy: foodAllergy,
+            emergency_contact_name: emgName,
+            emergency_contact_no: emgNo,
+            travel_insurance_no: insNo,
+            insurance_company: insCo,
+            insurance_expiry,
+            passport_issued_location: passLoc,
+          }, { onConflict: 'user_id' })
+          tdErr = res.error
+        }
 
         if (tdErr) {
           // Compensating cleanup to prevent orphan auth user and profile
@@ -490,11 +600,24 @@ export async function POST(req: NextRequest) {
       if (passportNo) {
         const enc = encryptDocumentNumber(passportNo)
         const expiry_date = rawPassExp ? parseDateString(rawPassExp) : null
+        const issued_date = rawPassIssue ? parseDateString(rawPassIssue) : null
         await admin.from('guest_documents').insert({
           user_id: createdUserId,
           doc_type: 'passport',
+          issued_date,
           expiry_date,
           issued_country: passLoc || 'India',
+          ...enc,
+        })
+      }
+      if (cleanVisaNo) {
+        const enc = encryptDocumentNumber(cleanVisaNo)
+        const expiry_date = rawVisaExp ? parseDateString(rawVisaExp) : null
+        await admin.from('guest_documents').insert({
+          user_id: createdUserId,
+          doc_type: 'visa',
+          expiry_date,
+          issued_country: visaCountry || null,
           ...enc,
         })
       }

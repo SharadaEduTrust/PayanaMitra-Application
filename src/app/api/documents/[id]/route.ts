@@ -7,16 +7,10 @@ interface Params { params: Promise<{ id: string }> }
 
 const UpdateDocSchema = z.object({
   doc_type:       z.string().min(1).max(50).optional(),
-<<<<<<< HEAD
-  issued_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  expiry_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-=======
   expiry_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expiry_date must be YYYY-MM-DD').optional().nullable(),
   issued_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'issued_date must be YYYY-MM-DD').optional().nullable(),
   issued_place:   z.string().max(100).optional().nullable(),
->>>>>>> origin/main
   issued_country: z.string().max(100).optional().nullable(),
-  issued_place:   z.string().max(100).optional().nullable(),
   trip_id:        z.string().uuid().optional().nullable(),
 }).strict()
 
@@ -113,15 +107,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     updated_at: new Date().toISOString(),
   }
 
-<<<<<<< HEAD
-  if (parsed.data.issued_place !== undefined) {
-    updatePayload.issued_country = parsed.data.issued_place
-    delete updatePayload.issued_place
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let updateResult = await (admin.from('guest_documents') as any)
-=======
   // Cross-map place & country for legacy compatibility
   if (parsed.data.issued_place !== undefined && parsed.data.issued_country === undefined) {
     updatePayload.issued_country = parsed.data.issued_place
@@ -131,49 +116,31 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let { data: updated, error } = await (admin.from('guest_documents') as any)
->>>>>>> origin/main
     .update(updatePayload)
     .eq('id', id)
     .select()
     .single()
 
-<<<<<<< HEAD
-  if (updateResult.error && updateResult.error.message.includes('issued_date')) {
-    delete updatePayload.issued_date
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    updateResult = await (admin.from('guest_documents') as any)
-=======
   // Fallback if target DB has not migrated issued_date / issued_place columns yet
   if (error && (error.message.includes('column') || error.message.includes('issued_date') || error.message.includes('issued_place'))) {
     delete updatePayload.issued_date
     delete updatePayload.issued_place
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const retry = await (admin.from('guest_documents') as any)
->>>>>>> origin/main
       .update(updatePayload)
       .eq('id', id)
       .select()
       .single()
-<<<<<<< HEAD
-  }
-
-  if (updateResult.error) return NextResponse.json({ error: updateResult.error.message }, { status: 500 })
-=======
     updated = retry.data
     error = retry.error
   }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
->>>>>>> origin/main
 
   const placeVal = updated?.issued_place ?? updated?.issued_country ?? null
   const countryVal = updated?.issued_country ?? updated?.issued_place ?? null
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-<<<<<<< HEAD
-  const { doc_number_enc, iv, auth_tag, ...safe } = updateResult.data
-  return NextResponse.json({ ok: true, data: safe })
-=======
   const { doc_number_enc, iv, auth_tag, ...safe } = updated
   return NextResponse.json({
     ok: true,
@@ -184,7 +151,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       issued_country: countryVal,
     },
   })
->>>>>>> origin/main
 }
 
 export async function DELETE(_req: NextRequest, { params }: Params) {

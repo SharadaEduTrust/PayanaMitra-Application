@@ -58,20 +58,6 @@ export async function POST(req: NextRequest) {
   const { trip_id, responses } = parsed.data
   const admin = createAdminClient()
 
-<<<<<<< HEAD
-  // Verify user role: survey is only available to guests (travellers) and not admins
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: profile } = await (admin.from('profiles') as any)
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (profile?.role !== 'traveller') {
-    return NextResponse.json({ error: 'Surveys are only available to guests' }, { status: 403 })
-  }
-
-  // Verify user is a member of this trip
-=======
   // Verify trip exists
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: trip } = await (admin.from('trips') as any)
@@ -84,7 +70,6 @@ export async function POST(req: NextRequest) {
   }
 
   // Verify user is an enrolled member of this trip
->>>>>>> origin/main
   const { count } = await admin
     .from('trip_members')
     .select('id', { count: 'exact', head: true })
@@ -92,14 +77,10 @@ export async function POST(req: NextRequest) {
     .eq('user_id', profile.id)
 
   if ((count ?? 0) === 0) {
-<<<<<<< HEAD
-    return NextResponse.json({ error: 'You are not a registered guest on this trail' }, { status: 403 })
-=======
     return NextResponse.json(
       { error: 'Forbidden: You are not an enrolled member of this trip' },
       { status: 403 },
     )
->>>>>>> origin/main
   }
 
   const rows = responses.map(r => ({

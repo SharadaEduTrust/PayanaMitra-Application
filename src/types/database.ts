@@ -173,7 +173,6 @@ export interface GuestDocument {
   issued_date?: string | null
   expiry_date: string | null
   issued_country: string | null
-  issued_date?: string | null
   issued_place?: string | null
   storage_path?: string | null
   file_name?: string | null

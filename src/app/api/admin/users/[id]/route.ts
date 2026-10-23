@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession, derivePassword, PHONE_REGEX } from '@/lib/server/auth'
-import { formatZodError } from '@/app/api/admin/users/route'
+import { formatZodError } from '@/lib/server/zod-error'
 
 interface Params { params: Promise<{ id: string }> }
 

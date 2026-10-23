@@ -667,41 +667,12 @@ export default function TripEditor({
                     <option value="">None specified</option>
                     <option value="Breakfast">Breakfast</option>
                     <option value="Breakfast & Dinner">Breakfast & Dinner</option>
-                    <option value="Breakfast, Lunch & Dinner">Breakfast, Lunch & Dinner</option>
-                  </select>
-                </label>
-              </div>
-
-<<<<<<< HEAD
-              <div className="field-row">
-                <label className="form-field">
-                  Hotel Name
-                  <input
-                    value={day.hotelName}
-                    onChange={(e) => setDay(dayIndex, "hotelName", e.target.value)}
-                    placeholder="e.g. Hotel Sandakan"
-                  />
-                </label>
-                <label className="form-field">
-                  Meal details
-                  <select
-                    value={day.mealPlan ?? ""}
-                    onChange={(e) => setDay(dayIndex, "mealPlan", e.target.value)}
-                  >
-                    <option value="">Select meal details (optional)</option>
-                    <option value="Breakfast">Breakfast</option>
-                    <option value="Breakfast & Dinner">Breakfast & Dinner</option>
-                    <option value="Breakfast, Lunch & Dinner">Breakfast, Lunch & Dinner</option>
                   </select>
                 </label>
               </div>
 
               <label className="form-field">
-                Itinerary
-=======
-              <label className="form-field">
-                Day Highlights
->>>>>>> origin/main
+                Itinerary / Day Highlights
                 <textarea
                   rows={3}
                   placeholder="Overview and key highlights of the day..."

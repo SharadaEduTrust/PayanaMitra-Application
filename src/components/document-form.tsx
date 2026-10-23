@@ -53,12 +53,6 @@ export default function DocumentForm() {
     }
 
     setLoading(true);
-<<<<<<< HEAD
-=======
-
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
->>>>>>> origin/main
     form.set("doc_type", docType);
     if (issuedDate) form.set("issued_date", issuedDate);
     if (expiryDate) form.set("expiry_date", expiryDate);
@@ -73,26 +67,7 @@ export default function DocumentForm() {
         method: "POST",
         body: form,
       });
-<<<<<<< HEAD
-    } catch {
-=======
-
-      const data = await response.json().catch(() => null);
-      setLoading(false);
-
-      if (!response.ok) {
-        setError(data?.error ?? "Could not save that document.");
-        return;
-      }
-
-      formElement.reset();
-      setStatus("Document saved and securely encrypted.");
-      setExpiry("");
-      setDocType("pan");
-      setCountry("India");
-      router.refresh();
     } catch (err) {
->>>>>>> origin/main
       setLoading(false);
       console.error("Failed to save document:", err);
       setError("Network error while saving document.");

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession, derivePassword, phoneToEmail, PHONE_REGEX } from '@/lib/server/auth'
 import { encrypt } from '@/lib/server/crypto'
+import { formatZodError } from '@/lib/server/zod-error'
 
 /**
  * GET   /api/admin/users   — paginated, filterable user list with leader and guest details
@@ -61,31 +62,6 @@ const PhoneInputSchema = z.preprocess(
     .regex(PHONE_REGEX, 'Phone must be a valid 10-15 digit number (e.g. 9876543210 or +919876543210)'),
 )
 
-export function formatZodError(error: z.ZodError) {
-  const flattened = error.flatten()
-  const fieldErrors = flattened.fieldErrors as Record<string, string[] | undefined>
-  const formErrors = flattened.formErrors
-
-  const messages: string[] = []
-
-  for (const [field, errs] of Object.entries(fieldErrors)) {
-    if (Array.isArray(errs) && errs.length > 0) {
-      const fieldName = field.replace(/_/g, ' ')
-      messages.push(`${fieldName}: ${errs.join(', ')}`)
-    }
-  }
-
-  if (Array.isArray(formErrors) && formErrors.length > 0) {
-    messages.push(formErrors.join(', '))
-  }
-
-  const detailedMessage = messages.join('; ')
-  return {
-    error: detailedMessage ? `Validation failed: ${detailedMessage}` : 'Validation failed',
-    fieldErrors,
-    formErrors,
-  }
-}
 
 const CreateUserSchema = z.object({
   phone:           PhoneInputSchema,

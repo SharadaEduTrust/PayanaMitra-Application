@@ -119,15 +119,10 @@ export default function TripDetailView({
                   <span className="day-number">Day {day.dayNumber}</span>
                   <div>
                     <h3>{day.destination ?? `Day ${day.dayNumber}`}</h3>
-<<<<<<< HEAD
                     <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
                       {day.hotelName && <p className="muted small" style={{ margin: 0 }}>Stay: {day.hotelName}</p>}
                       {day.mealPlan && <p className="muted small" style={{ margin: 0 }}>Meals: {day.mealPlan}</p>}
                     </div>
-=======
-                    {day.hotelName && <p className="muted small">Accommodations: {day.hotelName}</p>}
-                    {day.mealPlan && <p className="muted small">Meals Included: {day.mealPlan}</p>}
->>>>>>> origin/main
                   </div>
                 </div>
 

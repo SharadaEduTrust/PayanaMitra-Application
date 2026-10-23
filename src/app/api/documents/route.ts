@@ -15,17 +15,10 @@ const MAX_FILE_SIZE = 1 * 1024 * 1024 // 1MB maximum limit to avoid database and
 const CreateDocSchema = z.object({
   doc_type:       z.string().min(1, 'Document type required').max(50),
   doc_number:     z.string().max(100).optional().nullable(),
-<<<<<<< HEAD
-  issued_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  expiry_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  issued_country: z.string().max(100).optional().nullable(),
-  issued_place:   z.string().max(100).optional().nullable(),
-=======
   expiry_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expiry_date must be YYYY-MM-DD').optional().nullable(),
   issued_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'issued_date must be YYYY-MM-DD').optional().nullable(),
   issued_place:   z.string().max(100, 'issued_place cannot exceed 100 characters').optional().nullable(),
   issued_country: z.string().max(100, 'issued_country cannot exceed 100 characters').optional().nullable(),
->>>>>>> origin/main
   trip_id:        z.string().uuid().optional().nullable(),
 })
 
@@ -124,7 +117,6 @@ export async function POST(req: NextRequest) {
 
   let doc_type = ''
   let doc_number: string | null = null
-  let issued_date: string | null = null
   let expiry_date: string | null = null
   let issued_date: string | null = null
   let issued_place: string | null = null
@@ -146,11 +138,7 @@ export async function POST(req: NextRequest) {
 
     doc_type = String(formData.get('doc_type') ?? formData.get('type') ?? '').trim()
     doc_number = (formData.get('doc_number') as string)?.trim() || (formData.get('document_number') as string)?.trim() || null
-    issued_date = (formData.get('issued_date') as string)?.trim() || null
     expiry_date = (formData.get('expiry_date') as string)?.trim() || null
-<<<<<<< HEAD
-    issued_country = (formData.get('issued_place') as string)?.trim() || (formData.get('issued_country') as string)?.trim() || (formData.get('country') as string)?.trim() || null
-=======
     issued_date = (formData.get('issued_date') as string)?.trim() || null
 
     const rawPlace = (formData.get('issued_place') as string)?.trim() || (formData.get('place') as string)?.trim() || null
@@ -158,7 +146,6 @@ export async function POST(req: NextRequest) {
     issued_place = rawPlace || rawCountry || null
     issued_country = rawCountry || rawPlace || null
 
->>>>>>> origin/main
     trip_id = (formData.get('trip_id') as string)?.trim() || null
 
     if (!doc_type) {
@@ -225,15 +212,10 @@ export async function POST(req: NextRequest) {
 
     doc_type = parsed.data.doc_type
     doc_number = parsed.data.doc_number ?? null
-    issued_date = parsed.data.issued_date ?? null
     expiry_date = parsed.data.expiry_date ?? null
-<<<<<<< HEAD
-    issued_country = parsed.data.issued_place ?? parsed.data.issued_country ?? null
-=======
     issued_date = parsed.data.issued_date ?? null
     issued_place = parsed.data.issued_place ?? parsed.data.issued_country ?? null
     issued_country = parsed.data.issued_country ?? parsed.data.issued_place ?? null
->>>>>>> origin/main
     trip_id = parsed.data.trip_id ?? null
   }
 
@@ -262,7 +244,6 @@ export async function POST(req: NextRequest) {
     doc_number_enc: ciphertext,
     iv,
     auth_tag: authTag,
-    issued_date: issued_date || null,
     expiry_date: expiry_date || null,
     issued_date: issued_date || null,
     issued_place: issued_place || null,
@@ -280,19 +261,6 @@ export async function POST(req: NextRequest) {
     .select()
     .single()
 
-<<<<<<< HEAD
-  if (insertResult.error && (insertResult.error.message.includes('column') || insertResult.error.message.includes('storage_path') || insertResult.error.message.includes('issued_date'))) {
-    // Fallback if issued_date or storage columns have not been migrated
-    if (insertResult.error.message.includes('issued_date')) {
-      delete insertPayload.issued_date
-    }
-    if (insertResult.error.message.includes('storage_path') || insertResult.error.message.includes('column')) {
-      delete insertPayload.storage_path
-      delete insertPayload.file_name
-      delete insertPayload.file_size
-      delete insertPayload.mime_type
-    }
-=======
   // Graceful degradation if new columns have not been migrated on the target database yet
   if (insertResult.error && (
     insertResult.error.message.includes('column') ||
@@ -306,7 +274,6 @@ export async function POST(req: NextRequest) {
     delete insertPayload.file_name
     delete insertPayload.file_size
     delete insertPayload.mime_type
->>>>>>> origin/main
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     insertResult = await (admin.from('guest_documents') as any)
       .insert(insertPayload)

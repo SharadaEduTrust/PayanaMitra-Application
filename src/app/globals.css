@@ -1486,16 +1486,11 @@ h3 {
 
 .day-actions { display:flex; align-items:center; gap:14px; margin-top:12px; flex-wrap:wrap; }
 .admin-subhead { display:flex; align-items:center; justify-content:space-between; margin:18px 0 12px; padding-top:14px; border-top:1px solid var(--line); font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:600; }
-<<<<<<< HEAD
-.activity-row { display:grid; grid-template-columns:105px 105px 1.2fr 1.8fr auto; gap:10px; margin-bottom:10px; align-items:center; }
-.activity-row input { padding:10px 12px; border:1px solid var(--line); background:var(--white); font:inherit; font-size:16px; min-width:0; }
-=======
 .activity-row { display:grid; grid-template-columns:145px 145px 1fr auto; gap:10px; margin-bottom:10px; align-items:center; }
-.activity-row input { padding:10px 12px; border:1px solid var(--line); background:var(--white); color:var(--ink); font:inherit; font-size:14px; min-width:0; }
-.activity-row input[type="time"] { padding:8px 10px; min-width:140px; font-weight:500; font-size:14px; color:var(--ink); }
+.activity-row input { padding:10px 12px; border:1px solid var(--line); background:var(--white); color:var(--ink); font:inherit; font-size:16px; min-width:0; }
+.activity-row input[type="time"] { padding:8px 10px; min-width:140px; font-weight:500; font-size:16px; color:var(--ink); }
 .activity-headers { margin-bottom:6px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); align-items:flex-end; }
 .activity-headers .activity-col-label { display:block; padding:0 2px; }
->>>>>>> origin/main
 .admin-steps { margin:0; padding-left:20px; color:var(--muted); font-size:14px; line-height:1.9; }
 .admin-steps a { color:var(--forest); font-weight:600; }
 .recipient-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:8px; margin-top:8px; max-height:240px; overflow:auto; padding:14px; border:1px solid var(--line); }

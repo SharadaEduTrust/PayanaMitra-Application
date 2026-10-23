@@ -55,11 +55,7 @@ export default async function TripPage({ params }: Params) {
         destination: day.destination,
         itineraryText: day.itinerary_text,
         hotelName: day.hotel_name,
-<<<<<<< HEAD
-        mealPlan: day.meal_plan,
-=======
-        mealPlan: (day as unknown as { meal_plan?: string | null }).meal_plan ?? null,
->>>>>>> origin/main
+        mealPlan: (day as { meal_plan?: string | null }).meal_plan ?? null,
         activities: activities
           .filter((activity) => activity.itinerary_day_id === day.id)
           .map((activity) => ({

@@ -162,7 +162,6 @@ export async function GET(req: NextRequest) {
     })
   }
 
-<<<<<<< HEAD
   // Template matching User Table: Mobile Number is user id (single column), Active is handled on backend, DD/MM/YY supported, Referral's Name included
   const lines = [
     'Mobile Number,First Name,Last Name,Role,Leader Name,Date of Joining,Location,email id,Referral\'s Name',
@@ -170,15 +169,6 @@ export async function GET(req: NextRequest) {
     '9000000002,Anushree,Kini,Leader,,01/01/25,Bengaluru,anushree@payana.app,',
     '9876543210,Sunita,Sharma,Guest,Anushree Kini,10/02/25,Mysuru,sunita.sharma@example.com,Anita Rao',
     '9876543211,Rahul,Verma,Guest,Anushree Kini,15/03/25,Delhi,rahul.verma@example.com,',
-=======
-  // Unified User Table template containing core profile and extended guest columns
-  const lines = [
-    'phone,first_name,last_name,role,leader_phone,email,location,date_of_joining,remarks,dob,food_preference,food_allergy,emergency_contact_name,emergency_contact_no',
-    '9876543210,Amit,Sharma,guest,9000000002,amit.sharma@example.com,Mumbai,2024-01-15,Group A,1990-05-15,veg,Peanuts,Sunita Sharma,9876500001',
-    '9876543211,Priya,Mehta,leader,,priya.mehta@example.com,Delhi,2024-02-01,Trail Leader,,,,,',
-    '9876543212,Rahul,Verma,traveller,9000000002,,Delhi,2024-03-10,VIP guest,1995-11-20,non_veg,,Sunil Verma,9876500002',
-    '9876543213,Sunita,Nair,traveller,,,Bangalore,,,,,,,',
->>>>>>> origin/main
   ]
   return new NextResponse(lines.join('\n'), {
     status: 200,
@@ -286,7 +276,6 @@ export async function POST(req: NextRequest) {
     const referral_name = getField(raw, "Referral's Name", 'Referrals Name', 'Referral Name', 'Referral', 'Referred By', 'referral_name', 'referred_by') || null
 
     // Guest Details fields
-<<<<<<< HEAD
     const rawDob         = getField(raw, 'Date of Birth', 'DateOfBirth', 'dob')
     const pan            = getField(raw, 'PAN', 'pan') || null
     const passportNo     = getField(raw, 'Passport No.', 'Passport No', 'Passport Number', 'passport_no') || null
@@ -299,24 +288,10 @@ export async function POST(req: NextRequest) {
     const insNo          = getField(raw, 'Travel Insurance No.', 'Travel Insurance No', 'travel_insurance_no') || null
     const insCo          = getField(raw, 'Travel Insurance Company', 'insurance_company') || null
     const rawInsExp      = getField(raw, 'Travel Insurance Expiry Date', 'insurance_expiry')
-    const rawFoodPref    = getField(raw, 'Food Preference', 'food_preference')
+    const rawFoodPref    = getField(raw, 'Food Preference', 'FoodPreference', 'food_preference', 'food_pref')
     const foodAllergy    = getField(raw, 'Food Allergy', 'Food Allergies', 'food_allergy') || null
-    const emgName        = getField(raw, 'Emergency Contact Name', 'emergency_contact_name') || null
-    const emgNo          = getField(raw, 'Emergency Contact Number', 'Emergency Contact No', 'emergency_contact_no') || null
-=======
-    const rawDob      = getField(raw, 'Date of Birth', 'DateOfBirth', 'dob')
-    const pan         = getField(raw, 'PAN', 'pan') || null
-    const passportNo  = getField(raw, 'Passport No.', 'Passport No', 'Passport Number', 'passport_no') || null
-    const rawPassExp  = getField(raw, 'Passport Expiry Date', 'Passport Expiry', 'passport_expiry')
-    const passLoc     = getField(raw, 'Passport Issued Location', 'Passport Issue Location', 'passport_issued_location') || null
-    const insNo       = getField(raw, 'Travel Insurance No.', 'Travel Insurance No', 'travel_insurance_no') || null
-    const insCo       = getField(raw, 'Travel Insurance Company', 'insurance_company') || null
-    const rawInsExp   = getField(raw, 'Travel Insurance Expiry Date', 'insurance_expiry')
-    const rawFoodPref = getField(raw, 'Food Preference', 'FoodPreference', 'food_preference', 'food_pref')
-    const foodAllergy = getField(raw, 'Food Allergy', 'Food Allergies', 'food_allergy') || null
-    const emgName     = getField(raw, 'Emergency Contact Name', 'emergency_contact_name', 'emergency_name') || null
-    const emgNo       = getField(raw, 'Emergency Contact Number', 'Emergency Contact No', 'emergency_contact_no', 'emergency_phone') || null
->>>>>>> origin/main
+    const emgName        = getField(raw, 'Emergency Contact Name', 'emergency_contact_name', 'emergency_name') || null
+    const emgNo          = getField(raw, 'Emergency Contact Number', 'Emergency Contact No', 'emergency_contact_no', 'emergency_phone') || null
 
     // Field validation
     if (!PHONE_REGEX.test(rawPhone)) {
@@ -398,8 +373,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-<<<<<<< HEAD
-    // Check duplicate phone
+    // Duplicate detection / handling
     const existingUserId = existingPhoneMap.get(rawPhone)
     if (existingUserId) {
       // Update referral name if present
@@ -411,18 +385,20 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // If user already exists and this row contains guest details, update details
-      if (rawDob || rawFoodPref || foodAllergy || emgName || emgNo || insNo || insCo || passLoc || passportNo || rawPassIssue || rawPassExp || visaNo || rawVisaExp || visaCountry || pan) {
+      // If user already exists and this is details table import or row contains guest details, update details
+      const hasExistingGuestDetails = isDetailsOnlyImport || Boolean(
+        dob || mappedFoodPref || rawFoodPref || foodAllergy || emgName || emgNo || insNo || insCo || passLoc || passportNo || rawPassIssue || rawPassExp || visaNo || rawVisaExp || visaCountry || pan
+      )
+
+      if (hasExistingGuestDetails) {
         try {
-          const dob = rawDob ? parseDateString(rawDob) : null
-          const insurance_expiry = rawInsExp ? parseDateString(rawInsExp) : null
-          const food_preference = rawFoodPref ? (rawFoodPref.toLowerCase().includes('non') ? 'non_veg' : 'veg') : null
+          const food_preference = mappedFoodPref ?? (rawFoodPref ? (rawFoodPref.toLowerCase().includes('non') ? 'non_veg' : 'veg') : null)
           const passport_issue_date = rawPassIssue ? parseDateString(rawPassIssue) : null
           const visa_expiry = rawVisaExp ? parseDateString(rawVisaExp) : null
           const cleanVisaNo = visaNo ? visaNo.trim().toUpperCase() : null
 
           try {
-            await admin.from('traveller_details').upsert({
+            await (admin.from('traveller_details') as any).upsert({
               user_id: existingUserId,
               dob,
               food_preference,
@@ -439,7 +415,7 @@ export async function POST(req: NextRequest) {
               visa_country: visaCountry,
             }, { onConflict: 'user_id' })
           } catch {
-            await admin.from('traveller_details').upsert({
+            await (admin.from('traveller_details') as any).upsert({
               user_id: existingUserId,
               dob,
               food_preference,
@@ -456,54 +432,11 @@ export async function POST(req: NextRequest) {
           if (pan) {
             const enc = encryptDocumentNumber(pan)
             await admin.from('guest_documents').insert({
-=======
-    // Duplicate detection / handling
-    const existingUserId = existingPhoneMap.get(rawPhone)
-    if (existingUserId) {
-      if (isDetailsOnlyImport) {
-        // If user already exists and this is details table import, update details
-        if (dob || mappedFoodPref || foodAllergy || emgName || emgNo || insNo || insCo || passLoc) {
-          try {
-            await admin.from('traveller_details').upsert({
->>>>>>> origin/main
               user_id: existingUserId,
-              dob,
-              food_preference: mappedFoodPref,
-              food_allergy: foodAllergy,
-              emergency_contact_name: emgName,
-              emergency_contact_no: emgNo,
-              travel_insurance_no: insNo,
-              insurance_company: insCo,
-              insurance_expiry,
-              passport_issued_location: passLoc,
-            }, { onConflict: 'user_id' })
-
-            if (pan) {
-              const enc = encryptDocumentNumber(pan)
-              await admin.from('guest_documents').insert({
-                user_id: existingUserId,
-                doc_type: 'pan',
-                ...enc,
-              })
-            }
-            if (passportNo) {
-              const enc = encryptDocumentNumber(passportNo)
-              const expiry_date = rawPassExp ? parseDateString(rawPassExp) : null
-              await admin.from('guest_documents').insert({
-                user_id: existingUserId,
-                doc_type: 'passport',
-                expiry_date,
-                issued_country: passLoc || 'India',
-                ...enc,
-              })
-            }
-            results.push({ row: rowNum, phone: rawPhone, status: 'created', id: existingUserId })
-            continue
-          } catch (detailErr) {
-            results.push({ row: rowNum, phone: rawPhone, status: 'error', error: String(detailErr) })
-            continue
+              doc_type: 'pan',
+              ...enc,
+            })
           }
-<<<<<<< HEAD
           if (passportNo) {
             const enc = encryptDocumentNumber(passportNo)
             const expiry_date = rawPassExp ? parseDateString(rawPassExp) : null
@@ -533,8 +466,6 @@ export async function POST(req: NextRequest) {
         } catch (detailErr) {
           results.push({ row: rowNum, phone: rawPhone, status: 'error', error: String(detailErr) })
           continue
-=======
->>>>>>> origin/main
         }
       }
 
@@ -600,18 +531,22 @@ export async function POST(req: NextRequest) {
 
       const createdUserId = profileData.id
 
-<<<<<<< HEAD
-      // Upsert guest details if provided
-      const dob = rawDob ? parseDateString(rawDob) : null
-      const insurance_expiry = rawInsExp ? parseDateString(rawInsExp) : null
-      const food_preference = rawFoodPref ? (rawFoodPref.toLowerCase().includes('non') ? 'non_veg' : 'veg') : null
+      // Only write guest-specific details for Guest/traveller users if provided
+      const food_preference = mappedFoodPref ?? (rawFoodPref ? (rawFoodPref.toLowerCase().includes('non') ? 'non_veg' : 'veg') : null)
       const passport_issue_date = rawPassIssue ? parseDateString(rawPassIssue) : null
       const visa_expiry = rawVisaExp ? parseDateString(rawVisaExp) : null
       const cleanVisaNo = visaNo ? visaNo.trim().toUpperCase() : null
 
-      if (dob || food_preference || foodAllergy || emgName || emgNo || insNo || insCo || passLoc || passport_issue_date || cleanVisaNo || visa_expiry || visaCountry) {
+      const hasGuestDetails = mappedRole === 'traveller' && Boolean(
+        dob || food_preference || foodAllergy || emgName || emgNo || insNo || insCo || passLoc || passport_issue_date || cleanVisaNo || visa_expiry || visaCountry
+      )
+
+      if (hasGuestDetails) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let tdErr: any = null
         try {
-          await admin.from('traveller_details').upsert({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const res = await (admin.from('traveller_details') as any).upsert({
             user_id: createdUserId,
             dob,
             food_preference,
@@ -627,8 +562,10 @@ export async function POST(req: NextRequest) {
             visa_expiry,
             visa_country: visaCountry,
           }, { onConflict: 'user_id' })
+          tdErr = res.error
         } catch {
-          await admin.from('traveller_details').upsert({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const res = await (admin.from('traveller_details') as any).upsert({
             user_id: createdUserId,
             dob,
             food_preference,
@@ -640,26 +577,8 @@ export async function POST(req: NextRequest) {
             insurance_expiry,
             passport_issued_location: passLoc,
           }, { onConflict: 'user_id' })
-=======
-      // Only write guest-specific details for Guest/traveller users
-      const hasGuestDetails = mappedRole === 'traveller' && Boolean(
-        dob || mappedFoodPref || foodAllergy || emgName || emgNo || insNo || insCo || passLoc
-      )
-
-      if (hasGuestDetails) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: tdErr } = await (admin.from('traveller_details') as any).upsert({
-          user_id: createdUserId,
-          dob,
-          food_preference: mappedFoodPref,
-          food_allergy: foodAllergy,
-          emergency_contact_name: emgName,
-          emergency_contact_no: emgNo,
-          travel_insurance_no: insNo,
-          insurance_company: insCo,
-          insurance_expiry,
-          passport_issued_location: passLoc,
-        }, { onConflict: 'user_id' })
+          tdErr = res.error
+        }
 
         if (tdErr) {
           // Compensating cleanup to prevent orphan auth user and profile
@@ -667,7 +586,6 @@ export async function POST(req: NextRequest) {
           await admin.auth.admin.deleteUser(createdUserId)
           results.push({ row: rowNum, phone: rawPhone, status: 'error', error: `Failed to save guest details: ${tdErr.message}` })
           continue
->>>>>>> origin/main
         }
       }
 

@@ -56,7 +56,6 @@ export default function TripEditor({
   // Broadcast state
   const [broadcastTitle, setBroadcastTitle] = useState("");
   const [broadcastBody, setBroadcastBody] = useState("");
-  const [sendWhatsapp, setSendWhatsapp] = useState(false);
   const [broadcasting, setBroadcasting] = useState(false);
   const [broadcastStatus, setBroadcastStatus] = useState("");
 
@@ -463,7 +462,6 @@ export default function TripEditor({
           trip_id: trip.id,
           title: broadcastTitle.trim(),
           body: broadcastBody.trim() || undefined,
-          sendWhatsapp,
         }),
       });
 
@@ -476,8 +474,8 @@ export default function TripEditor({
       }
 
       setBroadcastStatus(
-        `Broadcast sent! Push notifications: ${json.sent} sent (${json.failed} failed). In-app: ${json.inAppCreated ?? 0}.` +
-          (sendWhatsapp ? ` WhatsApp: ${json.whatsappSent ?? 0} sent (${json.whatsappFailed ?? 0} failed).` : "")
+        `✓ Broadcast successfully sent to ${json.inAppCreated ?? json.recipientCount ?? 0} trail guest(s) in the app!` +
+          (json.sent > 0 ? ` (${json.sent} push notification(s) delivered)` : "")
       );
       setBroadcastTitle("");
       setBroadcastBody("");
@@ -768,8 +766,7 @@ export default function TripEditor({
       <section className="admin-card">
         <h2 className="serif">Broadcast to Trail Guests</h2>
         <p className="admin-hint">
-          Send an announcement to all guests enrolled in this trail via in-app alerts, Web Push,
-          and optionally direct WhatsApp message.
+          Send an in-app announcement to all guests enrolled in or assigned to this trail. Guests will immediately see this broadcast in their Notifications center and on their Trail page in the app.
         </p>
 
         <form onSubmit={sendBroadcast}>
@@ -791,15 +788,6 @@ export default function TripEditor({
               onChange={(e) => setBroadcastBody(e.target.value)}
               placeholder="Provide any additional details or instructions for guests..."
             />
-          </label>
-
-          <label className="form-field" style={{ display: "flex", gap: "10px", alignItems: "center", margin: "12px 0" }}>
-            <input
-              type="checkbox"
-              checked={sendWhatsapp}
-              onChange={(e) => setSendWhatsapp(e.target.checked)}
-            />
-            <span>Also send as WhatsApp message to all guests</span>
           </label>
 
           {broadcastStatus && <p className="form-notice" role="status">{broadcastStatus}</p>}

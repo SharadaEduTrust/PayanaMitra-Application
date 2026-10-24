@@ -19,9 +19,16 @@ export default async function TripPage({ params }: Params) {
   const trip = tripData as Trip | null;
   if (!trip) notFound();
 
-  const [{ data: dayRows }, { data: contactRows }] = await Promise.all([
+  const [{ data: dayRows }, { data: contactRows }, { data: notifRows }] = await Promise.all([
     supabase.from("itinerary_days").select("*").eq("trip_id", id).order("day_number"),
     supabase.from("trip_contacts").select("*").eq("trip_id", id).order("name"),
+    supabase
+      .from("notifications")
+      .select("id, title, body, created_at, is_read")
+      .eq("user_id", profile.id)
+      .eq("trip_id", id)
+      .order("created_at", { ascending: false })
+      .limit(10),
   ]);
 
   const days = (dayRows ?? []) as ItineraryDay[];
@@ -76,6 +83,7 @@ export default async function TripPage({ params }: Params) {
       }))}
       canContribute={profile.role === "admin" || profile.role === "leader"}
       userRole={profile.role}
+      announcements={(notifRows ?? []) as any}
     />
   );
 }

@@ -34,12 +34,21 @@ function dateRange(start: string | null, end: string | null) {
   return end ? `${format(start)} – ${format(end)}` : `From ${format(start)}`;
 }
 
+export type AnnouncementView = {
+  id: string;
+  title: string;
+  body: string | null;
+  created_at: string;
+  is_read: boolean;
+};
+
 export default function TripDetailView({
   trip,
   days,
   contacts,
   canContribute,
   userRole,
+  announcements = [],
 }: {
   trip: {
     id: string;
@@ -55,6 +64,7 @@ export default function TripDetailView({
   contacts: ContactView[];
   canContribute: boolean;
   userRole?: string;
+  announcements?: AnnouncementView[];
 }) {
   return (
     <div className="trip-detail">
@@ -71,6 +81,54 @@ export default function TripDetailView({
         </div>
         <span className={`pill ${trip.status === "published" ? "upcoming" : "past"}`}>{trip.status}</span>
       </header>
+
+      {announcements && announcements.length > 0 && (
+        <section
+          style={{
+            margin: "16px 0",
+            padding: "16px 20px",
+            background: "linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%)",
+            border: "1px solid #fde68a",
+            borderRadius: "10px",
+            boxShadow: "0 2px 6px rgba(245, 158, 11, 0.08)",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+            <span style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700, color: "#92400e", display: "flex", alignItems: "center", gap: "6px" }}>
+              📢 Trail Announcements ({announcements.length})
+            </span>
+            <Link href="/dashboard/notifications" style={{ fontSize: "12px", color: "#b45309", fontWeight: 600 }}>
+              All notifications →
+            </Link>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {announcements.map((a) => (
+              <div
+                key={a.id}
+                style={{
+                  background: "#ffffff",
+                  padding: "12px 14px",
+                  borderRadius: "8px",
+                  border: a.is_read ? "1px solid #e2e8f0" : "1.5px solid #f59e0b",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+                  <div style={{ fontWeight: 700, color: "#1e293b", fontSize: "15px" }}>{a.title}</div>
+                  {!a.is_read && (
+                    <span style={{ background: "#dc2626", color: "#fff", fontSize: "10px", fontWeight: 700, padding: "2px 6px", borderRadius: "8px", textTransform: "uppercase" }}>
+                      New
+                    </span>
+                  )}
+                </div>
+                {a.body && <div style={{ color: "#475569", fontSize: "13.5px", marginTop: "4px", lineHeight: "1.5" }}>{a.body}</div>}
+                <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "6px" }}>
+                  {new Date(a.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {trip.status !== "published" && (
         <p className="form-note">

@@ -7,7 +7,6 @@ import AvatarUpload from "@/components/avatar-upload";
 import ProfileForm from "@/components/profile-form";
 import ProfileSummary, { type CompletionItem } from "@/components/profile-summary";
 import TravellerDetailsForm from "@/components/traveller-details-form";
-import LogoutButton from "@/components/logout-button";
 import { decrypt } from "@/lib/server/crypto";
 
 export const dynamic = "force-dynamic";
@@ -259,12 +258,6 @@ export default async function ProfilePage() {
             >
               {hasChangedPassword ? "Change Password" : "Create New Password →"}
             </Link>
-            <LogoutButton
-              redirectTo="/login"
-              className="btn btn-secondary"
-              label="Log out"
-              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-            />
           </div>
         </section>
 

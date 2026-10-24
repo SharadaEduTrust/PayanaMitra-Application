@@ -1,9 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 export type TripSummary = {
   id: string;
@@ -30,25 +27,14 @@ const statusLabel: Record<string, string> = {
 };
 
 export default function TripList({
-  firstName,
+  firstName: _firstName,
   role,
   grouped,
 }: {
-  firstName: string;
+  firstName?: string;
   role: string;
   grouped: Record<string, TripSummary[]>;
 }) {
-  const router = useRouter();
-  const [signingOut, setSigningOut] = useState(false);
-
-  async function signOut() {
-    setSigningOut(true);
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
-  }
-
   const total = Object.values(grouped).reduce((count, list) => count + list.length, 0);
 
   return (
@@ -118,15 +104,6 @@ export default function TripList({
             );
           })
         )}
-
-        <div className="account-strip">
-          <p>
-            Signed in as {firstName}
-          </p>
-          <button className="link-btn" onClick={signOut} disabled={signingOut}>
-            {signingOut ? "Signing out…" : "Log out"}
-          </button>
-        </div>
       </div>
     </>
   );

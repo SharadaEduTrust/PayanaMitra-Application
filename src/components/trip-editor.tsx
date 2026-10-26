@@ -630,54 +630,14 @@ export default function TripEditor({
               </div>
 
               <label className="form-field">
-                Itinerary
+                Activity
                 <textarea
-                  rows={3}
+                  rows={4}
                   value={day.itineraryText}
                   onChange={(e) => setDay(dayIndex, "itineraryText", e.target.value)}
+                  placeholder="Describe the day's activities and highlights..."
                 />
               </label>
-
-              <div className="admin-subhead">
-                <span>Activities</span>
-                <button type="button" className="link-btn" onClick={() => addActivity(dayIndex)}>
-                  + Add activity
-                </button>
-              </div>
-
-              {day.activities.map((activity, activityIndex) => (
-                <div className="activity-row" key={activity.id ?? `new-activity-${activityIndex}`}>
-                  <input
-                    placeholder="Start"
-                    type="time"
-                    value={activity.startTime ?? ""}
-                    onChange={(e) => setActivity(dayIndex, activityIndex, "startTime", e.target.value)}
-                  />
-                  <input
-                    placeholder="End"
-                    type="time"
-                    value={activity.endTime ?? ""}
-                    onChange={(e) => setActivity(dayIndex, activityIndex, "endTime", e.target.value)}
-                  />
-                  <input
-                    placeholder="Title"
-                    value={activity.title}
-                    onChange={(e) => setActivity(dayIndex, activityIndex, "title", e.target.value)}
-                  />
-                  <input
-                    placeholder="Description"
-                    value={activity.description ?? ""}
-                    onChange={(e) => setActivity(dayIndex, activityIndex, "description", e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="link-btn"
-                    onClick={() => removeActivity(dayIndex, activityIndex)}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
 
               <div className="day-actions">
                 <button type="button" className="btn btn-primary" onClick={() => saveDay(day)}>

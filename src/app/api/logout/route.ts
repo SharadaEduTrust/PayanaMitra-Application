@@ -10,5 +10,7 @@ import { logout } from '@/lib/server/auth'
 
 export async function POST() {
   await logout()
-  return NextResponse.json({ ok: true })
+  const response = NextResponse.json({ ok: true })
+  response.cookies.delete('payana_last_active')
+  return response
 }

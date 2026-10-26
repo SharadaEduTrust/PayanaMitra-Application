@@ -219,7 +219,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     const destination = getField(row, 'Destination', 'destination', 'place') || null
     const hotel_name = getField(row, 'Hotel Name', 'HotelName', 'hotel_name', 'hotel') || null
-    const itinerary_text = getField(row, 'Itinerary', 'itinerary', 'itinerary_text', 'Day Plan') || null
+    const itinerary_text = getField(row, 'Activity', 'activity', 'Itinerary', 'itinerary', 'itinerary_text', 'Day Plan') || null
 
     if (!dayData.has(dayNum)) {
       dayData.set(dayNum, {

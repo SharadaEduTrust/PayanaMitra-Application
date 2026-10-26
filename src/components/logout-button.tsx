@@ -25,6 +25,9 @@ export default function LogoutButton({
     if (loading) return;
     setLoading(true);
     try {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("payana_last_active");
+      }
       // 1. Clear server-side session cookies
       await fetch("/api/logout", { method: "POST" }).catch(() => null);
       // 2. Clear client-side Supabase state

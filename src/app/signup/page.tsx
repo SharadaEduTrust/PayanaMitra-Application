@@ -14,7 +14,7 @@ export default function SignupPage() {
           <h1>Tell us who is joining.</h1>
           <p>Your phone number identifies your bookings across every trail.</p>
         </div>
-        <small style={{ color: "#D4A373", fontSize: "11px" }}>© 2026 Payana Trails</small>
+        <small style={{ color: "#D4A373", fontSize: "11px" }}>© 2026 Payana Mitra</small>
       </section>
       <section className="auth-form-wrap">
         <div className="auth-card">

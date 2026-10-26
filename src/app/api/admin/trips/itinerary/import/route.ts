@@ -123,10 +123,10 @@ export async function GET() {
   if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })
 
   const lines = [
-    'Trail Id,Trail Name,Day,Destination,Itinerary,Hotel Name,Meal Plan,Activity Title,Activity Description,Start Time,End Time',
-    'HIHGOK01,Heritage Gems of Karnataka,1,Hampi,"• Arrive at Hospet / Hampi\\n• Check-in to hotel\\n• Sunset view at Hemakuta Hill",Heritage Resort Hampi,Breakfast & Dinner,Sunset Walk,Walk up to Hemakuta Hill for panoramic sunset view,16:30,18:30',
-    'HIHGOK01,Heritage Gems of Karnataka,2,Hampi,"• Virupaksha Temple & Bazaar\\n• Vijaya Vittala Temple & Stone Chariot\\n• Tungabhadra River coracle ride",Heritage Resort Hampi,Breakfast, Lunch & Dinner,Temple Tour,Guided exploration of Vijaya Vittala temple complex,08:30,12:00',
-    'HIHGOK01,Heritage Gems of Karnataka,3,Badami,"• Transfer to Badami\\n• Rock-cut Cave Temples\\n• Agastya Lake heritage circuit",The Badami Court,Breakfast & Dinner,Cave Temples Exploration,Guided walk through 6th-century cave temples,09:00,13:00',
+    'Trail Id,Trail Name,Day,Destination,Activity,Hotel Name,Meal Plan',
+    'HIHGOK01,Heritage Gems of Karnataka,1,Hampi,"• Arrive at Hospet / Hampi\\n• Check-in to hotel\\n• Sunset view at Hemakuta Hill",Heritage Resort Hampi,Breakfast & Dinner',
+    'HIHGOK01,Heritage Gems of Karnataka,2,Hampi,"• Virupaksha Temple & Bazaar\\n• Vijaya Vittala Temple & Stone Chariot\\n• Tungabhadra River coracle ride",Heritage Resort Hampi,"Breakfast, Lunch & Dinner"',
+    'HIHGOK01,Heritage Gems of Karnataka,3,Badami,"• Transfer to Badami\\n• Rock-cut Cave Temples\\n• Agastya Lake heritage circuit",The Badami Court,Breakfast & Dinner',
   ]
   return new NextResponse(lines.join('\n'), {
     status: 200,
@@ -275,7 +275,7 @@ export async function POST(req: NextRequest) {
 
     const destination = getField(row, 'Destination', 'destination', 'place') || null
     const hotel_name = getField(row, 'Hotel Name', 'HotelName', 'hotel_name', 'hotel') || null
-    const itinerary_text = getField(row, 'Itinerary', 'itinerary', 'itinerary_text', 'Day Plan') || null
+    const itinerary_text = getField(row, 'Activity', 'activity', 'Itinerary', 'itinerary', 'itinerary_text', 'Day Plan') || null
 
     const key = `${resolvedTrip.id}:${dayNum}`
     if (!daysByKey.has(key)) {

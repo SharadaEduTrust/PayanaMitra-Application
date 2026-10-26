@@ -69,11 +69,8 @@ const blank = {
   phone: "",
   email: "",
   role: "traveller" as UserRow["role"],
-<<<<<<< HEAD
-=======
   leaderId: "",
   referralName: "",
->>>>>>> origin/fixing-bugs-and-features
   location: "",
   remarks: "",
 };
@@ -119,11 +116,8 @@ export default function UsersAdmin({
     lastName: "",
     email: "",
     role: "traveller" as UserRow["role"],
-<<<<<<< HEAD
-=======
     leaderId: "",
     referralName: "",
->>>>>>> origin/fixing-bugs-and-features
     location: "",
     remarks: "",
     dob: "",
@@ -166,14 +160,10 @@ export default function UsersAdmin({
         `${row.firstName} ${row.lastName}`.toLowerCase().includes(term) ||
         row.phone.includes(term) ||
         (row.email ?? "").toLowerCase().includes(term) ||
-<<<<<<< HEAD
-        (row.leaderName ?? "").toLowerCase().includes(term) ||
-        (row.trailLeaders ?? []).some((tl) => tl.trailName.toLowerCase().includes(term));
-=======
         (row.location ?? "").toLowerCase().includes(term) ||
         (row.leaderName ?? "").toLowerCase().includes(term) ||
-        (row.referralName ?? "").toLowerCase().includes(term);
->>>>>>> origin/fixing-bugs-and-features
+        (row.referralName ?? "").toLowerCase().includes(term) ||
+        (row.trailLeaders ?? []).some((tl) => tl.trailName.toLowerCase().includes(term));
 
       const matchesRole = roleFilter === "all" || row.role === roleFilter;
       const matchesStatus =
@@ -402,11 +392,8 @@ export default function UsersAdmin({
       lastName: user.lastName,
       email: user.email ?? "",
       role: user.role,
-<<<<<<< HEAD
-=======
       leaderId: user.leaderId ?? "",
       referralName: user.referralName ?? "",
->>>>>>> origin/fixing-bugs-and-features
       location: user.location ?? "",
       remarks: user.remarks ?? "",
       dob: user.dob ?? "",
@@ -444,11 +431,8 @@ export default function UsersAdmin({
           first_name: editForm.firstName.trim(),
           last_name: editForm.lastName.trim(),
           role: editForm.role,
-<<<<<<< HEAD
-=======
           leader_id: editForm.leaderId || null,
           referral_name: editForm.referralName.trim() || null,
->>>>>>> origin/fixing-bugs-and-features
           email: editForm.email.trim() || null,
           location: editForm.location.trim() || null,
           remarks: editForm.remarks.trim() || null,
@@ -484,6 +468,11 @@ export default function UsersAdmin({
         return;
       }
 
+      const assignedLeader = leaders.find((l) => l.id === editForm.leaderId);
+      const assignedLeaderName = assignedLeader
+        ? `${assignedLeader.first_name} ${assignedLeader.last_name}`.trim()
+        : null;
+
       setRows((current) =>
         current.map((r) =>
           r.id === editingUser.id
@@ -493,12 +482,9 @@ export default function UsersAdmin({
                 lastName: editForm.lastName.trim(),
                 email: editForm.email.trim() || null,
                 role: editForm.role,
-<<<<<<< HEAD
-=======
                 leaderId: editForm.leaderId || null,
                 leaderName: assignedLeaderName,
                 referralName: editForm.referralName.trim() || null,
->>>>>>> origin/fixing-bugs-and-features
                 location: editForm.location.trim() || null,
                 remarks: editForm.remarks.trim() || null,
                 dob: editForm.dob || null,
@@ -550,11 +536,8 @@ export default function UsersAdmin({
           first_name: draft.firstName.trim(),
           last_name: draft.lastName.trim(),
           role: draft.role,
-<<<<<<< HEAD
-=======
           leader_id: draft.leaderId || null,
           referral_name: draft.referralName.trim() || null,
->>>>>>> origin/fixing-bugs-and-features
           email: draft.email.trim() || null,
           location: draft.location.trim() || null,
           remarks: draft.remarks.trim() || null,
@@ -895,7 +878,6 @@ export default function UsersAdmin({
                       <strong>{row.lastName}</strong>
                     </td>
                     <td style={{ textTransform: "capitalize" }}>{row.role === "traveller" ? "Guest" : row.role === "leader" ? "Trail leader" : "Admin"}</td>
-<<<<<<< HEAD
                     <td>
                       <div>{row.leaderName || "—"}</div>
                       {row.trailLeaders && row.trailLeaders.length > 0 && (
@@ -912,10 +894,7 @@ export default function UsersAdmin({
                         </div>
                       )}
                     </td>
-=======
-                    <td>{row.leaderName || "—"}</td>
                     <td>{row.referralName || "—"}</td>
->>>>>>> origin/fixing-bugs-and-features
                     <td>{row.location || "—"}</td>
                     <td className="small">{row.email || "—"}</td>
                     <td>
@@ -1020,8 +999,6 @@ export default function UsersAdmin({
 
             <div className="field-row">
               <label className="form-field">
-<<<<<<< HEAD
-=======
                 Referral&apos;s Name
                 <input
                   value={editForm.referralName}
@@ -1031,11 +1008,6 @@ export default function UsersAdmin({
                 />
               </label>
               <label className="form-field">
-                Location
-                <input value={editForm.location} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} />
-              </label>
-              <label className="form-field">
->>>>>>> origin/fixing-bugs-and-features
                 Date of Birth
                 <input type="date" value={editForm.dob} onChange={(e) => setEditForm({ ...editForm, dob: e.target.value })} />
               </label>
@@ -1471,12 +1443,6 @@ export default function UsersAdmin({
             </label>
           </div>
 
-<<<<<<< HEAD
-          <label className="form-field">
-            Location
-            <input value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} />
-          </label>
-=======
           <div className="field-row">
             <label className="form-field">
               Leader Name (Optional)
@@ -1503,7 +1469,6 @@ export default function UsersAdmin({
               <input value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} />
             </label>
           </div>
->>>>>>> origin/fixing-bugs-and-features
 
           <label className="form-field">
             Remarks

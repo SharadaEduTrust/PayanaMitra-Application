@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, type ChangeEvent, type FormEvent } from "react";
+import Link from "next/link";
 import type { Profile } from "@/lib/types";
 
 export default function TripMembers({ tripId }: { tripId: string }) {
@@ -11,12 +12,35 @@ export default function TripMembers({ tripId }: { tripId: string }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // CSV Import State
+  const [showCsv, setShowCsv] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvLoading, setCsvLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  async function reloadMembers() {
+    try {
+      const res = await fetch(`/api/admin/trips/${tripId}/members`);
+      const json = await res.json().catch(() => ({ data: [] }));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const enrolled = (json.data ?? []).map((m: any) => ({
+        userId: m.profiles?.id ?? "",
+        name: m.profiles ? `${m.profiles.first_name} ${m.profiles.last_name}` : "Unknown",
+        phone: m.profiles?.phone ?? "",
+      })).filter((m: { userId: string }) => Boolean(m.userId));
+
+      setMembers(enrolled);
+    } catch {
+      // ignore
+    }
+  }
+
   useEffect(() => {
     let ignore = false;
     async function load() {
       try {
         const [usersRes, membersRes] = await Promise.all([
-          fetch("/api/admin/users?role=traveller&limit=100"),
+          fetch("/api/admin/users?role=traveller&limit=200"),
           fetch(`/api/admin/trips/${tripId}/members`),
         ]);
 
@@ -39,7 +63,8 @@ export default function TripMembers({ tripId }: { tripId: string }) {
 
         setCandidates(people);
 
-        const enrolled = (membersJson.data ?? []).map((m: { profiles?: { id: string; first_name: string; last_name: string; phone: string } }) => ({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const enrolled = (membersJson.data ?? []).map((m: any) => ({
           userId: m.profiles?.id ?? "",
           name: m.profiles ? `${m.profiles.first_name} ${m.profiles.last_name}` : "Unknown",
           phone: m.profiles?.phone ?? "",
@@ -117,18 +142,132 @@ export default function TripMembers({ tripId }: { tripId: string }) {
     }
   }
 
+  async function handleCsvUpload(e: FormEvent) {
+    e.preventDefault();
+    if (!csvFile) return;
+
+    setCsvLoading(true);
+    setError("");
+    setStatus("");
+
+    try {
+      const fd = new FormData();
+      fd.append("file", csvFile);
+      fd.append("trip_id", tripId);
+
+      const res = await fetch("/api/admin/trips/mapping/import", {
+        method: "POST",
+        body: fd,
+      });
+
+      const json = await res.json().catch(() => null);
+      setCsvLoading(false);
+
+      if (!res.ok) {
+        setError(json?.error ?? "Failed to import guests CSV.");
+        return;
+      }
+
+      setStatus(
+        `Mapping complete: ${json.created} guest(s) mapped, ${json.skipped} skipped, ${json.errorCount} error(s).`
+      );
+      setCsvFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setShowCsv(false);
+      await reloadMembers();
+    } catch {
+      setCsvLoading(false);
+      setError("Network error while uploading guests CSV.");
+    }
+  }
+
   return (
     <section className="admin-card">
-      <h2 className="serif">Guests</h2>
-      <p className="admin-hint">
-        Only enrolled guests can see a published trail. Adding someone here is what grants them access.
-      </p>
+      <div className="admin-card-head" style={{ flexWrap: "wrap", gap: "10px", alignItems: "flex-start", marginBottom: "12px" }}>
+        <div>
+          <h2 className="serif" style={{ margin: 0 }}>Enrolled Guests ({members.length})</h2>
+          <p className="admin-hint" style={{ margin: "4px 0 0" }}>
+            Only enrolled guests can access details of this trail on their dashboard.
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setShowCsv(!showCsv)}
+          >
+            {showCsv ? "Hide CSV Import" : "Import Guests (CSV)"}
+          </button>
+          <Link href="/admin/import?tab=mapping" className="link-btn" style={{ fontSize: "13px" }}>
+            Bulk Mapping Utility →
+          </Link>
+        </div>
+      </div>
+
+      {showCsv && (
+        <div
+          style={{
+            padding: "16px",
+            background: "var(--paper, rgba(255, 255, 255, 0.02))",
+            border: "1px dashed var(--line)",
+            borderRadius: "8px",
+            marginBottom: "18px",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
+            <strong>Map Guests to This Trail via CSV</strong>
+            <a
+              href="/api/admin/trips/mapping/import"
+              download="trail_guest_mapping_template.csv"
+              className="link-btn"
+              style={{ fontSize: "13px" }}
+            >
+              Download CSV Template
+            </a>
+          </div>
+          <p className="admin-hint" style={{ fontSize: "13px", margin: "0 0 12px" }}>
+            Upload a UTF-8 CSV with <code>Mobile Number of the Guest</code>. All valid guest mobile numbers in the file will be mapped directly to this trail.
+          </p>
+          <form onSubmit={handleCsvUpload} style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                setCsvFile(e.target.files?.[0] || null);
+                setError("");
+              }}
+              disabled={csvLoading}
+              style={{ fontSize: "14px" }}
+            />
+            <button
+              type="submit"
+              className="btn btn-primary btn-sm"
+              disabled={csvLoading || !csvFile}
+            >
+              {csvLoading ? "Mapping…" : "Upload & Enrol"}
+            </button>
+            {csvFile && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  setCsvFile(null);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+              >
+                Cancel
+              </button>
+            )}
+          </form>
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: "12px", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "18px" }}>
         <label className="form-field" style={{ flex: "1 1 280px", maxWidth: "420px", margin: 0 }}>
-          Add a guest
+          Add a guest manually
           <select value={selected} onChange={(event) => setSelected(event.target.value)}>
-            <option value="">Select a guest</option>
+            <option value="">Select a registered guest</option>
             {candidates
               .filter((candidate) => !members.some((member) => member.userId === candidate.id))
               .map((candidate) => (
@@ -176,8 +315,8 @@ export default function TripMembers({ tripId }: { tripId: string }) {
         </table>
       )}
 
-      {error && <p className="form-error" role="alert">{error}</p>}
-      {status && <p className="form-notice" role="status">{status}</p>}
+      {error && <p className="form-error" role="alert" style={{ marginTop: "12px" }}>{error}</p>}
+      {status && <p className="form-notice" role="status" style={{ marginTop: "12px" }}>{status}</p>}
     </section>
   );
 }

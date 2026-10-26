@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import AssignedGuestsView from "@/components/assigned-guests-view";
 
 export const dynamic = "force-dynamic";
 
@@ -79,11 +80,8 @@ export default async function LeaderGuestsPage() {
 
       {error ? (
         <p className="form-error">Could not load assigned guests: {error.message}</p>
-      ) : !guests || guests.length === 0 ? (
-        <section className="panel">
-          <p className="panel-note">No guests are currently assigned to you.</p>
-        </section>
       ) : (
+<<<<<<< HEAD
         <div style={{ display: "grid", gap: "20px" }}>
           {guests.map((guest: {
             id: string;
@@ -189,6 +187,9 @@ export default async function LeaderGuestsPage() {
             );
           })}
         </div>
+=======
+        <AssignedGuestsView initialGuests={guests ?? []} />
+>>>>>>> origin/fixing-bugs-and-features
       )}
     </div>
   );

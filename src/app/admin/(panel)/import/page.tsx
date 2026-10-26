@@ -1,4 +1,5 @@
 import { requireProfile } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import CsvImportAdmin from "@/components/csv-import-admin";
 
 export const dynamic = "force-dynamic";
@@ -15,18 +16,28 @@ export default async function AdminImportPage({
       ? "trails"
       : params.tab === "details"
       ? "details"
+      : params.tab === "mapping" || params.tab === "members"
+      ? "mapping"
+      : params.tab === "itinerary"
+      ? "itinerary"
       : "users";
+
+  const admin = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: trips } = await (admin.from("trips") as any)
+    .select("id, trip_code, name")
+    .order("trip_code", { ascending: true });
 
   return (
     <>
       <header className="topbar">
         <div>
           <h1>CSV Import Utility</h1>
-          <small>Bulk upload Guest accounts and Trails data from spreadsheets.</small>
+          <small>Bulk upload Guest accounts, Trails, Itineraries, and Guest Mappings from spreadsheets.</small>
         </div>
       </header>
       <div className="admin-body">
-        <CsvImportAdmin initialTab={initialTab} />
+        <CsvImportAdmin initialTab={initialTab} trips={trips ?? []} />
       </div>
     </>
   );

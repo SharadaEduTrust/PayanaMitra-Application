@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
   const admin = createAdminClient()
 
   // Verify user role: survey is only available to guests (travellers) and not admins
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: profile } = await (admin.from('profiles') as any)
     .select('role')
     .eq('id', user.id)

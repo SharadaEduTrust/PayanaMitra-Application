@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { DOCUMENT_TYPES, formatDocType } from "@/lib/documents";
 
@@ -25,6 +25,10 @@ export default function SavedDocumentsList({
 }) {
   const router = useRouter();
   const [docs, setDocs] = useState<SavedDoc[]>(initialDocs);
+
+  useEffect(() => {
+    setDocs(initialDocs);
+  }, [initialDocs]);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
 

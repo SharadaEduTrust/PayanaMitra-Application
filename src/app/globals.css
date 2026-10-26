@@ -1157,9 +1157,9 @@ h3 {
   margin: 0 0 8px;
 }
 .admin-hint {
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.6;
+  color: #334155;
+  font-size: 14.5px;
+  line-height: 1.65;
   margin: 0 0 18px;
 }
 .admin-card-head {
@@ -1188,17 +1188,19 @@ h3 {
 .admin-table th {
   text-align: left;
   font-size: 12px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--muted);
-  padding: 0 12px 12px;
-  border-bottom: 1px solid var(--line);
-  font-weight: 600;
+  color: #0f172a;
+  padding: 12px 14px;
+  border-bottom: 2px solid var(--line);
+  font-weight: 700;
+  background: #f8fafc;
 }
 .admin-table td {
   padding: 14px 12px;
   border-bottom: 1px solid #efe4d0;
   font-size: 14px;
+  color: #1e293b;
 }
 .admin-table tr:last-child td {
   border-bottom: 0;
@@ -1216,6 +1218,7 @@ h3 {
   padding: 4px 10px;
   border-radius: 999px;
   font-weight: 600;
+  display: inline-block;
 }
 .pill.on {
   background: var(--soft);
@@ -1224,6 +1227,18 @@ h3 {
 .pill.off {
   background: #f2ded3;
   color: #8a3311;
+}
+.pill.mandatory {
+  background: #dcfce7;
+  color: #14532d;
+  font-weight: 700;
+  border: 1px solid #86efac;
+}
+.pill.optional {
+  background: #f1f5f9;
+  color: #475569;
+  font-weight: 600;
+  border: 1px solid #cbd5e1;
 }
 .link-btn {
   background: none;

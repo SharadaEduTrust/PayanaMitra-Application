@@ -461,7 +461,14 @@ export default function TripEditor({
         <div className="field-row">
           <label className="form-field">
             Trail Id
-            <input required value={form.tripCode} onChange={(e) => set("tripCode", e.target.value)} placeholder="003 or PM-2026-HAM-01" />
+            <input
+              required
+              value={form.tripCode}
+              onChange={(e) => set("tripCode", e.target.value.toUpperCase())}
+              placeholder="e.g. HIHGOK01 (8-char alphanumeric)"
+              maxLength={8}
+              style={{ textTransform: "uppercase" }}
+            />
           </label>
           <label className="form-field">
             Trail Name

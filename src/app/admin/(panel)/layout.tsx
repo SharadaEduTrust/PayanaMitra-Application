@@ -10,13 +10,16 @@ import type { Notification, Profile } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPanelLayout({ children }: { children: React.ReactNode }) {
-  const profile = await requireProfile(["admin"]);
-  const supabase = await createClient();
-
-  const { count } = await supabase
-    .from("notifications")
-    .select("id", { count: "exact", head: true })
-    .eq("is_read", false);
+  const [profile, { count }] = await Promise.all([
+    requireProfile(["admin"]),
+    (async () => {
+      const supabase = await createClient();
+      return supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("is_read", false);
+    })(),
+  ]);
 
   return (
     <div className="admin">

@@ -26,6 +26,7 @@ export default function DashboardNav({ role }: { role: string }) {
           key={link.href}
           className={`side-link ${isActive(link.href) ? "active" : ""}`}
           href={link.href}
+          prefetch={true}
         >
           {link.label}
         </Link>
@@ -34,7 +35,7 @@ export default function DashboardNav({ role }: { role: string }) {
       {(role === "leader" || role === "admin") && (
         <>
           <div className="side-label">Trail Lead</div>
-          <Link className={`side-link ${isActive("/dashboard/guests") ? "active" : ""}`} href="/dashboard/guests">
+          <Link className={`side-link ${isActive("/dashboard/guests") ? "active" : ""}`} href="/dashboard/guests" prefetch={true}>
             Assigned Guests
           </Link>
         </>
@@ -43,7 +44,7 @@ export default function DashboardNav({ role }: { role: string }) {
       {role === "admin" && (
         <>
           <div className="side-label">Administration</div>
-          <Link className={`side-link ${isActive("/admin") ? "active" : ""}`} href="/admin">
+          <Link className={`side-link ${isActive("/admin") ? "active" : ""}`} href="/admin" prefetch={true}>
             Admin panel
           </Link>
         </>

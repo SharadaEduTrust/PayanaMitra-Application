@@ -11,20 +11,24 @@ const ALGORITHM = 'AES-GCM'
 const IV_LENGTH = 12  // bytes — GCM standard
 const TAG_LENGTH = 128 // bits
 
-function getKey(): Promise<CryptoKey> {
+let cachedKey: CryptoKey | null = null
+
+async function getKey(): Promise<CryptoKey> {
+  if (cachedKey) return cachedKey
   const raw = process.env.ENCRYPTION_KEY
   if (!raw) throw new Error('ENCRYPTION_KEY is not set')
   const bytes = Buffer.from(raw, 'base64')
   if (bytes.length !== 32) {
     throw new Error('ENCRYPTION_KEY must be exactly 32 bytes (base64-encoded)')
   }
-  return crypto.subtle.importKey(
+  cachedKey = await crypto.subtle.importKey(
     'raw',
     bytes,
     { name: ALGORITHM },
     false,
     ['encrypt', 'decrypt'],
   )
+  return cachedKey
 }
 
 export interface EncryptedValue {

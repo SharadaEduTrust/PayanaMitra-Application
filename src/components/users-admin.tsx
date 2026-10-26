@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type FormEvent, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
-import { DOCUMENT_TYPES, formatDocType } from "@/lib/documents";
+import { formatDocType } from "@/lib/documents";
 
 type AdminDoc = {
   id: string;
@@ -271,17 +271,8 @@ export default function UsersAdmin({
   const [docsUser, setDocsUser] = useState<UserRow | null>(null);
   const [guestDocs, setGuestDocs] = useState<AdminDoc[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
-  const [docUploadLoading, setDocUploadLoading] = useState(false);
   const [docUploadError, setDocUploadError] = useState("");
   const [docUploadStatus, setDocUploadStatus] = useState("");
-
-  // Document upload form state
-  const [newDocType, setNewDocType] = useState("aadhar");
-  const [newDocNumber, setNewDocNumber] = useState("");
-  const [newIssuedDate, setNewIssuedDate] = useState("");
-  const [newExpiryDate, setNewExpiryDate] = useState("");
-  const [newIssuedPlace, setNewIssuedPlace] = useState("");
-  const [newDocFile, setNewDocFile] = useState<File | null>(null);
 
   async function openDocsModal(user: UserRow) {
     setDocsUser(user);
@@ -289,12 +280,6 @@ export default function UsersAdmin({
     setDocsLoading(true);
     setDocUploadError("");
     setDocUploadStatus("");
-    setNewDocType("aadhar");
-    setNewDocNumber("");
-    setNewIssuedDate("");
-    setNewExpiryDate("");
-    setNewIssuedPlace("");
-    setNewDocFile(null);
 
     try {
       const res = await fetch(`/api/documents?user_id=${user.id}`);
@@ -306,65 +291,6 @@ export default function UsersAdmin({
       setDocUploadError("Failed to fetch documents for this guest.");
     } finally {
       setDocsLoading(false);
-    }
-  }
-
-  async function handleAdminUploadDoc(e: FormEvent) {
-    e.preventDefault();
-    if (!docsUser) return;
-    if (!newDocNumber.trim()) {
-      setDocUploadError("Document number is required.");
-      return;
-    }
-    setDocUploadError("");
-    setDocUploadStatus("");
-    setDocUploadLoading(true);
-
-    try {
-      const formData = new FormData();
-      formData.set("user_id", docsUser.id);
-      formData.set("doc_type", newDocType);
-      formData.set("doc_number", newDocNumber.trim());
-      if (newIssuedDate) formData.set("issued_date", newIssuedDate);
-      if (newExpiryDate) formData.set("expiry_date", newExpiryDate);
-      if (newIssuedPlace.trim()) {
-        formData.set("issued_country", newIssuedPlace.trim());
-        formData.set("issued_place", newIssuedPlace.trim());
-      }
-      if (newDocFile) {
-        formData.set("file", newDocFile);
-      }
-
-      const res = await fetch("/api/documents", {
-        method: "POST",
-        body: formData,
-      });
-
-      const json = await res.json().catch(() => null);
-      setDocUploadLoading(false);
-
-      if (!res.ok) {
-        setDocUploadError(json?.error ?? "Failed to upload document.");
-        return;
-      }
-
-      setDocUploadStatus("Document uploaded successfully.");
-      setNewDocNumber("");
-      setNewIssuedDate("");
-      setNewExpiryDate("");
-      setNewIssuedPlace("");
-      setNewDocFile(null);
-
-      // Refresh documents list
-      const refreshRes = await fetch(`/api/documents?user_id=${docsUser.id}`);
-      const refreshJson = await refreshRes.json().catch(() => ({ data: [] }));
-      if (refreshRes.ok && refreshJson.data) {
-        setGuestDocs(refreshJson.data);
-      }
-      router.refresh();
-    } catch {
-      setDocUploadLoading(false);
-      setDocUploadError("Network error while uploading document.");
     }
   }
 
@@ -1333,83 +1259,10 @@ export default function UsersAdmin({
               )}
             </div>
 
-            {/* Upload Document Form */}
-            <div style={{ borderTop: "1px solid var(--color-border, rgba(255,255,255,0.1))", paddingTop: "18px" }}>
-              <h3 className="serif" style={{ fontSize: "16px", marginBottom: "6px" }}>
-                Upload Document for {docsUser.firstName}
-              </h3>
-              <p className="panel-note" style={{ marginBottom: "14px" }}>
-                Upload verified identity or travel documents on behalf of this guest.
-              </p>
-
-              <form onSubmit={handleAdminUploadDoc}>
-                <label className="form-field">
-                  Document Type <span className="req">*</span>
-                  <select value={newDocType} onChange={(e) => setNewDocType(e.target.value)}>
-                    {DOCUMENT_TYPES.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="form-field">
-                  Document Number <span className="req">*</span>
-                  <input
-                    required
-                    minLength={4}
-                    value={newDocNumber}
-                    onChange={(e) => setNewDocNumber(e.target.value)}
-                    placeholder="Enter document number (e.g. AAADK9754A)"
-                  />
-                </label>
-
-                <div className="field-row" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))" }}>
-                  <label className="form-field">
-                    Issued Date
-                    <input
-                      type="date"
-                      value={newIssuedDate}
-                      onChange={(e) => setNewIssuedDate(e.target.value)}
-                    />
-                  </label>
-                  <label className="form-field">
-                    Expiry Date
-                    <input
-                      type="date"
-                      value={newExpiryDate}
-                      onChange={(e) => setNewExpiryDate(e.target.value)}
-                    />
-                  </label>
-                  <label className="form-field">
-                    Issued at (Place)
-                    <input
-                      value={newIssuedPlace}
-                      placeholder="e.g. Bangalore"
-                      onChange={(e) => setNewIssuedPlace(e.target.value)}
-                    />
-                  </label>
-                </div>
-
-                <label className="form-field">
-                  Attachment (PDF or Image, Max 10MB)
-                  <input
-                    type="file"
-                    accept=".pdf,image/jpeg,image/png,image/webp"
-                    onChange={(e) => setNewDocFile(e.target.files?.[0] ?? null)}
-                  />
-                </label>
-
-                <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
-                  <button className="btn btn-primary" type="submit" disabled={docUploadLoading}>
-                    {docUploadLoading ? "Uploading & Encrypting…" : "Upload Document"}
-                  </button>
-                  <button className="btn btn-secondary" type="button" onClick={() => setDocsUser(null)}>
-                    Done
-                  </button>
-                </div>
-              </form>
+            <div style={{ display: "flex", justifyContent: "flex-end", borderTop: "1px solid var(--color-border, rgba(255,255,255,0.1))", paddingTop: "14px" }}>
+              <button className="btn btn-secondary" type="button" onClick={() => setDocsUser(null)}>
+                Close
+              </button>
             </div>
           </div>
         </div>

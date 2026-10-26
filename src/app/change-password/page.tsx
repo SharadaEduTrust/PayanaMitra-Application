@@ -33,7 +33,7 @@ export default async function ChangePasswordPage({ searchParams }: Props) {
             Default logins use the last 4 digits of your mobile number. Because other guests or fellow travellers may know your phone number, creating a unique, private password ensures sensitive documents like your PAN, Aadhar, and Passport remain strictly confidential.
           </p>
         </div>
-        <small style={{ color: "#D4A373", fontSize: "11px" }}>© 2026 Payana Trails</small>
+        <small style={{ color: "#D4A373", fontSize: "11px" }}>© 2026 Payana Mitra</small>
       </section>
       <section className="auth-form-wrap">
         <div className="auth-card">

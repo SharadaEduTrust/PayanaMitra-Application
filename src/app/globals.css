@@ -93,6 +93,9 @@ button {
   border-radius: 3px;
 }
 .brand-badge { display:block; border-radius:50%; object-fit:contain; flex:none; }
+.brand-emblem-picture { display:inline-flex; align-items:center; line-height:0; }
+.brand-emblem { display:block; object-fit:contain; width:auto; max-width:100%; transition:transform 0.15s ease; }
+.brand:hover .brand-emblem { transform:scale(1.02); }
 
 .brand-badge-sm { padding:3px; background:var(--white); border-radius:50%; }
 .auth-emblem {

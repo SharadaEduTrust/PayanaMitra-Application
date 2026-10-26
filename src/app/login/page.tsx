@@ -16,7 +16,7 @@ export default function LoginPage() {
           <h1>Leave room for the places that stay with you.</h1>
           <p>Sign in with your registered phone number to access your account.</p>
         </div>
-        <small style={{ color: "#D4A373", fontSize: "11px" }}>© 2026 Payana Trails</small>
+        <small style={{ color: "#D4A373", fontSize: "11px" }}>© 2026 Payana Mitra</small>
       </section>
       <section className="auth-form-wrap">
         <div className="auth-card">

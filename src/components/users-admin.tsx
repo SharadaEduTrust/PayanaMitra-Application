@@ -680,60 +680,103 @@ export default function UsersAdmin({
     }
   }
 
+  const stats = useMemo(() => {
+    const total = rows.length;
+    const activeGuests = rows.filter((r) => r.role === "traveller" && r.isActive).length;
+    const leadersCount = rows.filter((r) => r.role === "leader").length;
+    const adminsCount = rows.filter((r) => r.role === "admin").length;
+    return [
+      { label: "Total Accounts", value: total, sub: "Registered users & staff", role: "all" },
+      { label: "Active Guests", value: activeGuests, sub: "Ready for upcoming trails", role: "traveller" },
+      { label: "Trail Leaders", value: leadersCount, sub: "Assigned & active guides", role: "leader" },
+      { label: "Administrators", value: adminsCount, sub: "Full management access", role: "admin" },
+    ];
+  }, [rows]);
+
   return (
     <>
+      {/* KPI Stats Overview */}
+      <div className="admin-stats" style={{ marginBottom: "22px" }}>
+        {stats.map((s) => {
+          const isSelected = roleFilter === s.role;
+          return (
+            <button
+              key={s.label}
+              type="button"
+              className="stat"
+              onClick={() => {
+                setRoleFilter(s.role);
+                setPage(1);
+              }}
+              style={{
+                textAlign: "left",
+                width: "100%",
+                background: isSelected ? "var(--soft, #f4f8f5)" : "var(--white, #ffffff)",
+                borderColor: isSelected ? "var(--forest, #1e3a2b)" : "var(--line, #e2e8f0)",
+              }}
+              title={`Filter by ${s.label}`}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>{s.label}</span>
+                {isSelected && (
+                  <span style={{ fontSize: "10px", background: "var(--forest)", color: "#fff", padding: "1px 6px", borderRadius: "8px", fontWeight: 700 }}>
+                    Active Filter
+                  </span>
+                )}
+              </div>
+              <strong>{s.value}</strong>
+              <small style={{ fontSize: "11px", color: "#64748b" }}>{s.sub}</small>
+            </button>
+          );
+        })}
+      </div>
+
       <section className="admin-card">
-        <div className="admin-card-head" style={{ flexWrap: "wrap", gap: "12px" }}>
-          <h2 className="serif">Accounts</h2>
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-            {/* Search Input with Magnifying Glass */}
-            <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+        <div className="admin-card-head" style={{ flexWrap: "wrap", gap: "16px", alignItems: "center" }}>
+          <div>
+            <h2 className="serif" style={{ margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
+              Accounts
+              <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--muted)", background: "#f1f5f9", padding: "2px 9px", borderRadius: "12px" }}>
+                {filtered.length} {filtered.length === 1 ? "account" : "accounts"}
+              </span>
+            </h2>
+            <p className="admin-hint" style={{ margin: "4px 0 0", fontSize: "13.5px", color: "#64748b" }}>
+              Manage guest accounts, assign trail leaders, inspect travel credentials, and reset access.
+            </p>
+          </div>
+
+          <div className="admin-toolbar">
+            {/* Search Input Box */}
+            <div className="admin-search-box">
               <svg
-                width="16"
-                height="16"
+                className="admin-search-icon"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                style={{
-                  position: "absolute",
-                  left: "12px",
-                  color: "var(--color-muted, #94a3b8)",
-                  pointerEvents: "none",
-                }}
               >
                 <circle cx="11" cy="11" r="8" />
                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
               <input
-                className="admin-search"
+                className="admin-control admin-control-input"
                 placeholder="Search name, phone, email, city…"
                 value={query}
-                style={{ paddingLeft: "36px", paddingRight: query ? "30px" : "12px", minWidth: "240px" }}
                 onChange={(event) => {
                   setQuery(event.target.value);
                   setPage(1);
                 }}
+                aria-label="Search accounts"
               />
               {query && (
                 <button
                   type="button"
+                  className="admin-search-clear"
                   onClick={() => {
                     setQuery("");
                     setPage(1);
-                  }}
-                  style={{
-                    position: "absolute",
-                    right: "8px",
-                    background: "none",
-                    border: "none",
-                    color: "var(--color-muted, #94a3b8)",
-                    cursor: "pointer",
-                    padding: "2px 6px",
-                    fontSize: "14px",
-                    lineHeight: 1,
                   }}
                   title="Clear search"
                 >
@@ -742,81 +785,100 @@ export default function UsersAdmin({
               )}
             </div>
 
-            {/* Sort Key Controls */}
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <span className="muted small" style={{ whiteSpace: "nowrap" }}>Sort by:</span>
+            {/* Role Filter */}
+            <select
+              className="admin-control admin-control-select"
+              value={roleFilter}
+              onChange={(e) => {
+                setRoleFilter(e.target.value);
+                setPage(1);
+              }}
+              aria-label="Filter by role"
+            >
+              <option value="all">All roles</option>
+              <option value="traveller">Guests</option>
+              <option value="leader">Trail leaders</option>
+              <option value="admin">Administrators</option>
+            </select>
+
+            {/* Status Filter */}
+            <select
+              className="admin-control admin-control-select"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(1);
+              }}
+              aria-label="Filter by status"
+            >
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="suspended">Suspended</option>
+            </select>
+
+            {/* Sort Controls */}
+            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
               <select
+                className="admin-control admin-control-select"
                 value={sortField}
                 onChange={(e) => {
                   setSortField(e.target.value as SortField);
                   setPage(1);
                 }}
-                style={{ padding: "6px 12px", borderRadius: "6px" }}
                 aria-label="Sort by field"
               >
-                <option value="name">Names</option>
-                <option value="role">Role</option>
-                <option value="leaderName">Leader Name</option>
-                <option value="referralName">Referral</option>
-                <option value="location">Location</option>
-                <option value="email">email id</option>
-                <option value="isActive">Active / Inactive</option>
-                <option value="lastActiveAt">Date Last Active</option>
-                <option value="phone">Mobile Number</option>
+                <option value="name">Sort: Name</option>
+                <option value="role">Sort: Role</option>
+                <option value="leaderName">Sort: Leader</option>
+                <option value="referralName">Sort: Referral</option>
+                <option value="location">Sort: Location</option>
+                <option value="email">Sort: Email</option>
+                <option value="isActive">Sort: Status</option>
+                <option value="lastActiveAt">Sort: Last Active</option>
+                <option value="phone">Sort: Mobile</option>
               </select>
               <button
                 type="button"
-                className="btn btn-secondary"
+                className="admin-control admin-control-btn admin-control-btn-secondary"
                 onClick={() => setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))}
-                style={{ padding: "6px 10px", fontSize: "13px", display: "inline-flex", alignItems: "center", gap: "4px" }}
                 title={`Sort ${sortOrder === "asc" ? "Ascending" : "Descending"} (Click to flip)`}
               >
                 {sortOrder === "asc" ? "▲ Asc" : "▼ Desc"}
               </button>
             </div>
 
-            <select
-              value={roleFilter}
-              onChange={(e) => {
-                setRoleFilter(e.target.value);
-                setPage(1);
-              }}
-              style={{ padding: "6px 12px", borderRadius: "6px" }}
-            >
-              <option value="all">All roles</option>
-              <option value="traveller">Guest</option>
-              <option value="leader">Trail leader</option>
-              <option value="admin">Administrator</option>
-            </select>
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setPage(1);
-              }}
-              style={{ padding: "6px 12px", borderRadius: "6px" }}
-            >
-              <option value="all">All statuses</option>
-              <option value="active">Active</option>
-              <option value="suspended">Suspended</option>
-            </select>
+            {/* Import CSV Button */}
             <button
               type="button"
-              className="btn btn-secondary"
+              className="admin-control admin-control-btn admin-control-btn-secondary"
               onClick={() => setShowImport(!showImport)}
             >
-              {showImport ? "Close CSV Import" : "Import Guests (CSV)"}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              {showImport ? "Close Import" : "Import Guests (CSV)"}
             </button>
+
+            {/* Quick jump to New Account */}
+            <a
+              href="#new-account"
+              className="admin-control admin-control-btn admin-control-btn-primary"
+              style={{ textDecoration: "none" }}
+            >
+              + New Account
+            </a>
           </div>
         </div>
 
         {showImport && (
-          <div style={{ margin: "16px 0", padding: "18px", background: "var(--color-surface, #1e293b)", borderRadius: "8px", border: "1px dashed var(--color-border, #334155)" }}>
+          <div style={{ margin: "16px 0", padding: "20px", background: "#f8fafc", borderRadius: "10px", border: "1px dashed #cbd5e1" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "10px" }}>
               <div>
-                <h3 className="serif" style={{ margin: 0, fontSize: "1.15rem" }}>Bulk Import Guests (CSV)</h3>
-                <p className="admin-hint" style={{ margin: "4px 0 0" }}>
-                  Upload a UTF-8 CSV with columns: <code>Mobile Number</code>, <code>First Name</code>, <code>Last Name</code>, <code>Role</code>, <code>Leader Name</code>, <code>Date of Joining</code>, <code>Location</code>, <code>email id</code>, <code>Referral&apos;s Name</code>. (Active status is automatically set in the backend).
+                <h3 className="serif" style={{ margin: 0, fontSize: "1.15rem", color: "#0f172a" }}>Bulk Import Guests (CSV)</h3>
+                <p className="admin-hint" style={{ margin: "4px 0 0", color: "#475569" }}>
+                  Upload a UTF-8 CSV with columns: <code>Mobile Number</code>, <code>First Name</code>, <code>Last Name</code>, <code>Role</code>, <code>Leader Name</code>, <code>Date of Joining</code>, <code>Location</code>, <code>email id</code>, <code>Referral&apos;s Name</code>.
                 </p>
               </div>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -847,7 +909,7 @@ export default function UsersAdmin({
             />
             {importing && <p className="muted small" style={{ marginTop: "8px" }}>Processing CSV import batch…</p>}
             {importReport && (
-              <div style={{ marginTop: "14px", padding: "12px", background: "rgba(0,0,0,0.2)", borderRadius: "6px" }}>
+              <div style={{ marginTop: "14px", padding: "12px", background: "rgba(0,0,0,0.05)", borderRadius: "6px" }}>
                 <strong>Import Results:</strong> Created: {importReport.created} · Skipped (duplicates): {importReport.skipped}
                 {importReport.results && importReport.results.some((r) => r.status === "error") && (
                   <div style={{ marginTop: "8px", color: "var(--color-danger, #ef4444)" }}>
@@ -870,97 +932,143 @@ export default function UsersAdmin({
           <p className="panel-note">No accounts match that filter.</p>
         ) : (
           <>
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  {renderSortHeader("User Id / Mobile Number", "phone")}
-                  {renderSortHeader("First Name", "name")}
-                  <th>Last Name</th>
-                  {renderSortHeader("Role", "role")}
-                  {renderSortHeader("Leader Name", "leaderName")}
-                  {renderSortHeader("Referral", "referralName")}
-                  {renderSortHeader("Location", "location")}
-                  {renderSortHeader("email id", "email")}
-                  {renderSortHeader("Active / Inactive", "isActive")}
-                  {renderSortHeader("Date Last Active", "lastActiveAt")}
-                  <th aria-label="Actions" />
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedRows.map((row) => (
-                  <tr key={row.id}>
-                    <td className="mono">{row.phone}</td>
-                    <td>
-                      <strong>{row.firstName}</strong>
-                    </td>
-                    <td>
-                      <strong>{row.lastName}</strong>
-                    </td>
-                    <td style={{ textTransform: "capitalize" }}>{row.role === "traveller" ? "Guest" : row.role === "leader" ? "Trail leader" : "Admin"}</td>
-                    <td>
-                      <div>{row.leaderName || "—"}</div>
-                      {row.trailLeaders && row.trailLeaders.length > 0 && (
-                        <div
-                          className="muted small"
-                          style={{ fontSize: "0.75rem", marginTop: "3px", lineHeight: 1.3 }}
-                          title={row.trailLeaders.map((tl) => `${tl.trailName}: ${tl.leaderName}`).join("\n")}
-                        >
-                          {row.trailLeaders.map((tl, i) => (
-                            <span key={i} style={{ display: "block" }}>
-                              <span style={{ opacity: 0.75 }}>Trail:</span> {tl.trailName}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                    <td>{row.referralName || "—"}</td>
-                    <td>{row.location || "—"}</td>
-                    <td className="small">{row.email || "—"}</td>
-                    <td>
-                      <span className={`pill ${row.isActive ? "on" : "off"}`}>
-                        {row.isActive ? "Active" : "Inactive"}
-                      </span>
-                    </td>
-                    <td className="small muted">
-                      {row.lastActiveAt ? new Date(row.lastActiveAt).toLocaleDateString("en-IN") : "Never"}
-                    </td>
-                    <td className="row-actions">
-                      <button className="link-btn" onClick={() => openDocsModal(row)}>
-                        Documents
-                      </button>
-                      <button className="link-btn" onClick={() => startEdit(row)}>
-                        Edit
-                      </button>
-                      <button className="link-btn" onClick={() => resetPassword(row)}>
-                        Reset Password
-                      </button>
-                      <button className="link-btn" onClick={() => updateUser(row.id, { is_active: !row.isActive }, row.isActive ? "Account suspended." : "Account restored.")}>
-                        {row.isActive ? "Suspend" : "Restore"}
-                      </button>
-                    </td>
+            <div className="admin-table-container">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    {renderSortHeader("User Id / Mobile Number", "phone")}
+                    {renderSortHeader("First Name", "name")}
+                    <th>Last Name</th>
+                    {renderSortHeader("Role", "role")}
+                    {renderSortHeader("Leader Name", "leaderName")}
+                    {renderSortHeader("Referral", "referralName")}
+                    {renderSortHeader("Location", "location")}
+                    {renderSortHeader("Email Id", "email")}
+                    {renderSortHeader("Active / Inactive", "isActive")}
+                    {renderSortHeader("Date Last Active", "lastActiveAt")}
+                    <th style={{ textAlign: "right", paddingRight: "16px" }} aria-label="Actions">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {paginatedRows.map((row) => (
+                    <tr key={row.id}>
+                      <td>
+                        <span className="mono" style={{ fontWeight: 600, color: "#0f172a" }}>
+                          {row.phone}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: "9px", whiteSpace: "nowrap" }}>
+                          <span className="guest-avatar-bubble">
+                            {row.firstName?.charAt(0) || "U"}
+                          </span>
+                          <strong style={{ color: "#0f172a" }}>{row.firstName}</strong>
+                        </div>
+                      </td>
+                      <td>
+                        <strong style={{ color: "#0f172a" }}>{row.lastName}</strong>
+                      </td>
+                      <td>
+                        <span className={`role-badge ${row.role}`}>
+                          {row.role === "traveller" ? "Guest" : row.role === "leader" ? "Trail Leader" : "Admin"}
+                        </span>
+                      </td>
+                      <td>
+                        <div>
+                          <div style={{ fontWeight: 600, color: row.leaderName ? "#0f172a" : "#94a3b8" }}>
+                            {row.leaderName || "—"}
+                          </div>
+                          {row.trailLeaders && row.trailLeaders.length > 0 && (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "2px", marginTop: "3px" }}>
+                              {row.trailLeaders.map((tl, i) => (
+                                <span key={i} className="trail-pill-sub" title={tl.trailName}>
+                                  Trail: {tl.trailName}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td>{row.referralName || "—"}</td>
+                      <td>
+                        <span style={{ whiteSpace: "nowrap" }}>
+                          {row.location ? `📍 ${row.location}` : "—"}
+                        </span>
+                      </td>
+                      <td className="small" style={{ color: row.email ? "#334155" : "#94a3b8" }}>
+                        {row.email || "—"}
+                      </td>
+                      <td>
+                        <span className={`status-pill ${row.isActive ? "active" : "inactive"}`}>
+                          <span className="status-dot" />
+                          {row.isActive ? "Active" : "Suspended"}
+                        </span>
+                      </td>
+                      <td className="small muted" style={{ whiteSpace: "nowrap" }}>
+                        {row.lastActiveAt ? new Date(row.lastActiveAt).toLocaleDateString("en-IN") : "Never"}
+                      </td>
+                      <td>
+                        <div className="row-action-pills">
+                          <button
+                            type="button"
+                            className="action-pill action-pill-neutral"
+                            onClick={() => openDocsModal(row)}
+                            title="View & upload travel documents"
+                          >
+                            📄 Docs
+                          </button>
+                          <button
+                            type="button"
+                            className="action-pill action-pill-primary"
+                            onClick={() => startEdit(row)}
+                            title="Edit account details"
+                          >
+                            ✏️ Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="action-pill action-pill-neutral"
+                            onClick={() => resetPassword(row)}
+                            title="Reset PIN to last 4 digits of phone"
+                          >
+                            🔑 Reset PIN
+                          </button>
+                          <button
+                            type="button"
+                            className={`action-pill ${row.isActive ? "action-pill-danger" : "action-pill-success"}`}
+                            onClick={() => updateUser(row.id, { is_active: !row.isActive }, row.isActive ? "Account suspended." : "Account restored.")}
+                            title={row.isActive ? "Suspend guest account" : "Restore guest account"}
+                          >
+                            {row.isActive ? "Suspend" : "Restore"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
             {totalPages > 1 && (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "16px", flexWrap: "wrap", gap: "10px" }}>
                 <button
                   type="button"
-                  className="btn btn-secondary"
+                  className="admin-control admin-control-btn admin-control-btn-secondary"
                   disabled={page <= 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  style={{ opacity: page <= 1 ? 0.5 : 1, cursor: page <= 1 ? "not-allowed" : "pointer" }}
                 >
                   ← Previous
                 </button>
                 <span className="muted small">
-                  Page {page} of {totalPages} ({filtered.length} total)
+                  Showing <strong>{(page - 1) * pageSize + 1}</strong> – <strong>{Math.min(page * pageSize, filtered.length)}</strong> of <strong>{filtered.length}</strong> accounts (Page {page} of {totalPages})
                 </span>
                 <button
                   type="button"
-                  className="btn btn-secondary"
+                  className="admin-control admin-control-btn admin-control-btn-secondary"
                   disabled={page >= totalPages}
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  style={{ opacity: page >= totalPages ? 0.5 : 1, cursor: page >= totalPages ? "not-allowed" : "pointer" }}
                 >
                   Next →
                 </button>

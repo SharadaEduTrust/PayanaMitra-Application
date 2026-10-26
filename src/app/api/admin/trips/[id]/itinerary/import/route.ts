@@ -1,30 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/server/auth'
-
-/**
- * POST /api/admin/trips/[id]/itinerary/import
- *
- * Accepts a multipart/form-data request with a single `file` field that
- * contains a UTF-8 CSV. Parses the CSV server-side and bulk-imports the
- * itinerary (days + activities) for the given trip.
- *
- * Follows exact Field Names from the Payana Mitra App - Table Details sheet ("Trail Table Extension"):
- *   Trail Id             — string (optional for reference)
- *   Trail Name           — string (optional for reference)
- *   Day                  — integer >= 1 (required)
- *   Destination          — string (optional)
- *   Itinerary            — string (optional, description of the day plan)
- *   Hotel Name           — string (optional)
- *
- * Extended activity columns supported:
- *   Meal Plan            — Breakfast | Breakfast & Dinner | Breakfast, Lunch & Dinner (optional)
- *   Activity Title       — string (optional — row creates activity when present)
- *   Activity Description — string (optional)
- *   Start Time           — HH:MM or HH:MM:SS (optional)
- *   End Time             — HH:MM or HH:MM:SS (optional)
- *   Activity Order       — integer >= 1 (optional)
- */
+import { parseCSV, getField, parseDayNumber } from '@/lib/csv'
 
 interface Params { params: Promise<{ id: string }> }
 
@@ -49,57 +26,6 @@ async function requireAdmin() {
   if (!profile) return { error: 'Unauthorized', status: 401 } as const
   if (profile.role !== 'admin') return { error: 'Forbidden', status: 403 } as const
   return { profile }
-}
-
-function parseCSV(text: string): Record<string, string>[] {
-  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
-  const headerLine = lines.find(l => l.trim().length > 0)
-  if (!headerLine) return []
-  const headers = splitCSVRow(headerLine).map(h => h.trim())
-  const rows: Record<string, string>[] = []
-  for (let i = lines.indexOf(headerLine) + 1; i < lines.length; i++) {
-    const line = lines[i]
-    if (line.trim() === '') continue
-    const values = splitCSVRow(line)
-    const obj: Record<string, string> = {}
-    headers.forEach((h, idx) => { obj[h] = (values[idx] ?? '').trim() })
-    rows.push(obj)
-  }
-  return rows
-}
-
-function splitCSVRow(line: string): string[] {
-  const fields: string[] = []
-  let current = ''
-  let inQuotes = false
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]
-    if (inQuotes) {
-      if (ch === '"') {
-        if (line[i + 1] === '"') { current += '"'; i++ }
-        else inQuotes = false
-      } else { current += ch }
-    } else {
-      if (ch === '"') { inQuotes = true }
-      else if (ch === ',') { fields.push(current); current = '' }
-      else { current += ch }
-    }
-  }
-  fields.push(current)
-  return fields
-}
-
-function getField(row: Record<string, string>, ...aliases: string[]): string {
-  for (const a of aliases) {
-    if (row[a] !== undefined && row[a].trim() !== '') return row[a].trim()
-    const normTarget = a.toLowerCase().replace(/[\s_/.-]/g, '')
-    for (const [k, v] of Object.entries(row)) {
-      if (k.toLowerCase().replace(/[\s_/.-]/g, '') === normTarget && v.trim() !== '') {
-        return v.trim()
-      }
-    }
-  }
-  return ''
 }
 
 export async function GET() {
@@ -195,7 +121,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     // Field names matching "Trail Table Extension"
     const dayRaw = getField(row, 'Day', 'day', 'day_number', 'Day Number')
-    const dayNum = parseInt(dayRaw, 10)
+    const dayNum = parseDayNumber(dayRaw)
     if (!dayRaw || isNaN(dayNum) || dayNum < 1) {
       errors.push({ row: rowNum, error: 'Day must be an integer >= 1' })
       skipped++

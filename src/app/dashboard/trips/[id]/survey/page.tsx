@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth";
 import SurveyForm from "@/components/survey-form";
 
@@ -14,9 +14,18 @@ export default async function SurveyPage({ params }: Params) {
   if (profile.role !== "traveller") {
     redirect(`/dashboard/trips/${id}`);
   }
-  const supabase = await createClient();
+  const admin = createAdminClient();
 
-  const { data: tripData } = await supabase
+  const { data: member } = await admin
+    .from("trip_members")
+    .select("id")
+    .eq("trip_id", id)
+    .eq("user_id", profile.id)
+    .maybeSingle();
+
+  if (!member) redirect("/dashboard");
+
+  const { data: tripData } = await admin
     .from("trips")
     .select("id, name, remarks")
     .eq("id", id)

@@ -1221,16 +1221,25 @@ export default function CsvImportAdmin({
                     <td>Breakfast & Dinner</td>
                   </tr>
                   <tr>
-                    <td className="mono">Activity Title</td>
+                    <td className="mono"><strong>Activity Description 1 .. 5</strong><br /><span style={{ fontSize: "11px", color: "#64748b" }}>(Column-wise format)</span></td>
+                    <td>Free text for each daily activity</td>
+                    <td>Free text (Max 500 chars each). Extend columns: <code>Activity Description 1</code>, <code>Activity Description 2</code>, <code>Activity Description 3</code>, <code>Activity Description 4</code>, <code>Activity Description 5</code></td>
+                    <td>
+                      <span className="pill optional">Optional</span>
+                    </td>
+                    <td>Sunset walk to Hemakuta Hill for panoramic sunset view</td>
+                  </tr>
+                  <tr>
+                    <td className="mono">Activity Title<br /><span style={{ fontSize: "11px", color: "#64748b" }}>(Row-wise format)</span></td>
                     <td>Specific schedule item name</td>
-                    <td>Max 100 characters</td>
+                    <td>Max 100 characters (or companion <code>Activity Title 1..5</code>)</td>
                     <td>
                       <span className="pill optional">Optional</span>
                     </td>
                     <td>Mysore Palace Guided Walk</td>
                   </tr>
                   <tr>
-                    <td className="mono">Activity Description</td>
+                    <td className="mono">Activity Description<br /><span style={{ fontSize: "11px", color: "#64748b" }}>(Row-wise format)</span></td>
                     <td>Activity overview or guidance notes</td>
                     <td>Free text (Max 500 characters)</td>
                     <td>
@@ -1241,7 +1250,7 @@ export default function CsvImportAdmin({
                   <tr>
                     <td className="mono">Start Time</td>
                     <td>24-hour time format</td>
-                    <td><code>HH:MM</code> (00:00 to 23:59)</td>
+                    <td><code>HH:MM</code> (00:00 to 23:59, or <code>Start Time 1..5</code>)</td>
                     <td>
                       <span className="pill optional">Optional</span>
                     </td>
@@ -1250,7 +1259,7 @@ export default function CsvImportAdmin({
                   <tr>
                     <td className="mono">End Time</td>
                     <td>24-hour time format</td>
-                    <td><code>HH:MM</code> (00:00 to 23:59)</td>
+                    <td><code>HH:MM</code> (00:00 to 23:59, or <code>End Time 1..5</code>)</td>
                     <td>
                       <span className="pill optional">Optional</span>
                     </td>
@@ -1286,7 +1295,10 @@ export default function CsvImportAdmin({
                   <strong>*Trail Id Requirement:</strong> You must supply <code>Trail Id</code> in the CSV row unless you have picked a specific <strong>Target Trail</strong> from the dropdown above as a fallback.
                 </li>
                 <li>
-                  <strong>Multiple Activities per Day:</strong> You can include multiple rows with the same <code>Trail Id</code> and <code>Day</code> to register multiple activities for that day. Destination, Itinerary narrative, Hotel, and Meal Plan are consolidated cleanly.
+                  <strong>Column-wise Extended Activities:</strong> You can extend activities column-wise on the same day row using columns <code>Activity Description 1</code>, <code>Activity Description 2</code>, <code>Activity Description 3</code>, <code>Activity Description 4</code>, <code>Activity Description 5</code> (plus optional companion columns <code>Activity Title 1..5</code>, <code>Start Time 1..5</code>, <code>End Time 1..5</code>). This allows an entire day's schedule with multiple activities to be imported in a single row.
+                </li>
+                <li>
+                  <strong>Row-wise Multiple Activities per Day:</strong> Alternatively, you can include multiple rows with the same <code>Trail Id</code> and <code>Day</code> to register multiple activities row-by-row. Destination, Itinerary narrative, Hotel, and Meal Plan are consolidated cleanly.
                 </li>
                 <li>
                   <strong>Re-importing & Updates:</strong> Re-uploading a CSV updates existing days and appends new activities without deleting your trail settings or enrolled guests.

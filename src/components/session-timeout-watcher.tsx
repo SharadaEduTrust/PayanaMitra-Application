@@ -88,6 +88,9 @@ export default function SessionTimeoutWatcher() {
       }
     }
 
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    let cleanupListeners: (() => void) | null = null;
+
     // Check if the user is authenticated before attaching listeners
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!isSubscribed || !session) return;
@@ -116,20 +119,21 @@ export default function SessionTimeoutWatcher() {
       document.addEventListener("visibilitychange", onVisibilityChange);
       window.addEventListener("focus", checkInactivity);
 
-      const interval = setInterval(checkInactivity, CHECK_INTERVAL_MS);
+      intervalId = setInterval(checkInactivity, CHECK_INTERVAL_MS);
 
-      return () => {
+      cleanupListeners = () => {
         events.forEach((event) => {
           window.removeEventListener(event, recordActivity);
         });
         document.removeEventListener("visibilitychange", onVisibilityChange);
         window.removeEventListener("focus", checkInactivity);
-        clearInterval(interval);
       };
     });
 
     return () => {
       isSubscribed = false;
+      if (intervalId) clearInterval(intervalId);
+      if (cleanupListeners) cleanupListeners();
     };
   }, [pathname]);
 

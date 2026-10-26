@@ -249,16 +249,18 @@ export async function loginWithPhonePin(
     return { ok: false, error: GENERIC_ERROR, status: 401 }
   }
 
-  // 6. Generate one-time magiclink tokenHash for callers utilizing verifyOtp
+  // 6. Generate one-time magiclink tokenHash only as fallback if session is absent
   let tokenHash: string | null = null
-  try {
-    const { data: link } = await admin.auth.admin.generateLink({
-      type: 'magiclink',
-      email: authEmail,
-    })
-    tokenHash = link?.properties?.hashed_token ?? null
-  } catch {
-    // Non-fatal fallback
+  if (!session) {
+    try {
+      const { data: link } = await admin.auth.admin.generateLink({
+        type: 'magiclink',
+        email: authEmail,
+      })
+      tokenHash = link?.properties?.hashed_token ?? null
+    } catch {
+      // Non-fatal fallback
+    }
   }
 
   // 7. Neutralize must_change_password and update last_active_at
@@ -270,11 +272,12 @@ export async function loginWithPhonePin(
     profile.must_change_password = false
   }
 
+  // Run profile update and attempt recording in parallel to cut latency
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (admin.from('profiles') as any).update(profileUpdates).eq('id', profile.id)
-
-  // 8. Record success
-  await recordAttempt(rawPhone, ip, true)
+  await Promise.all([
+    (admin.from('profiles') as any).update(profileUpdates).eq('id', profile.id),
+    recordAttempt(rawPhone, ip, true),
+  ])
 
   return {
     ok: true,

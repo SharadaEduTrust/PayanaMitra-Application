@@ -66,7 +66,6 @@ export default function PinForm() {
     } else {
       router.push(data.role === "admin" ? "/admin" : "/dashboard");
     }
-    router.refresh();
   }
 
   if (!isSupabaseConfigured()) return <SupabaseSetupNotice />;

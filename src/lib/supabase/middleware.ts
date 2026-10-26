@@ -10,6 +10,13 @@ export async function updateSession(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+  // Fast redirect for deprecated /admin/login before running auth checks
+  if (request.nextUrl.pathname === "/admin/login") {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/login";
+    return NextResponse.redirect(redirectUrl);
+  }
+
   // Before Supabase is configured there is no session to refresh. Let public
   // pages render so the app is still viewable; anything that touches the
   // database will fail loudly in its own route.
@@ -45,12 +52,6 @@ export async function updateSession(request: NextRequest) {
   const isAuthRoute = path === "/login" || path === "/signup";
   const needsAuth = path.startsWith("/dashboard") || path.startsWith("/admin") || path === "/change-password";
   const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
-
-  if (path === "/admin/login") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
-  }
 
   if (signedIn) {
     const lastActiveCookie = request.cookies.get("payana_last_active")?.value;

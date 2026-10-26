@@ -134,14 +134,16 @@ export default function TripDetailView({
                       <li key={activity.id}>
                         <span className="timing-time">
                           {activity.startTime ? activity.startTime.slice(0, 5) : "—"}
+                          {activity.endTime && (
+                            <span className="timing-meta" style={{ display: "block", marginTop: "2px" }}>
+                              to {activity.endTime.slice(0, 5)}
+                            </span>
+                          )}
                         </span>
                         <div className="timing-body">
-                          <strong>{activity.title}</strong>
-                          {activity.description && <p>{activity.description}</p>}
-                          {activity.endTime && (
-                            <span className="timing-meta">
-                              until {activity.endTime.slice(0, 5)}
-                            </span>
+                          <strong>{activity.description || activity.title}</strong>
+                          {activity.description && activity.title && activity.description !== activity.title && (
+                            <p>{activity.description}</p>
                           )}
                         </div>
                       </li>

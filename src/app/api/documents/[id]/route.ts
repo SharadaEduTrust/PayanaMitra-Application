@@ -7,10 +7,10 @@ interface Params { params: Promise<{ id: string }> }
 
 const UpdateDocSchema = z.object({
   doc_type:       z.string().min(1).max(50).optional(),
-  issued_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  expiry_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  issued_country: z.string().max(100).optional().nullable(),
+  expiry_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expiry_date must be YYYY-MM-DD').optional().nullable(),
+  issued_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'issued_date must be YYYY-MM-DD').optional().nullable(),
   issued_place:   z.string().max(100).optional().nullable(),
+  issued_country: z.string().max(100).optional().nullable(),
   trip_id:        z.string().uuid().optional().nullable(),
 }).strict()
 
@@ -69,9 +69,21 @@ export async function GET(_req: NextRequest, { params }: Params) {
     download_url = signed?.signedUrl ?? null
   }
 
+  const placeVal = (doc.issued_place as string | null) ?? (doc.issued_country as string | null) ?? null
+  const countryVal = (doc.issued_country as string | null) ?? (doc.issued_place as string | null) ?? null
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { doc_number_enc, iv, auth_tag, ...safe } = doc
-  return NextResponse.json({ ok: true, data: { ...safe, download_url } })
+  return NextResponse.json({
+    ok: true,
+    data: {
+      ...safe,
+      issued_date: (doc.issued_date as string | null) ?? null,
+      issued_place: placeVal,
+      issued_country: countryVal,
+      download_url,
+    },
+  })
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
@@ -111,33 +123,50 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     updated_at: new Date().toISOString(),
   }
 
-  if (parsed.data.issued_place !== undefined) {
+  // Cross-map place & country for legacy compatibility
+  if (parsed.data.issued_place !== undefined && parsed.data.issued_country === undefined) {
     updatePayload.issued_country = parsed.data.issued_place
-    delete updatePayload.issued_place
+  } else if (parsed.data.issued_country !== undefined && parsed.data.issued_place === undefined) {
+    updatePayload.issued_place = parsed.data.issued_country
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let updateResult = await (admin.from('guest_documents') as any)
+  let { data: updated, error } = await (admin.from('guest_documents') as any)
     .update(updatePayload)
     .eq('id', id)
     .select()
     .single()
 
-  if (updateResult.error && updateResult.error.message.includes('issued_date')) {
+  // Fallback if target DB has not migrated issued_date / issued_place columns yet
+  if (error && (error.message.includes('column') || error.message.includes('issued_date') || error.message.includes('issued_place'))) {
     delete updatePayload.issued_date
+    delete updatePayload.issued_place
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    updateResult = await (admin.from('guest_documents') as any)
+    const retry = await (admin.from('guest_documents') as any)
       .update(updatePayload)
       .eq('id', id)
       .select()
       .single()
+    updated = retry.data
+    error = retry.error
   }
 
-  if (updateResult.error) return NextResponse.json({ error: updateResult.error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  const placeVal = updated?.issued_place ?? updated?.issued_country ?? null
+  const countryVal = updated?.issued_country ?? updated?.issued_place ?? null
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { doc_number_enc, iv, auth_tag, ...safe } = updateResult.data
-  return NextResponse.json({ ok: true, data: safe })
+  const { doc_number_enc, iv, auth_tag, ...safe } = updated
+  return NextResponse.json({
+    ok: true,
+    data: {
+      ...safe,
+      issued_date: updated?.issued_date ?? parsed.data.issued_date ?? null,
+      issued_place: placeVal,
+      issued_country: countryVal,
+    },
+  })
 }
 
 export async function DELETE(_req: NextRequest, { params }: Params) {

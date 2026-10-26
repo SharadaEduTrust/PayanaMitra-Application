@@ -25,13 +25,9 @@ export default async function AdminUsersPage() {
     supabase.from("profiles").select("*").order("last_name", { ascending: true }),
     supabase.from("traveller_details").select("*"),
     supabase.from("profiles").select("id, first_name, last_name").eq("role", "leader").order("first_name", { ascending: true }),
-<<<<<<< HEAD
-    (admin.from("guest_documents") as any).select("user_id, doc_type, doc_number_enc, iv, auth_tag, expiry_date"),
+    (admin.from("guest_documents") as any).select("user_id, doc_type, doc_number_enc, iv, auth_tag, expiry_date, issued_date, issued_country"),
     admin.from("trip_members").select("user_id, trip_id"),
     admin.from("trips").select("id, name, leader_id"),
-=======
-    (admin.from("guest_documents") as any).select("user_id, doc_type, doc_number_enc, iv, auth_tag, expiry_date, issued_date, issued_country"),
->>>>>>> origin/fixing-bugs-and-features
   ]);
 
   const leaderMap = new Map((leaders ?? []).map((l) => [l.id, `${l.first_name} ${l.last_name}`.trim()]));

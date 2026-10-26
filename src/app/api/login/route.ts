@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: result.status })
   }
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     ok: true,
     role: result.profile.role,
     mustChangePassword: false,
@@ -48,4 +48,13 @@ export async function POST(req: NextRequest) {
     tokenHash: result.tokenHash,
     firstName: result.profile.first_name,
   })
+
+  response.cookies.set('payana_last_active', String(Date.now()), {
+    path: '/',
+    sameSite: 'lax',
+    httpOnly: false,
+    maxAge: 60 * 60 * 24,
+  })
+
+  return response
 }

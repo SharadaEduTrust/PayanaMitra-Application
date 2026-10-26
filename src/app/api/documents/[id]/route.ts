@@ -114,8 +114,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     .single()
 
   if (!doc) return NextResponse.json({ error: 'Document not found' }, { status: 404 })
-  if (doc.user_id !== profile.id && profile.role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (profile.role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden: Only administrators can update documents' }, { status: 403 })
   }
 
   const updatePayload: Record<string, unknown> = {
@@ -184,8 +184,8 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     .single()
 
   if (!doc) return NextResponse.json({ error: 'Document not found' }, { status: 404 })
-  if (doc.user_id !== profile.id && profile.role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (profile.role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden: Only administrators can delete documents' }, { status: 403 })
   }
 
   // Delete from storage if file exists

@@ -56,8 +56,16 @@ export default function PinForm() {
       }
     }
 
-    router.push(data.role === "admin" ? "/admin" : "/dashboard");
-    router.refresh();
+    if (typeof window !== "undefined") {
+      localStorage.setItem("payana_last_active", String(Date.now()));
+    }
+
+    const nextUrl = new URLSearchParams(window.location.search).get("next");
+    if (nextUrl && (data.role === "admin" || !nextUrl.startsWith("/admin"))) {
+      router.push(nextUrl);
+    } else {
+      router.push(data.role === "admin" ? "/admin" : "/dashboard");
+    }
   }
 
   if (!isSupabaseConfigured()) return <SupabaseSetupNotice />;

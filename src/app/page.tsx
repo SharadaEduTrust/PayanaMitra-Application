@@ -15,7 +15,7 @@ export default function Home() {
           <Brand size={40} />
           <div className="navlinks">
             <a href="#how">How it works</a>
-            <a href="#why">Why Payana Trails</a>
+            <a href="#why">Why Payana Mitra</a>
             <a href="#stories">Stories</a>
           </div>
           <div className="nav-actions">
@@ -67,7 +67,7 @@ export default function Home() {
             <em>Plan smarter.</em>
           </h2>
           <p className="hero-copy">
-            Payana Trails turns the way you travel into a trail that actually
+            Payana Mitra turns the way you travel into a trail that actually
             feels like yours — thoughtful routes, local textures, and plans that
             leave room for the unexpected.
           </p>
@@ -124,7 +124,7 @@ export default function Home() {
             </h2>
           </div>
           <p className="section-intro">
-            Tell us how you like to travel. Payana Trails brings the context, care, and
+            Tell us how you like to travel. Payana Mitra brings the context, care, and
             local knowledge to shape a plan around it.
           </p>
         </div>
@@ -195,7 +195,7 @@ export default function Home() {
             <div className="footer-col">
               <span className="footer-label">Explore</span>
               <a href="#how">How it works</a>
-              <a href="#why">Why Payana Trails</a>
+              <a href="#why">Why Payana Mitra</a>
               <a href="#stories">Stories</a>
             </div>
 
@@ -218,7 +218,7 @@ export default function Home() {
           </div>
 
           <div className="footer-bottom">
-            <span>© 2026 Payana Trails</span>
+            <span>© 2026 Payana Mitra</span>
             <span className="footer-route" aria-hidden="true" />
             <span>Travel thoughtfully.</span>
           </div>

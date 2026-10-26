@@ -1,11 +1,12 @@
 import "server-only";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Profile, UserRole } from "@/lib/types";
 import { redirect } from "next/navigation";
 
-/** The signed-in Supabase auth user, or null. */
-export async function getAuthUser() {
+/** The signed-in Supabase auth user, or null. Cached per request. */
+export const getAuthUser = cache(async () => {
   try {
     const supabase = await createClient();
     const { data, error } = await supabase.auth.getUser();
@@ -15,16 +16,16 @@ export async function getAuthUser() {
     // Supabase not configured yet. Treat everyone as signed out.
     return null;
   }
-}
+});
 
 /**
- * The profile row for the signed-in user.
+ * The profile row for the signed-in user. Cached per request.
  *
  * `profiles` has no client insert policy in the migrations, so profile rows are
  * written server-side with the service role. Until that row exists the user is
  * not onboarded and must be sent to /onboarding.
  */
-export async function getProfile(): Promise<Profile | null> {
+export const getProfile = cache(async (): Promise<Profile | null> => {
   const user = await getAuthUser();
   if (!user) return null;
 
@@ -41,7 +42,7 @@ export async function getProfile(): Promise<Profile | null> {
     // throwing, so protected pages redirect instead of showing a 500.
     return null;
   }
-}
+});
 
 export async function requireProfile(roles?: UserRole[]) {
   const profile = await getProfile();

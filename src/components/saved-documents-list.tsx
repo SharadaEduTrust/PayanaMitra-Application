@@ -18,8 +18,10 @@ export type SavedDoc = {
 
 export default function SavedDocumentsList({
   initialDocs,
+  isReadOnly = false,
 }: {
   initialDocs: SavedDoc[];
+  isReadOnly?: boolean;
 }) {
   const router = useRouter();
   const [docs, setDocs] = useState<SavedDoc[]>(initialDocs);
@@ -180,22 +182,26 @@ export default function SavedDocumentsList({
                     Download {doc.file_name ? doc.file_name : "File"} ↗
                   </a>
                 )}
-                <button
-                  type="button"
-                  className="link-btn"
-                  onClick={() => startEdit(doc)}
-                  style={{ fontSize: "12px" }}
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  className="link-btn"
-                  onClick={() => removeDoc(doc.id)}
-                  style={{ fontSize: "12px" }}
-                >
-                  Delete
-                </button>
+                {!isReadOnly && (
+                  <>
+                    <button
+                      type="button"
+                      className="link-btn"
+                      onClick={() => startEdit(doc)}
+                      style={{ fontSize: "12px" }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="link-btn"
+                      onClick={() => removeDoc(doc.id)}
+                      style={{ fontSize: "12px" }}
+                    >
+                      Delete
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -249,7 +255,7 @@ export default function SavedDocumentsList({
             </div>
 
             <label className="form-field">
-              Document Type
+              Document Type <span className="req">*</span>
               <select
                 value={editForm.doc_type}
                 onChange={(e) => setEditForm({ ...editForm, doc_type: e.target.value })}

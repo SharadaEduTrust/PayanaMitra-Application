@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 /**
- * Payana Trails brand lockup.
+ * Payana Mitra brand lockup.
  *
  * The mark is a circular illustrated badge, so the wordmark sits beside it in
  * the brand serif rather than inside the image — the badge's own lettering is
@@ -23,7 +23,7 @@ export default function Brand({
       <img
         className="brand-badge"
         src="/brand/payana-trails-badge.webp"
-        alt="Payana Trails"
+        alt="Payana Mitra"
         width={size}
         height={size}
         style={{ width: size, height: size }}
@@ -31,7 +31,7 @@ export default function Brand({
       {showWordmark && (
         <span className="brand-lockup">
           <span className="brand-word">Payana</span>
-          <span className="brand-sub">Trails</span>
+          <span className="brand-sub">Mitra</span>
         </span>
       )}
     </>
@@ -41,7 +41,7 @@ export default function Brand({
     return <span className={`brand brand-${tone}`}>{content}</span>;
   }
   return (
-    <Link href={href} className={`brand brand-${tone}`} aria-label="Payana Trails — home">
+    <Link href={href} className={`brand brand-${tone}`} aria-label="Payana Mitra — home">
       {content}
     </Link>
   );

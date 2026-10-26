@@ -10,6 +10,13 @@ export async function updateSession(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+  // Fast redirect for deprecated /admin/login before running auth checks
+  if (request.nextUrl.pathname === "/admin/login") {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/login";
+    return NextResponse.redirect(redirectUrl);
+  }
+
   // Before Supabase is configured there is no session to refresh. Let public
   // pages render so the app is still viewable; anything that touches the
   // database will fail loudly in its own route.
@@ -42,21 +49,64 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const signedIn = Boolean(user);
+  const isAuthRoute = path === "/login" || path === "/signup";
+  const needsAuth = path.startsWith("/dashboard") || path.startsWith("/admin") || path === "/change-password";
+  const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
-  // The admin sign-in page sits outside the admin guard but still starts with
-  // /admin, so it has to be excluded by name or it would redirect to /login
-  // and bounce straight back here.
-  const isAdminLogin = path === "/admin/login";
-  const isAuthRoute = path === "/login" || path === "/signup" || isAdminLogin;
+  if (signedIn) {
+    const lastActiveCookie = request.cookies.get("payana_last_active")?.value;
+    const lastActive = lastActiveCookie ? parseInt(lastActiveCookie, 10) : NaN;
+    const now = Date.now();
 
-  const needsAuth =
-    path.startsWith("/dashboard") || (path.startsWith("/admin") && !isAdminLogin);
+    if (!isNaN(lastActive) && now - lastActive > INACTIVITY_TIMEOUT_MS) {
+      // Inactivity timeout exceeded (more than 30 mins)
+      await supabase.auth.signOut().catch(() => null);
+
+      if (path.startsWith("/api/") && path !== "/api/login" && path !== "/api/logout") {
+        const jsonResponse = NextResponse.json(
+          { error: "Session timed out due to 30 minutes of inactivity. Please log in again.", timeout: true },
+          { status: 401 }
+        );
+        jsonResponse.cookies.delete("payana_last_active");
+        request.cookies.getAll().forEach((cookie) => {
+          if (cookie.name.includes("auth-token") || cookie.name.startsWith("sb-")) {
+            jsonResponse.cookies.delete(cookie.name);
+          }
+        });
+        return jsonResponse;
+      }
+
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = "/login";
+      redirectUrl.searchParams.set("timeout", "1");
+      if (needsAuth) {
+        redirectUrl.searchParams.set("next", path);
+      }
+
+      const redirectResponse = NextResponse.redirect(redirectUrl);
+      redirectResponse.cookies.delete("payana_last_active");
+
+      request.cookies.getAll().forEach((cookie) => {
+        if (cookie.name.includes("auth-token") || cookie.name.startsWith("sb-")) {
+          redirectResponse.cookies.delete(cookie.name);
+        }
+      });
+
+      return redirectResponse;
+    }
+
+    // Still active: update the payana_last_active cookie
+    response.cookies.set("payana_last_active", String(now), {
+      path: "/",
+      sameSite: "lax",
+      httpOnly: false,
+      maxAge: 60 * 60 * 24,
+    });
+  }
 
   if (!signedIn && needsAuth) {
     const url = request.nextUrl.clone();
-    // Admin routes belong back to the admin sign-in page; sending them to the
-    // traveller login would show a form that can never satisfy the role check.
-    url.pathname = path.startsWith("/admin") ? "/admin/login" : "/login";
+    url.pathname = "/login";
     url.searchParams.set("next", path);
     return NextResponse.redirect(url);
   }

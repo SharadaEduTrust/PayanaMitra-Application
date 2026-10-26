@@ -13,6 +13,8 @@ const ALLOWED_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image
 const MAX_FILE_SIZE = 1 * 1024 * 1024 // 1MB maximum limit to avoid database and storage overload
 
 const CreateDocSchema = z.object({
+  user_id:        z.string().uuid().optional().nullable(),
+  target_user_id: z.string().uuid().optional().nullable(),
   doc_type:       z.string().min(1, 'Document type required').max(50),
   doc_number:     z.string().max(100).optional().nullable(),
   expiry_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expiry_date must be YYYY-MM-DD').optional().nullable(),
@@ -36,14 +38,29 @@ export async function GET(req: NextRequest) {
     if (profile.role === 'admin') {
       targetUserId = requestedUserId
     } else if (profile.role === 'leader') {
-      // Verify this guest is assigned to this leader
+      // Verify this guest is assigned to this leader via trail or legacy leader_id
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: guestProfile } = await (admin.from('profiles') as any)
         .select('id, leader_id')
         .eq('id', requestedUserId)
         .single()
 
-      if (!guestProfile || guestProfile.leader_id !== profile.id) {
+      let hasLeaderAccess = guestProfile?.leader_id === profile.id
+
+      if (!hasLeaderAccess) {
+        const { data: ledTrips } = await admin.from('trips').select('id').eq('leader_id', profile.id)
+        const tripIds = (ledTrips ?? []).map((t: { id: string }) => t.id)
+        if (tripIds.length > 0) {
+          const { count } = await admin
+            .from('trip_members')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', requestedUserId)
+            .in('trip_id', tripIds)
+          hasLeaderAccess = (count ?? 0) > 0
+        }
+      }
+
+      if (!hasLeaderAccess) {
         return NextResponse.json({ error: 'Forbidden: You are not assigned to this guest' }, { status: 403 })
       }
       targetUserId = requestedUserId
@@ -122,6 +139,7 @@ export async function POST(req: NextRequest) {
   let issued_place: string | null = null
   let issued_country: string | null = null
   let trip_id: string | null = null
+  let targetUserId = profile.id
 
   let storage_path: string | null = null
   let file_name: string | null = null
@@ -134,6 +152,15 @@ export async function POST(req: NextRequest) {
       formData = await req.formData()
     } catch {
       return NextResponse.json({ error: 'Invalid multipart form data' }, { status: 400 })
+    }
+
+    const requestedUser = (formData.get('user_id') as string)?.trim() || (formData.get('target_user_id') as string)?.trim() || null
+    if (requestedUser && requestedUser !== profile.id) {
+      if (profile.role === 'admin') {
+        targetUserId = requestedUser
+      } else {
+        return NextResponse.json({ error: 'Forbidden: Only administrators can upload documents for other users' }, { status: 403 })
+      }
     }
 
     doc_type = String(formData.get('doc_type') ?? formData.get('type') ?? '').trim()
@@ -178,7 +205,7 @@ export async function POST(req: NextRequest) {
 
         const ext = file.name.split('.').pop() || 'bin'
         const safeDocType = doc_type.toLowerCase().replace(/[^a-z0-9]/g, '_')
-        storage_path = `${profile.id}/${safeDocType}_${Date.now()}_${crypto.randomUUID()}.${ext}`
+        storage_path = `${targetUserId}/${safeDocType}_${Date.now()}_${crypto.randomUUID()}.${ext}`
 
         const buffer = Buffer.from(await file.arrayBuffer())
         const { error: uploadErr } = await admin.storage
@@ -210,6 +237,15 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    const requestedUser = parsed.data.user_id || parsed.data.target_user_id || null
+    if (requestedUser && requestedUser !== profile.id) {
+      if (profile.role === 'admin') {
+        targetUserId = requestedUser
+      } else {
+        return NextResponse.json({ error: 'Forbidden: Only administrators can upload documents for other users' }, { status: 403 })
+      }
+    }
+
     doc_type = parsed.data.doc_type
     doc_number = parsed.data.doc_number ?? null
     expiry_date = parsed.data.expiry_date ?? null
@@ -238,7 +274,7 @@ export async function POST(req: NextRequest) {
 
   // Insert document record
   const insertPayload: Record<string, unknown> = {
-    user_id: profile.id,
+    user_id: targetUserId,
     trip_id: trip_id || null,
     doc_type,
     doc_number_enc: ciphertext,

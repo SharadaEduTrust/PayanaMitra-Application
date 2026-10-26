@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
-import LogoutButton from "@/components/logout-button";
 
 export const dynamic = "force-dynamic";
 
@@ -30,13 +29,6 @@ export default async function AdminOverviewPage() {
         <div>
           <h1>Overview</h1>
           <small>Signed in as {admin.first_name} {admin.last_name}</small>
-        </div>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <LogoutButton
-            redirectTo="/admin/login"
-            className="btn btn-secondary"
-            style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13px" }}
-          />
         </div>
       </header>
       <div className="admin-body">

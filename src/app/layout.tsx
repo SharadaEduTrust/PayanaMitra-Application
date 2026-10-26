@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import SessionTimeoutWatcher from "@/components/session-timeout-watcher";
 
 export const metadata: Metadata = {
   metadataBase: new URL(
@@ -14,7 +15,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <SessionTimeoutWatcher />
+        {children}
+      </body>
     </html>
   );
 }

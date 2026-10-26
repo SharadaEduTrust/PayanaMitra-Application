@@ -97,7 +97,7 @@ export default function DocumentForm() {
   return (
     <form onSubmit={submit}>
       <label className="form-field">
-        Document Type
+        Document Type <span className="req">*</span>
         <select value={docType} onChange={(event) => setDocType(event.target.value)}>
           {DOCUMENT_TYPES.map((item) => (
             <option key={item.value} value={item.value}>
@@ -108,7 +108,7 @@ export default function DocumentForm() {
       </label>
 
       <label className="form-field">
-        Document Number
+        Document Number <span className="req">*</span>
         <input
           name="doc_number"
           required
@@ -170,6 +170,6 @@ export default function DocumentForm() {
       <button className="btn btn-primary" type="submit" disabled={loading}>
         {loading ? "Encrypting & Uploading…" : "Save Document"}
       </button>
-    </form>
+    </form >
   );
 }

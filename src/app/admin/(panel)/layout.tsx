@@ -48,11 +48,11 @@ export default async function AdminPanelLayout({ children }: { children: React.R
           <Link className="side-link" href="/dashboard">
             View as guest
           </Link>
-          <LogoutButton redirectTo="/admin/login" />
+          <LogoutButton redirectTo="/login" />
         </div>
       </aside>
       <section className="admin-main">
-        <MobileNav title="Admin Menu" redirectTo="/admin/login" />
+        <MobileNav title="Admin Menu" redirectTo="/login" />
         {children}
       </section>
     </div>

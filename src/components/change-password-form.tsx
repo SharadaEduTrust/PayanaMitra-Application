@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
-export default function ChangePasswordForm() {
+export default function ChangePasswordForm({
+  redirectTarget = "/dashboard/profile",
+}: {
+  redirectTarget?: string;
+}) {
   const router = useRouter();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -53,13 +57,13 @@ export default function ChangePasswordForm() {
         return;
       }
 
-      setSuccess("Password updated successfully! Redirecting…");
+      setSuccess("Password updated successfully! Your confidential documents are now protected. Redirecting…");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
 
       setTimeout(() => {
-        router.push("/dashboard/profile");
+        router.push(redirectTarget);
         router.refresh();
       }, 1500);
     } catch {
@@ -96,9 +100,9 @@ export default function ChangePasswordForm() {
       </label>
 
       <label className="form-field">
-        New Password
+        New Password *
         <p className="form-hint" style={{ marginTop: "2px", marginBottom: "4px" }}>
-          At least 4 characters.
+          Choose a unique password (at least 4 characters) known only to you.
         </p>
         <span className="password-input">
           <input
@@ -122,7 +126,7 @@ export default function ChangePasswordForm() {
       </label>
 
       <label className="form-field">
-        Confirm New Password
+        Confirm New Password *
         <span className="password-input">
           <input
             required
@@ -158,10 +162,10 @@ export default function ChangePasswordForm() {
 
       <div style={{ display: "flex", gap: "12px", alignItems: "center", marginTop: "18px" }}>
         <button className="btn btn-primary" type="submit" disabled={loading}>
-          {loading ? "Updating password…" : "Update Password"}
+          {loading ? "Updating password…" : "Save New Password"}
         </button>
-        <Link className="btn btn-secondary" href="/dashboard/profile">
-          Back to Profile
+        <Link className="btn btn-secondary" href={redirectTarget}>
+          Back
         </Link>
       </div>
     </form>

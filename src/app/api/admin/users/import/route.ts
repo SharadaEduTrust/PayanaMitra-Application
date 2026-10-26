@@ -20,7 +20,7 @@ import { encryptDocumentNumber } from '@/lib/crypto'
  *   Remarks                 — freeform notes (optional)
  *
  * Optional Guest Details columns (from "Guest Details Table"):
- *   Date of Birth           — DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD
+ *   Date of Birth / dob     — DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD
  *   PAN                     — 10-char alphanumeric
  *   Passport No.            — alphanumeric
  *   Passport Expiry Date    — DD-MM-YYYY or YYYY-MM-DD
@@ -28,7 +28,7 @@ import { encryptDocumentNumber } from '@/lib/crypto'
  *   Travel Insurance No.    — alphanumeric
  *   Travel Insurance Company— string max 50
  *   Travel Insurance Expiry Date — DD-MM-YYYY or YYYY-MM-DD
- *   Food Preference         — Veg or Non Veg
+ *   Food Preference         — Veg or Non Veg (veg / non_veg)
  *   Food Allergy            — string max 50
  *   Emergency Contact Name  — string max 50
  *   Emergency Contact Number— 10-15 digits
@@ -256,6 +256,7 @@ export async function POST(req: NextRequest) {
     error?: string
   }
   const results: RowResult[] = []
+  const isDetailsOnlyImport = req.nextUrl.searchParams.get('type') === 'details' || req.nextUrl.searchParams.get('type') === 'guest_details'
 
   for (let i = 0; i < rows.length; i++) {
     const raw = rows[i]
@@ -287,12 +288,12 @@ export async function POST(req: NextRequest) {
     const insNo          = getField(raw, 'Travel Insurance No.', 'Travel Insurance No', 'travel_insurance_no') || null
     const insCo          = getField(raw, 'Travel Insurance Company', 'insurance_company') || null
     const rawInsExp      = getField(raw, 'Travel Insurance Expiry Date', 'insurance_expiry')
-    const rawFoodPref    = getField(raw, 'Food Preference', 'food_preference')
+    const rawFoodPref    = getField(raw, 'Food Preference', 'FoodPreference', 'food_preference', 'food_pref')
     const foodAllergy    = getField(raw, 'Food Allergy', 'Food Allergies', 'food_allergy') || null
-    const emgName        = getField(raw, 'Emergency Contact Name', 'emergency_contact_name') || null
-    const emgNo          = getField(raw, 'Emergency Contact Number', 'Emergency Contact No', 'emergency_contact_no') || null
+    const emgName        = getField(raw, 'Emergency Contact Name', 'emergency_contact_name', 'emergency_name') || null
+    const emgNo          = getField(raw, 'Emergency Contact Number', 'Emergency Contact No', 'emergency_contact_no', 'emergency_phone') || null
 
-    // Validation
+    // Field validation
     if (!PHONE_REGEX.test(rawPhone)) {
       results.push({ row: rowNum, phone: rawPhone || 'Row ' + rowNum, status: 'error', error: 'User Id / Mobile Number must be a valid 10-15 digit number' })
       continue
@@ -322,6 +323,41 @@ export async function POST(req: NextRequest) {
       continue
     }
 
+    // Optional guest details validation
+    const dob = rawDob ? parseDateString(rawDob) : null
+    if (rawDob && !dob) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: `Date of Birth "${rawDob}" is invalid. Use DD-MM-YYYY or YYYY-MM-DD.` })
+      continue
+    }
+
+    let mappedFoodPref: 'veg' | 'non_veg' | null = null
+    if (rawFoodPref) {
+      const cleanFp = rawFoodPref.trim().toLowerCase()
+      if (['veg', 'vegetarian'].includes(cleanFp)) {
+        mappedFoodPref = 'veg'
+      } else if (['non_veg', 'non-veg', 'nonveg', 'non_vegetarian', 'non-vegetarian', 'non vegetarian'].includes(cleanFp)) {
+        mappedFoodPref = 'non_veg'
+      } else {
+        results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'food_preference must be veg or non_veg' })
+        continue
+      }
+    }
+
+    if (foodAllergy && foodAllergy.length > 50) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'food_allergy cannot exceed 50 characters' })
+      continue
+    }
+    if (emgName && emgName.length > 50) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'emergency_contact_name cannot exceed 50 characters' })
+      continue
+    }
+    if (emgNo && !PHONE_REGEX.test(emgNo)) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'emergency_contact_no must be a valid 10-15 digit number' })
+      continue
+    }
+
+    const insurance_expiry = rawInsExp ? parseDateString(rawInsExp) : null
+
     // Leader lookup
     let leader_id: string | null = null
     if (leaderInput) {
@@ -337,7 +373,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Check duplicate phone
+    // Duplicate detection / handling
     const existingUserId = existingPhoneMap.get(rawPhone)
     if (existingUserId) {
       // Update referral name if present
@@ -349,18 +385,20 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // If user already exists and this row contains guest details, update details
-      if (rawDob || rawFoodPref || foodAllergy || emgName || emgNo || insNo || insCo || passLoc || passportNo || rawPassIssue || rawPassExp || visaNo || rawVisaExp || visaCountry || pan) {
+      // If user already exists and this is details table import or row contains guest details, update details
+      const hasExistingGuestDetails = isDetailsOnlyImport || Boolean(
+        dob || mappedFoodPref || rawFoodPref || foodAllergy || emgName || emgNo || insNo || insCo || passLoc || passportNo || rawPassIssue || rawPassExp || visaNo || rawVisaExp || visaCountry || pan
+      )
+
+      if (hasExistingGuestDetails) {
         try {
-          const dob = rawDob ? parseDateString(rawDob) : null
-          const insurance_expiry = rawInsExp ? parseDateString(rawInsExp) : null
-          const food_preference = rawFoodPref ? (rawFoodPref.toLowerCase().includes('non') ? 'non_veg' : 'veg') : null
+          const food_preference = mappedFoodPref ?? (rawFoodPref ? (rawFoodPref.toLowerCase().includes('non') ? 'non_veg' : 'veg') : null)
           const passport_issue_date = rawPassIssue ? parseDateString(rawPassIssue) : null
           const visa_expiry = rawVisaExp ? parseDateString(rawVisaExp) : null
           const cleanVisaNo = visaNo ? visaNo.trim().toUpperCase() : null
 
           try {
-            await admin.from('traveller_details').upsert({
+            await (admin.from('traveller_details') as any).upsert({
               user_id: existingUserId,
               dob,
               food_preference,
@@ -377,7 +415,7 @@ export async function POST(req: NextRequest) {
               visa_country: visaCountry,
             }, { onConflict: 'user_id' })
           } catch {
-            await admin.from('traveller_details').upsert({
+            await (admin.from('traveller_details') as any).upsert({
               user_id: existingUserId,
               dob,
               food_preference,
@@ -431,6 +469,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Standard user import skips existing phones without resetting credentials
       results.push({ row: rowNum, phone: rawPhone, status: 'skipped', error: 'User Id / Mobile Number already registered' })
       continue
     }
@@ -492,17 +531,22 @@ export async function POST(req: NextRequest) {
 
       const createdUserId = profileData.id
 
-      // Upsert guest details if provided
-      const dob = rawDob ? parseDateString(rawDob) : null
-      const insurance_expiry = rawInsExp ? parseDateString(rawInsExp) : null
-      const food_preference = rawFoodPref ? (rawFoodPref.toLowerCase().includes('non') ? 'non_veg' : 'veg') : null
+      // Only write guest-specific details for Guest/traveller users if provided
+      const food_preference = mappedFoodPref ?? (rawFoodPref ? (rawFoodPref.toLowerCase().includes('non') ? 'non_veg' : 'veg') : null)
       const passport_issue_date = rawPassIssue ? parseDateString(rawPassIssue) : null
       const visa_expiry = rawVisaExp ? parseDateString(rawVisaExp) : null
       const cleanVisaNo = visaNo ? visaNo.trim().toUpperCase() : null
 
-      if (dob || food_preference || foodAllergy || emgName || emgNo || insNo || insCo || passLoc || passport_issue_date || cleanVisaNo || visa_expiry || visaCountry) {
+      const hasGuestDetails = mappedRole === 'traveller' && Boolean(
+        dob || food_preference || foodAllergy || emgName || emgNo || insNo || insCo || passLoc || passport_issue_date || cleanVisaNo || visa_expiry || visaCountry
+      )
+
+      if (hasGuestDetails) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let tdErr: any = null
         try {
-          await admin.from('traveller_details').upsert({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const res = await (admin.from('traveller_details') as any).upsert({
             user_id: createdUserId,
             dob,
             food_preference,
@@ -518,8 +562,10 @@ export async function POST(req: NextRequest) {
             visa_expiry,
             visa_country: visaCountry,
           }, { onConflict: 'user_id' })
+          tdErr = res.error
         } catch {
-          await admin.from('traveller_details').upsert({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const res = await (admin.from('traveller_details') as any).upsert({
             user_id: createdUserId,
             dob,
             food_preference,
@@ -531,6 +577,15 @@ export async function POST(req: NextRequest) {
             insurance_expiry,
             passport_issued_location: passLoc,
           }, { onConflict: 'user_id' })
+          tdErr = res.error
+        }
+
+        if (tdErr) {
+          // Compensating cleanup to prevent orphan auth user and profile
+          await admin.from('profiles').delete().eq('id', createdUserId)
+          await admin.auth.admin.deleteUser(createdUserId)
+          results.push({ row: rowNum, phone: rawPhone, status: 'error', error: `Failed to save guest details: ${tdErr.message}` })
+          continue
         }
       }
 

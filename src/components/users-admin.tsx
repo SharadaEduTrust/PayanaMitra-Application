@@ -459,9 +459,15 @@ export default function UsersAdmin({
       setLoading(false);
 
       if (!response.ok) {
-        if (data?.fieldErrors) {
-          const firstErr = Object.values(data.fieldErrors).flat()[0];
-          setError(String(firstErr || data?.error || "Could not update user."));
+        if (data?.fieldErrors && Object.keys(data.fieldErrors).length > 0) {
+          const detailed = Object.entries(data.fieldErrors)
+            .map(([field, msgs]) => {
+              const fieldName = field.replace(/_/g, " ");
+              const errList = Array.isArray(msgs) ? msgs.join(", ") : String(msgs);
+              return `${fieldName}: ${errList}`;
+            })
+            .join(" | ");
+          setError(detailed || data?.error || "Could not update user.");
         } else {
           setError(data?.error ?? "Could not update user.");
         }
@@ -525,6 +531,13 @@ export default function UsersAdmin({
     event.preventDefault();
     setError("");
     setStatus("");
+
+    const cleanPhone = draft.phone.trim().replace(/[\s\-\(\)]/g, "");
+    if (cleanPhone.replace(/^\+/, "").length < 10) {
+      setError("Mobile number must be at least 10 digits (e.g. 9876543210 or +919876543210).");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -532,7 +545,7 @@ export default function UsersAdmin({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phone: draft.phone.trim(),
+          phone: cleanPhone,
           first_name: draft.firstName.trim(),
           last_name: draft.lastName.trim(),
           role: draft.role,
@@ -548,16 +561,22 @@ export default function UsersAdmin({
       setLoading(false);
 
       if (!response.ok) {
-        if (data?.fieldErrors) {
-          const firstErr = Object.values(data.fieldErrors).flat()[0];
-          setError(String(firstErr || data?.error || "Could not create that account."));
+        if (data?.fieldErrors && Object.keys(data.fieldErrors).length > 0) {
+          const detailed = Object.entries(data.fieldErrors)
+            .map(([field, msgs]) => {
+              const fieldName = field.replace(/_/g, " ");
+              const errList = Array.isArray(msgs) ? msgs.join(", ") : String(msgs);
+              return `${fieldName}: ${errList}`;
+            })
+            .join(" | ");
+          setError(detailed || data?.error || "Could not create that account.");
         } else {
           setError(data?.error ?? "Could not create that account.");
         }
         return;
       }
 
-      setStatus(`Account created. Initial PIN is the last 4 digits of their phone (${draft.phone.trim().slice(-4)}).`);
+      setStatus(`Account created. Initial PIN is the last 4 digits of their phone (${cleanPhone.slice(-4)}).`);
       setDraft(blank);
       router.refresh();
     } catch {
@@ -1008,6 +1027,10 @@ export default function UsersAdmin({
                 />
               </label>
               <label className="form-field">
+                Location
+                <input value={editForm.location} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} />
+              </label>
+              <label className="form-field">
                 Date of Birth
                 <input type="date" value={editForm.dob} onChange={(e) => setEditForm({ ...editForm, dob: e.target.value })} />
               </label>
@@ -1414,12 +1437,12 @@ export default function UsersAdmin({
 
           <div className="field-row">
             <label className="form-field">
-              Mobile Number <span className="req">*</span>
-              <input required type="tel" value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} placeholder="98765 43210 (Used as User Id)" />
+              Mobile Number
+              <input required type="tel" minLength={10} value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} placeholder="98765 43210 (Used as User Id)" />
             </label>
             <label className="form-field">
-              email id <span className="req">*</span>
-              <input required type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
+              email id (Optional)
+              <input type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
             </label>
           </div>
 

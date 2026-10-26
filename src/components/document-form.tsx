@@ -67,8 +67,9 @@ export default function DocumentForm() {
         method: "POST",
         body: form,
       });
-    } catch {
+    } catch (err) {
       setLoading(false);
+      console.error("Failed to save document:", err);
       setError("Network error while saving document.");
       return;
     }
@@ -145,8 +146,6 @@ export default function DocumentForm() {
       </div>
 
       <label className="form-field">
-        Attachment(PDF or Image, Max 10MB)
-        < input type="file" name="file" accept=".pdf,image/jpeg,image/png,image/webp" />
         Attachment (Optional PDF or Image, Max 1MB)
         <input
           ref={fileInputRef}
@@ -163,10 +162,9 @@ export default function DocumentForm() {
             ✓ {fileNotice}
           </span>
         )}
-      </label >
+      </label>
 
-      {error && <p className="form-error" role="alert">{error}</p>
-      }
+      {error && <p className="form-error" role="alert">{error}</p>}
       {status && <p className="form-notice" role="status">{status}</p>}
 
       <button className="btn btn-primary" type="submit" disabled={loading}>

@@ -72,13 +72,13 @@ export default async function AdminTripPage({ params }: Params) {
           destination: day.destination ?? "",
           itineraryText: day.itinerary_text ?? "",
           hotelName: day.hotel_name ?? "",
-          mealPlan: day.meal_plan ?? "",
+          mealPlan: (day as { meal_plan?: string | null }).meal_plan ?? "",
           activities: activities
             .filter((activity) => activity.itinerary_day_id === day.id)
             .map((activity) => ({
               id: activity.id,
               title: activity.title,
-              description: activity.description ?? "",
+              description: activity.description || activity.title || "",
               startTime: activity.start_time ?? "",
               endTime: activity.end_time ?? "",
               order: activity.activity_order,

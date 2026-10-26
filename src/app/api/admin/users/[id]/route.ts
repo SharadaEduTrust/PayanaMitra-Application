@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession, derivePassword, PHONE_REGEX } from '@/lib/server/auth'
+import { formatZodError } from '@/lib/server/zod-error'
 
 interface Params { params: Promise<{ id: string }> }
 
@@ -19,12 +20,22 @@ const RoleInputSchema = z.string()
 
 const FoodPrefSchema = z.enum(['veg', 'non_veg']).nullable().optional()
 
+const OptionalEmailSchema = z.preprocess(
+  (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+  z.string().email('Invalid email address').nullable().optional(),
+)
+
+const OptionalUuidSchema = z.preprocess(
+  (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+  z.string().uuid('Invalid leader ID').nullable().optional(),
+)
+
 const PatchUserSchema = z.object({
   first_name:      z.string().min(1).max(50).optional(),
   last_name:       z.string().min(1).max(50).optional(),
   role:            RoleInputSchema.optional(),
-  leader_id:       z.string().uuid().nullable().optional(),
-  email:           z.string().email().nullable().optional(),
+  leader_id:       OptionalUuidSchema,
+  email:           OptionalEmailSchema,
   location:        z.string().max(50).nullable().optional(),
   date_of_joining: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   referral_name:   z.string().max(100).nullable().optional(),
@@ -87,10 +98,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const parsed = PatchUserSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Validation failed', fieldErrors: parsed.error.flatten().fieldErrors },
-      { status: 422 },
-    )
+    return NextResponse.json(formatZodError(parsed.error), { status: 422 })
   }
 
   const { reset_pin, ...fields } = parsed.data

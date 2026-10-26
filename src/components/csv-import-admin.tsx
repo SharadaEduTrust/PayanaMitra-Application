@@ -1194,8 +1194,8 @@ export default function CsvImportAdmin({
                     <td>Mysuru</td>
                   </tr>
                   <tr>
-                    <td className="mono"><strong>Activity</strong></td>
-                    <td>Day activity details & highlights</td>
+                    <td className="mono"><strong>Itinerary</strong></td>
+                    <td>Narrative / Day Highlights</td>
                     <td>Free text (Max 2,000 characters)</td>
                     <td>
                       <span className="pill mandatory">Mandatory</span>
@@ -1219,6 +1219,51 @@ export default function CsvImportAdmin({
                       <span className="pill optional">Optional</span>
                     </td>
                     <td>Breakfast & Dinner</td>
+                  </tr>
+                  <tr>
+                    <td className="mono">Activity Title</td>
+                    <td>Specific schedule item name</td>
+                    <td>Max 100 characters</td>
+                    <td>
+                      <span className="pill optional">Optional</span>
+                    </td>
+                    <td>Mysore Palace Guided Walk</td>
+                  </tr>
+                  <tr>
+                    <td className="mono">Activity Description</td>
+                    <td>Activity overview or guidance notes</td>
+                    <td>Free text (Max 500 characters)</td>
+                    <td>
+                      <span className="pill optional">Optional</span>
+                    </td>
+                    <td>Private walking tour through palace durbar hall and gardens</td>
+                  </tr>
+                  <tr>
+                    <td className="mono">Start Time</td>
+                    <td>24-hour time format</td>
+                    <td><code>HH:MM</code> (00:00 to 23:59)</td>
+                    <td>
+                      <span className="pill optional">Optional</span>
+                    </td>
+                    <td className="mono">09:30</td>
+                  </tr>
+                  <tr>
+                    <td className="mono">End Time</td>
+                    <td>24-hour time format</td>
+                    <td><code>HH:MM</code> (00:00 to 23:59)</td>
+                    <td>
+                      <span className="pill optional">Optional</span>
+                    </td>
+                    <td className="mono">11:30</td>
+                  </tr>
+                  <tr>
+                    <td className="mono">Activity Order</td>
+                    <td>Display order sequence</td>
+                    <td>Integer &gt;= 1</td>
+                    <td>
+                      <span className="pill optional">Optional</span>
+                    </td>
+                    <td className="mono">1</td>
                   </tr>
                 </tbody>
               </table>

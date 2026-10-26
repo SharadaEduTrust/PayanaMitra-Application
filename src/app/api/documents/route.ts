@@ -17,10 +17,10 @@ const CreateDocSchema = z.object({
   target_user_id: z.string().uuid().optional().nullable(),
   doc_type:       z.string().min(1, 'Document type required').max(50),
   doc_number:     z.string().max(100).optional().nullable(),
-  issued_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  expiry_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  issued_country: z.string().max(100).optional().nullable(),
-  issued_place:   z.string().max(100).optional().nullable(),
+  expiry_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expiry_date must be YYYY-MM-DD').optional().nullable(),
+  issued_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'issued_date must be YYYY-MM-DD').optional().nullable(),
+  issued_place:   z.string().max(100, 'issued_place cannot exceed 100 characters').optional().nullable(),
+  issued_country: z.string().max(100, 'issued_country cannot exceed 100 characters').optional().nullable(),
   trip_id:        z.string().uuid().optional().nullable(),
 })
 
@@ -105,11 +105,18 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      // Backward-compatible mapping: preserve issued_place and legacy issued_country
+      const placeVal = (doc.issued_place as string | null) ?? (doc.issued_country as string | null) ?? null
+      const countryVal = (doc.issued_country as string | null) ?? (doc.issued_place as string | null) ?? null
+
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { doc_number_enc, iv, auth_tag, ...safe } = doc
       return {
         ...safe,
         doc_number,
+        issued_date: (doc.issued_date as string | null) ?? null,
+        issued_place: placeVal,
+        issued_country: countryVal,
         download_url,
       }
     }),
@@ -127,8 +134,9 @@ export async function POST(req: NextRequest) {
 
   let doc_type = ''
   let doc_number: string | null = null
-  let issued_date: string | null = null
   let expiry_date: string | null = null
+  let issued_date: string | null = null
+  let issued_place: string | null = null
   let issued_country: string | null = null
   let trip_id: string | null = null
   let targetUserId = profile.id
@@ -157,13 +165,24 @@ export async function POST(req: NextRequest) {
 
     doc_type = String(formData.get('doc_type') ?? formData.get('type') ?? '').trim()
     doc_number = (formData.get('doc_number') as string)?.trim() || (formData.get('document_number') as string)?.trim() || null
-    issued_date = (formData.get('issued_date') as string)?.trim() || null
     expiry_date = (formData.get('expiry_date') as string)?.trim() || null
-    issued_country = (formData.get('issued_place') as string)?.trim() || (formData.get('issued_country') as string)?.trim() || (formData.get('country') as string)?.trim() || null
+    issued_date = (formData.get('issued_date') as string)?.trim() || null
+
+    const rawPlace = (formData.get('issued_place') as string)?.trim() || (formData.get('place') as string)?.trim() || null
+    const rawCountry = (formData.get('issued_country') as string)?.trim() || (formData.get('country') as string)?.trim() || null
+    issued_place = rawPlace || rawCountry || null
+    issued_country = rawCountry || rawPlace || null
+
     trip_id = (formData.get('trip_id') as string)?.trim() || null
 
     if (!doc_type) {
       return NextResponse.json({ error: 'Validation failed', fieldErrors: { doc_type: ['doc_type is required'] } }, { status: 422 })
+    }
+    if (issued_date && !/^\d{4}-\d{2}-\d{2}$/.test(issued_date)) {
+      return NextResponse.json({ error: 'Validation failed', fieldErrors: { issued_date: ['issued_date must be YYYY-MM-DD'] } }, { status: 422 })
+    }
+    if (expiry_date && !/^\d{4}-\d{2}-\d{2}$/.test(expiry_date)) {
+      return NextResponse.json({ error: 'Validation failed', fieldErrors: { expiry_date: ['expiry_date must be YYYY-MM-DD'] } }, { status: 422 })
     }
 
     const fileEntry = formData.get('file')
@@ -229,9 +248,10 @@ export async function POST(req: NextRequest) {
 
     doc_type = parsed.data.doc_type
     doc_number = parsed.data.doc_number ?? null
-    issued_date = parsed.data.issued_date ?? null
     expiry_date = parsed.data.expiry_date ?? null
-    issued_country = parsed.data.issued_place ?? parsed.data.issued_country ?? null
+    issued_date = parsed.data.issued_date ?? null
+    issued_place = parsed.data.issued_place ?? parsed.data.issued_country ?? null
+    issued_country = parsed.data.issued_country ?? parsed.data.issued_place ?? null
     trip_id = parsed.data.trip_id ?? null
   }
 
@@ -260,8 +280,9 @@ export async function POST(req: NextRequest) {
     doc_number_enc: ciphertext,
     iv,
     auth_tag: authTag,
-    issued_date: issued_date || null,
     expiry_date: expiry_date || null,
+    issued_date: issued_date || null,
+    issued_place: issued_place || null,
     issued_country: issued_country || null,
   }
 
@@ -276,17 +297,19 @@ export async function POST(req: NextRequest) {
     .select()
     .single()
 
-  if (insertResult.error && (insertResult.error.message.includes('column') || insertResult.error.message.includes('storage_path') || insertResult.error.message.includes('issued_date'))) {
-    // Fallback if issued_date or storage columns have not been migrated
-    if (insertResult.error.message.includes('issued_date')) {
-      delete insertPayload.issued_date
-    }
-    if (insertResult.error.message.includes('storage_path') || insertResult.error.message.includes('column')) {
-      delete insertPayload.storage_path
-      delete insertPayload.file_name
-      delete insertPayload.file_size
-      delete insertPayload.mime_type
-    }
+  // Graceful degradation if new columns have not been migrated on the target database yet
+  if (insertResult.error && (
+    insertResult.error.message.includes('column') ||
+    insertResult.error.message.includes('issued_date') ||
+    insertResult.error.message.includes('issued_place') ||
+    insertResult.error.message.includes('storage_path')
+  )) {
+    delete insertPayload.issued_date
+    delete insertPayload.issued_place
+    delete insertPayload.storage_path
+    delete insertPayload.file_name
+    delete insertPayload.file_size
+    delete insertPayload.mime_type
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     insertResult = await (admin.from('guest_documents') as any)
       .insert(insertPayload)
@@ -315,7 +338,9 @@ export async function POST(req: NextRequest) {
       doc_type: createdDoc.doc_type,
       doc_number,
       expiry_date: createdDoc.expiry_date,
-      issued_country: createdDoc.issued_country,
+      issued_date: createdDoc.issued_date ?? issued_date ?? null,
+      issued_place: createdDoc.issued_place ?? createdDoc.issued_country ?? issued_place ?? null,
+      issued_country: createdDoc.issued_country ?? createdDoc.issued_place ?? issued_country ?? null,
       trip_id: createdDoc.trip_id,
       storage_path,
       file_name,
@@ -325,3 +350,4 @@ export async function POST(req: NextRequest) {
     },
   }, { status: 201 })
 }
+

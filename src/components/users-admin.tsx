@@ -944,7 +944,7 @@ export default function UsersAdmin({
         ) : (
           <>
             <div className="admin-table-container">
-              <table className="admin-table">
+              <table className="admin-table admin-table-users">
                 <thead>
                   <tr>
                     {renderSortHeader("User Id / Mobile Number", "phone")}

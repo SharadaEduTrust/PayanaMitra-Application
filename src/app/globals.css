@@ -1168,6 +1168,10 @@ div.admin {
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 8px 24px -4px rgba(0, 0, 0, 0.03);
   padding: 26px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 .admin-card h2 {
   font-size: 26px;
@@ -1408,6 +1412,7 @@ a.admin-control-btn-secondary:hover {
 .admin-table-container {
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border: 1px solid #efe4d0;
@@ -1437,8 +1442,13 @@ a.admin-control-btn-secondary:hover {
   width: 100%;
   border-collapse: collapse;
   font-size: 13.5px;
-  min-width: 1240px;
   table-layout: auto;
+}
+.admin-table-users {
+  min-width: 1200px;
+}
+.admin-table-trips {
+  min-width: 880px;
 }
 .admin-table tr {
   height: auto !important;
@@ -1693,7 +1703,8 @@ a.admin-control-btn-secondary:hover {
   padding: 0;
 }
 .row-actions {
-  display: flex;
+  display: inline-flex;
+  align-items: center;
   gap: 12px;
   justify-content: flex-end;
   white-space: nowrap;

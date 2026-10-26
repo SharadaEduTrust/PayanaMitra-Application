@@ -250,10 +250,16 @@ export default function UsersAdmin({
 
   function renderSortHeader(label: string, field: SortField) {
     const isSorted = sortField === field;
+    const isFirst = field === "phone";
     return (
       <th
         onClick={() => toggleSort(field)}
-        style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+        style={{
+          cursor: "pointer",
+          userSelect: "none",
+          whiteSpace: "nowrap",
+          paddingLeft: isFirst ? "18px" : undefined,
+        }}
         title={`Sort by ${label} (${isSorted ? (sortOrder === "asc" ? "Descending" : "Ascending") : "Ascending"})`}
         aria-sort={isSorted ? (sortOrder === "asc" ? "ascending" : "descending") : "none"}
       >
@@ -732,11 +738,12 @@ export default function UsersAdmin({
       </div>
 
       <section className="admin-card">
-        <div className="admin-card-head" style={{ flexWrap: "wrap", gap: "16px", alignItems: "center" }}>
+        {/* Card Header: Title on Left, Primary Action (+ New Account) on Right */}
+        <div className="admin-card-header-row">
           <div>
             <h2 className="serif" style={{ margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
               Accounts
-              <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--muted)", background: "#f1f5f9", padding: "2px 9px", borderRadius: "12px" }}>
+              <span className="admin-count-badge">
                 {filtered.length} {filtered.length === 1 ? "account" : "accounts"}
               </span>
             </h2>
@@ -744,50 +751,63 @@ export default function UsersAdmin({
               Manage guest accounts, assign trail leaders, inspect travel credentials, and reset access.
             </p>
           </div>
+          <div className="admin-card-header-actions">
+            <a
+              href="#new-account"
+              className="admin-control-btn admin-control-btn-primary"
+              style={{ textDecoration: "none" }}
+            >
+              + New Account
+            </a>
+          </div>
+        </div>
 
-          <div className="admin-toolbar">
-            {/* Search Input Box */}
-            <div className="admin-search-box">
-              <svg
-                className="admin-search-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <input
-                className="admin-control admin-control-input"
-                placeholder="Search name, phone, email, city…"
-                value={query}
-                onChange={(event) => {
-                  setQuery(event.target.value);
+        {/* Dedicated Toolbar Row for Search & Filters */}
+        <div className="admin-toolbar-row">
+          {/* Search Input Box */}
+          <div className="admin-search-box">
+            <svg
+              className="admin-search-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              className="admin-control-input"
+              placeholder="Search name, phone, email, city…"
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPage(1);
+              }}
+              aria-label="Search accounts"
+            />
+            {query && (
+              <button
+                type="button"
+                className="admin-search-clear"
+                onClick={() => {
+                  setQuery("");
                   setPage(1);
                 }}
-                aria-label="Search accounts"
-              />
-              {query && (
-                <button
-                  type="button"
-                  className="admin-search-clear"
-                  onClick={() => {
-                    setQuery("");
-                    setPage(1);
-                  }}
-                  title="Clear search"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
+                title="Clear search"
+              >
+                ✕
+              </button>
+            )}
+          </div>
 
+          {/* Filter & Action Controls on Right */}
+          <div className="admin-filter-group">
             {/* Role Filter */}
             <select
-              className="admin-control admin-control-select"
+              className="admin-control-select"
               value={roleFilter}
               onChange={(e) => {
                 setRoleFilter(e.target.value);
@@ -803,7 +823,7 @@ export default function UsersAdmin({
 
             {/* Status Filter */}
             <select
-              className="admin-control admin-control-select"
+              className="admin-control-select"
               value={statusFilter}
               onChange={(e) => {
                 setStatusFilter(e.target.value);
@@ -817,9 +837,9 @@ export default function UsersAdmin({
             </select>
 
             {/* Sort Controls */}
-            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+            <div className="admin-sort-combo">
               <select
-                className="admin-control admin-control-select"
+                className="admin-control-select"
                 value={sortField}
                 onChange={(e) => {
                   setSortField(e.target.value as SortField);
@@ -839,7 +859,7 @@ export default function UsersAdmin({
               </select>
               <button
                 type="button"
-                className="admin-control admin-control-btn admin-control-btn-secondary"
+                className="admin-control-btn admin-control-btn-secondary"
                 onClick={() => setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))}
                 title={`Sort ${sortOrder === "asc" ? "Ascending" : "Descending"} (Click to flip)`}
               >
@@ -850,7 +870,7 @@ export default function UsersAdmin({
             {/* Import CSV Button */}
             <button
               type="button"
-              className="admin-control admin-control-btn admin-control-btn-secondary"
+              className="admin-control-btn admin-control-btn-secondary"
               onClick={() => setShowImport(!showImport)}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -860,15 +880,6 @@ export default function UsersAdmin({
               </svg>
               {showImport ? "Close Import" : "Import Guests (CSV)"}
             </button>
-
-            {/* Quick jump to New Account */}
-            <a
-              href="#new-account"
-              className="admin-control admin-control-btn admin-control-btn-primary"
-              style={{ textDecoration: "none" }}
-            >
-              + New Account
-            </a>
           </div>
         </div>
 
@@ -938,7 +949,7 @@ export default function UsersAdmin({
                   <tr>
                     {renderSortHeader("User Id / Mobile Number", "phone")}
                     {renderSortHeader("First Name", "name")}
-                    <th>Last Name</th>
+                    <th style={{ userSelect: "none", whiteSpace: "nowrap" }}>Last Name</th>
                     {renderSortHeader("Role", "role")}
                     {renderSortHeader("Leader Name", "leaderName")}
                     {renderSortHeader("Referral", "referralName")}
@@ -946,13 +957,13 @@ export default function UsersAdmin({
                     {renderSortHeader("Email Id", "email")}
                     {renderSortHeader("Active / Inactive", "isActive")}
                     {renderSortHeader("Date Last Active", "lastActiveAt")}
-                    <th style={{ textAlign: "right", paddingRight: "16px" }} aria-label="Actions">Actions</th>
+                    <th style={{ textAlign: "right", paddingRight: "18px", whiteSpace: "nowrap" }} aria-label="Actions">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedRows.map((row) => (
                     <tr key={row.id}>
-                      <td>
+                      <td style={{ paddingLeft: "18px" }}>
                         <span className="mono" style={{ fontWeight: 600, color: "#0f172a" }}>
                           {row.phone}
                         </span>
@@ -969,7 +980,7 @@ export default function UsersAdmin({
                         <strong style={{ color: "#0f172a" }}>{row.lastName}</strong>
                       </td>
                       <td>
-                        <span className={`role-badge ${row.role}`}>
+                        <span className={`role-badge role-badge-${row.role === "traveller" ? "guest" : row.role}`}>
                           {row.role === "traveller" ? "Guest" : row.role === "leader" ? "Trail Leader" : "Admin"}
                         </span>
                       </td>
@@ -1007,8 +1018,8 @@ export default function UsersAdmin({
                       <td className="small muted" style={{ whiteSpace: "nowrap" }}>
                         {row.lastActiveAt ? new Date(row.lastActiveAt).toLocaleDateString("en-IN") : "Never"}
                       </td>
-                      <td>
-                        <div className="row-action-pills">
+                      <td style={{ textAlign: "right", paddingRight: "18px" }}>
+                        <div className="row-action-pills" style={{ justifyContent: "flex-end" }}>
                           <button
                             type="button"
                             className="action-pill action-pill-neutral"

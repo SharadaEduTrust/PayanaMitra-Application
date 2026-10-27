@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Profile, UserRole } from "@/lib/types";
@@ -7,6 +8,18 @@ import { redirect } from "next/navigation";
 
 /** The signed-in Supabase auth user, or null. Cached per request. */
 export const getAuthUser = cache(async () => {
+  try {
+    const headerList = await headers();
+    const userId = headerList.get("x-user-id");
+    const userEmail = headerList.get("x-user-email");
+    if (userId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { id: userId, email: userEmail ?? "" } as any;
+    }
+  } catch {
+    // headers() might not be available in all contexts, fallback below
+  }
+
   try {
     const supabase = await createClient();
     const { data, error } = await supabase.auth.getUser();

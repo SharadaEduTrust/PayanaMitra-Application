@@ -72,6 +72,8 @@ export interface Trip {
   status: TripStatus
   is_active: boolean
   remarks: string | null
+  feedback_form_url?: string | null
+  feedback_window_days?: number | null
   created_at: string
   updated_at: string
 }
@@ -145,7 +147,7 @@ export interface Feedback {
   id: string
   trip_id: string
   user_id: string
-  rating: number | null   // 1–5
+  rating: number | null   // 1–10
   comment: string | null
   created_at: string
 }

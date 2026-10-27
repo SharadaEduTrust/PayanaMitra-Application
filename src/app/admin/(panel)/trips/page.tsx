@@ -51,7 +51,7 @@ export default async function AdminTripsPage() {
           <h1>Trails</h1>
           <small>Create, publish and manage itineraries.</small>
         </div>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <div className="topbar-actions" style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
           <Link className="btn btn-secondary" href="/admin/import?tab=mapping">
             Map Guests (CSV)
           </Link>

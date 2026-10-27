@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/server/auth'
+import { embedFeedbackConfigIntoRemarks } from '@/lib/feedback'
 
 /**
  * GET  /api/admin/trips          — list all trips (paginated)
@@ -16,6 +17,8 @@ const CreateTripSchema = z.object({
   end_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').optional().nullable(),
   leader_id:   z.string().uuid('Invalid leader ID').optional().nullable(),
   remarks:     z.string().max(2000, 'Remarks cannot exceed 2000 characters').optional().nullable(),
+  feedback_form_url: z.string().trim().max(1000).optional().nullable(),
+  feedback_window_days: z.coerce.number().int().min(1).max(365).optional().nullable(),
 }).refine(data => {
   if (data.start_date && data.end_date) {
     return new Date(data.end_date) >= new Date(data.start_date)
@@ -117,12 +120,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Validation failed', fieldErrors: { trip_code: ['Trip code already exists.'] } }, { status: 422 })
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (admin.from('trips') as any).insert({
+  const insertPayload = {
     ...parsed.data,
+    feedback_form_url: parsed.data.feedback_form_url ? parsed.data.feedback_form_url.trim() : null,
+    feedback_window_days: parsed.data.feedback_window_days ?? 7,
     status: 'draft',
     is_active: true,
-  }).select('*, profiles!trips_leader_id_fkey(id, first_name, last_name, phone)').single()
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let { data, error } = await (admin.from('trips') as any)
+    .insert(insertPayload)
+    .select('*, profiles!trips_leader_id_fkey(id, first_name, last_name, phone)')
+    .single()
+
+  // Resilient fallback if columns have not been added to remote DB yet
+  if (error && (error.code === '42703' || String(error.message).includes('feedback_form_url'))) {
+    const { feedback_form_url, feedback_window_days, ...rest } = insertPayload
+    const fallbackRemarks = embedFeedbackConfigIntoRemarks(rest.remarks, {
+      url: feedback_form_url,
+      windowDays: feedback_window_days,
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fallbackRes = await (admin.from('trips') as any)
+      .insert({ ...rest, remarks: fallbackRemarks })
+      .select('*, profiles!trips_leader_id_fkey(id, first_name, last_name, phone)')
+      .single()
+    data = fallbackRes.data
+    error = fallbackRes.error
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

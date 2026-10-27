@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { TravellerDetails } from "@/lib/types";
 import AvatarUpload from "@/components/avatar-upload";
@@ -42,18 +41,16 @@ function formatLastActive(value: string | null) {
 
 export default async function ProfilePage() {
   const profile = await requireProfile();
-  const supabase = await createClient();
+  const admin = createAdminClient();
 
   const [{ data: details }, { data: documents }, { data: memberships }] = await Promise.all([
-    supabase
+    admin
       .from("traveller_details")
       .select("*")
       .eq("user_id", profile.id)
       .maybeSingle(),
-    // RLS ("Users read own documents") already limits this to the caller.
-    supabase.from("guest_documents").select("*").eq("user_id", profile.id),
-    // RLS ("Users see own trip memberships") already limits this too.
-    supabase.from("trip_members").select("trip_id").eq("user_id", profile.id),
+    admin.from("guest_documents").select("*").eq("user_id", profile.id),
+    admin.from("trip_members").select("trip_id").eq("user_id", profile.id),
   ]);
 
   const traveller = (details as TravellerDetails | null) ?? null;
@@ -61,7 +58,6 @@ export default async function ProfilePage() {
 
   let hasChangedPassword = false;
   try {
-    const admin = createAdminClient();
     const { data: authUserData } = await admin.auth.admin.getUserById(profile.id);
     hasChangedPassword = Boolean(authUserData?.user?.user_metadata?.password_changed);
   } catch {
@@ -140,13 +136,13 @@ export default async function ProfilePage() {
 
   const tripIds = [...new Set((memberships ?? []).map((m) => m.trip_id))];
   const { data: memberTrips } = tripIds.length
-    ? await supabase.from("trips").select(columns).in("id", tripIds)
+    ? await admin.from("trips").select(columns).in("id", tripIds)
     : { data: [] as TripRow[] };
 
   // Leaders and admins also see the trips they lead, mirroring /dashboard.
   const { data: ledTrips } =
     profile.role === "leader" || profile.role === "admin"
-      ? await supabase.from("trips").select(columns).eq("leader_id", profile.id)
+      ? await admin.from("trips").select(columns).eq("leader_id", profile.id)
       : { data: [] as TripRow[] };
 
   const trips: TripRow[] = [...(memberTrips ?? [])];

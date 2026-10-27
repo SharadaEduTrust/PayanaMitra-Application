@@ -1,7 +1,8 @@
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth";
 import type { Trip, TripMember } from "@/lib/types";
 import TripList from "@/components/trip-list";
+import { calculateFeedbackStatus } from "@/lib/feedback";
 
 export const dynamic = "force-dynamic";
 
@@ -15,22 +16,20 @@ function tripStatus(trip: Trip) {
 
 export default async function DashboardPage() {
   const profile = await requireProfile();
+  const admin = createAdminClient();
 
-  const supabase = await createClient();
-
-  // RLS already limits these to trips the user belongs to, or leads.
-  const { data: memberships, error: memberError } = await supabase
+  const { data: memberships, error: memberError } = await admin
     .from("trip_members")
     .select("trip_id")
     .eq("user_id", profile.id);
 
   if (memberError) throw memberError;
 
-  const tripIds = [...new Set((memberships as Pick<TripMember, "trip_id">[]).map((m) => m.trip_id))];
+  const tripIds = [...new Set(((memberships ?? []) as Pick<TripMember, "trip_id">[]).map((m) => m.trip_id))];
 
   let trips: Trip[] = [];
   if (tripIds.length > 0) {
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from("trips")
       .select("*")
       .in("id", tripIds)
@@ -41,7 +40,7 @@ export default async function DashboardPage() {
 
   // Leaders see their assigned trips regardless of publication status.
   if (profile.role === "leader" || profile.role === "admin") {
-    const { data } = await supabase.from("trips").select("*").eq("leader_id", profile.id);
+    const { data } = await admin.from("trips").select("*").eq("leader_id", profile.id);
     for (const trip of (data ?? []) as Trip[]) {
       if (!trips.some((existing) => existing.id === trip.id)) trips.push(trip);
     }
@@ -67,6 +66,7 @@ export default async function DashboardPage() {
 }
 
 function decorate(trip: Trip) {
+  const fbStatus = calculateFeedbackStatus(trip);
   return {
     id: trip.id,
     tripCode: trip.trip_code,
@@ -76,5 +76,9 @@ function decorate(trip: Trip) {
     endDate: trip.end_date,
     status: tripStatus(trip),
     publication: trip.status,
+    feedbackState: fbStatus.state,
+    feedbackClosesOn: fbStatus.closesOnDate,
+    feedbackDaysRemaining: fbStatus.daysRemaining,
+    feedbackFormUrl: fbStatus.formUrl,
   };
 }

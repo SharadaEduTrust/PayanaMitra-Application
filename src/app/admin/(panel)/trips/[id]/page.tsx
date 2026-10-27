@@ -5,6 +5,7 @@ import type { Activity, ItineraryDay, Trip } from "@/lib/types";
 import TripEditor from "@/components/trip-editor";
 import TripMembers from "@/components/trip-members";
 import TripContactsEditor from "@/components/trip-contacts-editor";
+import { extractFeedbackConfig, cleanRemarks } from "@/lib/feedback";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,7 @@ export default async function AdminTripPage({ params }: Params) {
     );
   }
   const trip = tripData as Trip;
+  const fbConfig = extractFeedbackConfig(trip);
 
   const [{ data: dayRows }, { data: contactRows }, { data: leaderRows }] = await Promise.all([
     supabase.from("itinerary_days").select("*").eq("trip_id", id).order("day_number"),
@@ -49,9 +51,14 @@ export default async function AdminTripPage({ params }: Params) {
 
   return (
     <div className="admin-body">
-      <Link className="back-link" href="/admin/trips">
-        ← All trails
-      </Link>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+        <Link className="back-link" href="/admin/trips" style={{ margin: 0 }}>
+          ← All trails
+        </Link>
+        <Link className="btn btn-secondary" href={`/admin/feedback?trip_id=${trip.id}`}>
+          View Trail Feedback →
+        </Link>
+      </div>
 
       <TripEditor
         trip={{
@@ -63,8 +70,10 @@ export default async function AdminTripPage({ params }: Params) {
           endDate: trip.end_date ?? "",
           status: trip.status,
           isActive: trip.is_active,
-          remarks: trip.remarks ?? "",
+          remarks: cleanRemarks(trip.remarks),
           leaderId: trip.leader_id ?? "",
+          feedbackFormUrl: fbConfig.url ?? "",
+          feedbackWindowDays: fbConfig.windowDays,
         }}
         days={days.map((day) => ({
           id: day.id,

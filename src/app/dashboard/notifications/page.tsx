@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth";
 import type { Notification } from "@/lib/types";
 import NotificationList from "@/components/notification-list";
@@ -6,13 +6,13 @@ import NotificationList from "@/components/notification-list";
 export const dynamic = "force-dynamic";
 
 export default async function NotificationsPage() {
-  await requireProfile();
-  const supabase = await createClient();
+  const profile = await requireProfile();
+  const admin = createAdminClient();
 
-  // RLS allows a user to read only their own notifications.
-  const { data } = await supabase
+  const { data } = await admin
     .from("notifications")
     .select("id, title, body, is_read, created_at")
+    .eq("user_id", profile.id)
     .order("created_at", { ascending: false })
     .limit(50);
 

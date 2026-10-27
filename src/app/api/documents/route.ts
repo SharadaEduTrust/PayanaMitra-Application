@@ -128,6 +128,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const profile = await getSession()
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (profile.role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden: Only administrators can upload documents' }, { status: 403 })
+  }
 
   const contentType = req.headers.get('content-type') ?? ''
   const admin = createAdminClient()

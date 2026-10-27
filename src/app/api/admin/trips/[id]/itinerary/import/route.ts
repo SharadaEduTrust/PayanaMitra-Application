@@ -1,30 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/server/auth'
-
-/**
- * POST /api/admin/trips/[id]/itinerary/import
- *
- * Accepts a multipart/form-data request with a single `file` field that
- * contains a UTF-8 CSV. Parses the CSV server-side and bulk-imports the
- * itinerary (days + activities) for the given trip.
- *
- * Follows exact Field Names from the Payana Mitra App - Table Details sheet ("Trail Table Extension"):
- *   Trail Id             — string (optional for reference)
- *   Trail Name           — string (optional for reference)
- *   Day                  — integer >= 1 (required)
- *   Destination          — string (optional)
- *   Itinerary            — string (optional, description of the day plan)
- *   Hotel Name           — string (optional)
- *
- * Extended activity columns supported:
- *   Meal Plan            — Breakfast | Breakfast & Dinner | Breakfast, Lunch & Dinner (optional)
- *   Activity Title       — string (optional — row creates activity when present)
- *   Activity Description — string (optional)
- *   Start Time           — HH:MM or HH:MM:SS (optional)
- *   End Time             — HH:MM or HH:MM:SS (optional)
- *   Activity Order       — integer >= 1 (optional)
- */
+import { parseCSV, getField, parseDayNumber, extractActivitiesFromRow } from '@/lib/csv'
 
 interface Params { params: Promise<{ id: string }> }
 
@@ -51,67 +28,16 @@ async function requireAdmin() {
   return { profile }
 }
 
-function parseCSV(text: string): Record<string, string>[] {
-  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
-  const headerLine = lines.find(l => l.trim().length > 0)
-  if (!headerLine) return []
-  const headers = splitCSVRow(headerLine).map(h => h.trim())
-  const rows: Record<string, string>[] = []
-  for (let i = lines.indexOf(headerLine) + 1; i < lines.length; i++) {
-    const line = lines[i]
-    if (line.trim() === '') continue
-    const values = splitCSVRow(line)
-    const obj: Record<string, string> = {}
-    headers.forEach((h, idx) => { obj[h] = (values[idx] ?? '').trim() })
-    rows.push(obj)
-  }
-  return rows
-}
-
-function splitCSVRow(line: string): string[] {
-  const fields: string[] = []
-  let current = ''
-  let inQuotes = false
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]
-    if (inQuotes) {
-      if (ch === '"') {
-        if (line[i + 1] === '"') { current += '"'; i++ }
-        else inQuotes = false
-      } else { current += ch }
-    } else {
-      if (ch === '"') { inQuotes = true }
-      else if (ch === ',') { fields.push(current); current = '' }
-      else { current += ch }
-    }
-  }
-  fields.push(current)
-  return fields
-}
-
-function getField(row: Record<string, string>, ...aliases: string[]): string {
-  for (const a of aliases) {
-    if (row[a] !== undefined && row[a].trim() !== '') return row[a].trim()
-    const normTarget = a.toLowerCase().replace(/[\s_/.-]/g, '')
-    for (const [k, v] of Object.entries(row)) {
-      if (k.toLowerCase().replace(/[\s_/.-]/g, '') === normTarget && v.trim() !== '') {
-        return v.trim()
-      }
-    }
-  }
-  return ''
-}
-
 export async function GET() {
   const guard = await requireAdmin()
   if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })
 
   // Uses Field Names matching "Trail Table Extension" from the Table Details specification
   const lines = [
-    'Trail Id,Trail Name,Day,Destination,Itinerary,Hotel Name,Meal Plan,Activity Title,Activity Description,Start Time,End Time',
-    'HIHGOK01,Heritage Gems of Karnataka,1,Hampi,"• Arrive at Hospet / Hampi\\n• Check-in to hotel\\n• Sunset view at Hemakuta Hill",Heritage Resort Hampi,Breakfast & Dinner,Sunset Walk,Walk up to Hemakuta Hill for panoramic sunset view,16:30,18:30',
-    'HIHGOK01,Heritage Gems of Karnataka,2,Hampi,"• Virupaksha Temple & Bazaar\\n• Vijaya Vittala Temple & Stone Chariot\\n• Tungabhadra River coracle ride",Heritage Resort Hampi,Breakfast, Lunch & Dinner,Temple Tour,Guided exploration of Vijaya Vittala temple complex,08:30,12:00',
-    'HIHGOK01,Heritage Gems of Karnataka,3,Badami,"• Transfer to Badami\\n• Rock-cut Cave Temples\\n• Agastya Lake heritage circuit",The Badami Court,Breakfast & Dinner,Cave Temples Exploration,Guided walk through 6th-century cave temples,09:00,13:00',
+    'Trail Id,Trail Name,Day,Destination,Itinerary,Hotel Name,Meal Plan,Activity Description 1,Activity Description 2,Activity Description 3,Activity Description 4,Activity Description 5',
+    'HIHGOK01,Heritage Gems of Karnataka,1,Hampi,"• Arrive at Hospet / Hampi\\n• Check-in to hotel\\n• Sunset view at Hemakuta Hill",Heritage Resort Hampi,Breakfast & Dinner,"Arrive at Hospet station and transfer to hotel","Check-in and refresh at resort","Sunset walk to Hemakuta Hill for panoramic sunset view","Virupaksha temple evening Aarti","Traditional dinner at resort"',
+    'HIHGOK01,Heritage Gems of Karnataka,2,Hampi,"• Virupaksha Temple & Bazaar\\n• Vijaya Vittala Temple & Stone Chariot\\n• Tungabhadra River coracle ride",Heritage Resort Hampi,"Breakfast, Lunch & Dinner","Guided morning walk through Virupaksha bazaar","Exploration of Vijaya Vittala temple complex and stone chariot","Scenic coracle ride on the Tungabhadra River","Visit to Lotus Mahal and Queen\'s Bath","Cultural music performance and dinner"',
+    'HIHGOK01,Heritage Gems of Karnataka,3,Badami,"• Transfer to Badami\\n• Rock-cut Cave Temples\\n• Agastya Lake heritage circuit",The Badami Court,Breakfast & Dinner,"Scenic morning drive to Badami","Guided exploration of 6th-century rock-cut cave temples","Walk around holy Agastya Lake and Bhutanatha Temples","Visit Badami Archaeological Museum","Sunset view and dinner at hotel"',
   ]
   return new NextResponse(lines.join('\n'), {
     status: 200,
@@ -195,7 +121,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     // Field names matching "Trail Table Extension"
     const dayRaw = getField(row, 'Day', 'day', 'day_number', 'Day Number')
-    const dayNum = parseInt(dayRaw, 10)
+    const dayNum = parseDayNumber(dayRaw)
     if (!dayRaw || isNaN(dayNum) || dayNum < 1) {
       errors.push({ row: rowNum, error: 'Day must be an integer >= 1' })
       skipped++
@@ -231,40 +157,21 @@ export async function POST(req: NextRequest, { params }: Params) {
       })
     }
 
-    const actTitle = getField(row, 'Activity Title', 'ActivityTitle', 'activity_title', 'activity')
-    if (!actTitle) continue
-
-    const startTime = getField(row, 'Start Time', 'StartTime', 'start_time') || null
-    const endTime   = getField(row, 'End Time', 'EndTime', 'end_time') || null
-
-    if (startTime && !TIME_RE.test(startTime)) {
-      errors.push({ row: rowNum, error: 'Start Time must be HH:MM or HH:MM:SS' })
-      skipped++
-      continue
-    }
-    if (endTime && !TIME_RE.test(endTime)) {
-      errors.push({ row: rowNum, error: 'End Time must be HH:MM or HH:MM:SS' })
-      skipped++
-      continue
-    }
-    if (startTime && endTime && endTime < startTime) {
-      errors.push({ row: rowNum, error: 'End Time must be after or equal to Start Time' })
-      skipped++
-      continue
-    }
-
-    const orderRaw = getField(row, 'Activity Order', 'activity_order')
-    const actOrder = orderRaw ? parseInt(orderRaw, 10) : null
-
     const existing = activitiesByDay.get(dayNum) ?? []
-    existing.push({
-      title: actTitle,
-      description: getField(row, 'Activity Description', 'activity_description', 'description') || null,
-      start_time: startTime,
-      end_time: endTime,
-      activity_order: actOrder ?? (existing.length + 1),
-      row: rowNum,
-    })
+    const newActs = extractActivitiesFromRow(row, existing.length)
+    for (const a of newActs) {
+      if (a.start_time && a.end_time && a.end_time < a.start_time) {
+        errors.push({ row: rowNum, error: `Activity "${a.title}": End Time "${a.end_time}" must be after or equal to Start Time "${a.start_time}"` })
+      }
+      existing.push({
+        title: a.title,
+        description: a.description,
+        start_time: a.start_time,
+        end_time: a.end_time,
+        activity_order: a.activity_order,
+        row: rowNum,
+      })
+    }
     activitiesByDay.set(dayNum, existing)
   }
 

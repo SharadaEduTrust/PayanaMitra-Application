@@ -12,7 +12,7 @@ export default function AdminNav({ links }: { links: { href: string; label: stri
         const active =
           link.href === "/admin" ? pathname === "/admin" : pathname.startsWith(link.href);
         return (
-          <Link key={link.href} className={`side-link ${active ? "active" : ""}`} href={link.href}>
+          <Link key={link.href} className={`side-link ${active ? "active" : ""}`} href={link.href} prefetch={true}>
             {link.label}
           </Link>
         );

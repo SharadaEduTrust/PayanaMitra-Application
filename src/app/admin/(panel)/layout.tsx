@@ -10,16 +10,19 @@ import type { Notification, Profile } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPanelLayout({ children }: { children: React.ReactNode }) {
-  const profile = await requireProfile(["admin"]);
-  const supabase = await createClient();
-
-  const { count } = await supabase
-    .from("notifications")
-    .select("id", { count: "exact", head: true })
-    .eq("is_read", false);
+  const [profile, { count }] = await Promise.all([
+    requireProfile(["admin"]),
+    (async () => {
+      const supabase = await createClient();
+      return supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("is_read", false);
+    })(),
+  ]);
 
   return (
-    <div className="admin">
+    <div className="admin admin-layout">
       <aside className="admin-side">
         <Brand size={36} tone="light" href="/admin" />
         <div className="side-label">Manage</div>
@@ -29,6 +32,7 @@ export default async function AdminPanelLayout({ children }: { children: React.R
             { href: "/admin/users", label: "Guests" },
             { href: "/admin/trips", label: "Trails" },
             { href: "/admin/destinations", label: "Destinations" },
+            { href: "/admin/feedback", label: "Feedback" },
             { href: "/admin/import", label: "CSV Import" },
             { href: "/admin/notifications", label: `Notifications${count ? ` (${count})` : ""}` },
             { href: "/admin/audit-log", label: "Audit log" },

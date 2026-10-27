@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/server/auth'
+import { embedFeedbackConfigIntoRemarks, extractFeedbackConfig } from '@/lib/feedback'
 
 /**
  * GET    /api/admin/trips/[id]   — get single trip (with leader info)
@@ -20,6 +21,8 @@ const UpdateTripSchema = z.object({
   status:      z.enum(['draft', 'published', 'archived']).optional(),
   is_active:   z.boolean().optional(),
   remarks:     z.string().max(2000).optional().nullable(),
+  feedback_form_url: z.string().trim().max(1000).optional().nullable(),
+  feedback_window_days: z.coerce.number().int().min(1).max(365).optional().nullable(),
 }).strict().refine(data => {
   if (data.start_date && data.end_date) {
     return new Date(data.end_date) >= new Date(data.start_date)
@@ -53,7 +56,14 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   if (error || !data) return NextResponse.json({ error: 'Trip not found' }, { status: 404 })
 
-  return NextResponse.json({ data })
+  const fbConfig = extractFeedbackConfig(data)
+  const enriched = {
+    ...data,
+    feedback_form_url: fbConfig.url,
+    feedback_window_days: fbConfig.windowDays,
+  }
+
+  return NextResponse.json({ data: enriched })
 }
 
 // ─── PATCH /api/admin/trips/[id] ─────────────────────────────────────────────
@@ -95,17 +105,60 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
   }
 
+  const updatePayload: Record<string, unknown> = {
+    ...parsed.data,
+    updated_at: new Date().toISOString(),
+  }
+
+  if (parsed.data.feedback_form_url !== undefined) {
+    updatePayload.feedback_form_url = parsed.data.feedback_form_url ? parsed.data.feedback_form_url.trim() : null
+  }
+  if (parsed.data.feedback_window_days !== undefined) {
+    updatePayload.feedback_window_days = parsed.data.feedback_window_days ?? 7
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (admin.from('trips') as any)
-    .update({ ...parsed.data, updated_at: new Date().toISOString() })
+  let { data, error } = await (admin.from('trips') as any)
+    .update(updatePayload)
     .eq('id', id)
     .select('*, profiles!trips_leader_id_fkey(id, first_name, last_name, phone, email)')
     .single()
 
+  // Resilient fallback if columns do not exist yet on remote table
+  if (error && (error.code === '42703' || String(error.message).includes('feedback_form_url'))) {
+    const { feedback_form_url, feedback_window_days, ...rest } = updatePayload
+    let fallbackRemarks = rest.remarks as string | null | undefined
+    if (parsed.data.feedback_form_url !== undefined || parsed.data.feedback_window_days !== undefined) {
+      if (fallbackRemarks === undefined) {
+        const { data: curr } = await admin.from('trips').select('remarks').eq('id', id).maybeSingle()
+        fallbackRemarks = curr?.remarks ?? null
+      }
+      fallbackRemarks = embedFeedbackConfigIntoRemarks(fallbackRemarks, {
+        url: (feedback_form_url as string | null) ?? null,
+        windowDays: (feedback_window_days as number) ?? 7,
+      })
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fallbackRes = await (admin.from('trips') as any)
+      .update({ ...rest, ...(fallbackRemarks !== undefined ? { remarks: fallbackRemarks } : {}) })
+      .eq('id', id)
+      .select('*, profiles!trips_leader_id_fkey(id, first_name, last_name, phone, email)')
+      .single()
+    data = fallbackRes.data
+    error = fallbackRes.error
+  }
+
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: 'Trip not found' }, { status: 404 })
 
-  return NextResponse.json({ data })
+  const fbConfig = extractFeedbackConfig(data)
+  const enriched = {
+    ...data,
+    feedback_form_url: fbConfig.url,
+    feedback_window_days: fbConfig.windowDays,
+  }
+
+  return NextResponse.json({ data: enriched })
 }
 
 // ─── DELETE /api/admin/trips/[id] ────────────────────────────────────────────

@@ -82,21 +82,43 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   // 3. Create new trip
+  const newTripPayload: Record<string, unknown> = {
+    trip_code: new_trip_code,
+    name: new_name,
+    destination: src.destination,
+    start_date: new_start_date ?? src.start_date,
+    end_date: calculatedEndDate,
+    leader_id: src.leader_id,
+    status: 'draft',
+    is_active: true,
+    remarks: src.remarks,
+  }
+
+  const srcRecord = src as unknown as Record<string, unknown>
+  if (srcRecord.feedback_form_url !== undefined) {
+    newTripPayload.feedback_form_url = srcRecord.feedback_form_url
+  }
+  if (srcRecord.feedback_window_days !== undefined) {
+    newTripPayload.feedback_window_days = srcRecord.feedback_window_days
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: newTrip, error: createErr } = await (admin.from('trips') as any)
-    .insert({
-      trip_code: new_trip_code,
-      name: new_name,
-      destination: src.destination,
-      start_date: new_start_date ?? src.start_date,
-      end_date: calculatedEndDate,
-      leader_id: src.leader_id,
-      status: 'draft',
-      is_active: true,
-      remarks: src.remarks,
-    })
+  let { data: newTrip, error: createErr } = await (admin.from('trips') as any)
+    .insert(newTripPayload)
     .select()
     .single()
+
+  if (createErr && (createErr.code === '42703' || String(createErr.message).includes('feedback_form_url'))) {
+    delete newTripPayload.feedback_form_url
+    delete newTripPayload.feedback_window_days
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const retry = await (admin.from('trips') as any)
+      .insert(newTripPayload)
+      .select()
+      .single()
+    newTrip = retry.data
+    createErr = retry.error
+  }
 
   if (createErr || !newTrip) {
     return NextResponse.json({ error: createErr?.message ?? 'Failed to create new trip' }, { status: 500 })

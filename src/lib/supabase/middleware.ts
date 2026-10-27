@@ -24,7 +24,38 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
-  let response = NextResponse.next({ request });
+  const path = request.nextUrl.pathname;
+  const isAuthRoute = path === "/login" || path === "/signup";
+  const needsAuth = path.startsWith("/dashboard") || path.startsWith("/admin") || path === "/change-password";
+  const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
+  // Fast check: check if any Supabase auth cookies are present
+  const allCookies = request.cookies.getAll();
+  const hasAuthCookie = allCookies.some(
+    (c) => c.name.startsWith("sb-") && c.name.includes("-auth-token")
+  );
+
+  // If there are no auth cookies at all:
+  // - If the route requires auth, redirect to /login immediately (0ms delay)
+  // - If the route is a public route (not /login or /signup), proceed immediately without touching auth
+  if (!hasAuthCookie) {
+    if (needsAuth) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("next", path);
+      return NextResponse.redirect(url);
+    }
+    if (!isAuthRoute) {
+      return NextResponse.next({ request });
+    }
+  }
+
+  const requestHeaders = new Headers(request.headers);
+  let response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
 
   const supabase = createServerClient(url, anonKey, {
     cookies: {
@@ -33,7 +64,11 @@ export async function updateSession(request: NextRequest) {
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
+        response = NextResponse.next({
+          request: {
+            headers: requestHeaders,
+          },
+        });
         cookiesToSet.forEach(({ name, value, options }) =>
           response.cookies.set(name, value, options),
         );
@@ -41,19 +76,17 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  // Do not run code between createServerClient and getUser, it can cause
-  // hard-to-debug session problems.
+  // Verify auth session
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const path = request.nextUrl.pathname;
   const signedIn = Boolean(user);
-  const isAuthRoute = path === "/login" || path === "/signup";
-  const needsAuth = path.startsWith("/dashboard") || path.startsWith("/admin") || path === "/change-password";
-  const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
-  if (signedIn) {
+  if (signedIn && user) {
+    requestHeaders.set("x-user-id", user.id);
+    if (user.email) requestHeaders.set("x-user-email", user.email);
+
     const lastActiveCookie = request.cookies.get("payana_last_active")?.value;
     const lastActive = lastActiveCookie ? parseInt(lastActiveCookie, 10) : NaN;
     const now = Date.now();
@@ -118,5 +151,17 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  return response;
+  // Re-apply request headers to the final response
+  const finalResponse = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
+
+  // Preserve any cookies set during createServerClient
+  response.cookies.getAll().forEach((cookie) => {
+    finalResponse.cookies.set(cookie);
+  });
+
+  return finalResponse;
 }

@@ -1,9 +1,9 @@
-import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { notFound } from "next/navigation";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth";
 import type { Activity, ItineraryDay, Trip, TripContact } from "@/lib/types";
 import TripDetailView from "@/components/trip-detail-view";
+import { extractFeedbackConfig, cleanRemarks } from "@/lib/feedback";
 
 export const dynamic = "force-dynamic";
 
@@ -12,16 +12,26 @@ type Params = { params: Promise<{ id: string }> };
 export default async function TripPage({ params }: Params) {
   const { id } = await params;
   const profile = await requireProfile();
-  const supabase = await createClient();
+  const admin = createAdminClient();
 
-  // RLS blocks this query entirely if the user is not a member or leader.
-  const { data: tripData } = await supabase.from("trips").select("*").eq("id", id).maybeSingle();
+  // Authorize: Admin can see any trip; Leaders can see their led trips; Travellers can see their enrolled trips.
+  if (profile.role !== "admin") {
+    const [{ data: isMember }, { data: isLeader }] = await Promise.all([
+      admin.from("trip_members").select("id").eq("trip_id", id).eq("user_id", profile.id).maybeSingle(),
+      admin.from("trips").select("id").eq("id", id).eq("leader_id", profile.id).maybeSingle(),
+    ]);
+    if (!isMember && !isLeader) {
+      notFound();
+    }
+  }
+
+  const { data: tripData } = await admin.from("trips").select("*").eq("id", id).maybeSingle();
   const trip = tripData as Trip | null;
   if (!trip) notFound();
 
   const [{ data: dayRows }, { data: contactRows }] = await Promise.all([
-    supabase.from("itinerary_days").select("*").eq("trip_id", id).order("day_number"),
-    supabase.from("trip_contacts").select("*").eq("trip_id", id).order("name"),
+    admin.from("itinerary_days").select("*").eq("trip_id", id).order("day_number"),
+    admin.from("trip_contacts").select("*").eq("trip_id", id).order("name"),
   ]);
 
   const days = (dayRows ?? []) as ItineraryDay[];
@@ -29,13 +39,15 @@ export default async function TripPage({ params }: Params) {
 
   let activities: Activity[] = [];
   if (dayIds.length > 0) {
-    const { data } = await supabase
+    const { data } = await admin
       .from("activities")
       .select("*")
       .in("itinerary_day_id", dayIds)
       .order("activity_order");
     activities = (data ?? []) as Activity[];
   }
+
+  const fbConfig = extractFeedbackConfig(trip);
 
   return (
     <TripDetailView
@@ -47,7 +59,9 @@ export default async function TripPage({ params }: Params) {
         startDate: trip.start_date,
         endDate: trip.end_date,
         status: trip.status,
-        remarks: trip.remarks,
+        remarks: cleanRemarks(trip.remarks),
+        feedbackFormUrl: fbConfig.url,
+        feedbackWindowDays: fbConfig.windowDays,
       }}
       days={days.map((day) => ({
         id: day.id,
@@ -76,6 +90,7 @@ export default async function TripPage({ params }: Params) {
       }))}
       canContribute={profile.role === "admin" || profile.role === "leader"}
       userRole={profile.role}
+      isLeader={profile.role === "admin" || trip.leader_id === profile.id}
     />
   );
 }

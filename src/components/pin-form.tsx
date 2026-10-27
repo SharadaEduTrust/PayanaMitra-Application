@@ -73,12 +73,12 @@ export default function PinForm() {
   return (
     <form onSubmit={submit}>
       <label className="form-field">
-        Phone number
+        User ID / Mobile Number
         <input
           type="tel"
           inputMode="numeric"
           autoComplete="tel"
-          placeholder="98765 43210"
+          placeholder="Enter Your 10 digit Mobile number"
           value={phone}
           onChange={(event) => setPhone(event.target.value)}
           required
@@ -97,7 +97,7 @@ export default function PinForm() {
             type={showPassword ? "text" : "password"}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            placeholder="Last 4 digits or custom password"
+            placeholder="Enter Your Password"
             autoComplete="current-password"
           />
           <button

@@ -1,6 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
+import { calculateFeedbackStatus } from "@/lib/feedback";
+import TrailBroadcastModal from "@/components/trail-broadcast-modal";
 
 export type DayView = {
   id: string;
@@ -40,6 +43,7 @@ export default function TripDetailView({
   contacts,
   canContribute,
   userRole,
+  isLeader = false,
 }: {
   trip: {
     id: string;
@@ -50,12 +54,25 @@ export default function TripDetailView({
     endDate: string | null;
     status: "draft" | "published" | "archived";
     remarks: string | null;
+    feedbackFormUrl?: string | null;
+    feedbackWindowDays?: number | null;
   };
   days: DayView[];
   contacts: ContactView[];
   canContribute: boolean;
   userRole?: string;
+  isLeader?: boolean;
 }) {
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+
+  const feedbackStatus = calculateFeedbackStatus({
+    start_date: trip.startDate,
+    end_date: trip.endDate,
+    feedback_form_url: trip.feedbackFormUrl,
+    feedback_window_days: trip.feedbackWindowDays,
+    remarks: trip.remarks,
+  });
+
   return (
     <div className="trip-detail">
       <Link className="back-link" href="/dashboard">
@@ -69,8 +86,106 @@ export default function TripDetailView({
           <p className="trip-code mono">{trip.tripCode}</p>
           <p>{dateRange(trip.startDate, trip.endDate)}</p>
         </div>
-        <span className={`pill ${trip.status === "published" ? "upcoming" : "past"}`}>{trip.status}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <span className={`pill ${trip.status === "published" ? "upcoming" : "past"}`}>{trip.status}</span>
+          {isLeader && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setShowBroadcastModal(true)}
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 14px", fontSize: "12px" }}
+            >
+              <span>📢</span>
+              <span>Send Notification</span>
+            </button>
+          )}
+        </div>
       </header>
+
+      {isLeader && (
+        <section
+          style={{
+            marginBottom: "20px",
+            padding: "16px 20px",
+            borderRadius: "8px",
+            background: "linear-gradient(135deg, rgba(20,53,42,0.06), rgba(246,231,200,0.4))",
+            border: "1px solid var(--forest, #14352a)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "14px",
+          }}
+        >
+          <div style={{ flex: 1, minWidth: "260px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+              <span className="pill on" style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                Trail Lead Tools
+              </span>
+              <span className="small muted">Announcements & Alerts</span>
+            </div>
+            <h3 className="serif" style={{ margin: "2px 0 4px", fontSize: "1.15rem", color: "var(--forest, #14352a)" }}>
+              Broadcast to Trail Guests
+            </h3>
+            <p className="small muted" style={{ margin: 0, lineHeight: "1.5" }}>
+              Send schedule updates, weather warnings, or departure reminders directly to all guests booked on this trail via in-app alert and push notification.
+            </p>
+          </div>
+          <div>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setShowBroadcastModal(true)}
+              style={{ display: "inline-flex", alignItems: "center", gap: "8px", whiteSpace: "nowrap" }}
+            >
+              <span>📢</span>
+              <span>Send Notification</span>
+            </button>
+          </div>
+        </section>
+      )}
+
+      {feedbackStatus.configured && feedbackStatus.state === "open" && (
+        <section className="feedback-banner-card" style={{ marginBottom: "20px", padding: "18px 22px", borderRadius: "8px", background: "linear-gradient(135deg, rgba(20,53,42,0.12), rgba(246,231,200,0.35))", border: "1px solid var(--forest, #14352a)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "14px" }}>
+            <div style={{ flex: 1, minWidth: "260px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                <span className="pill on" style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em" }}>Feedback Open</span>
+                <span className="small muted">
+                  {feedbackStatus.daysRemaining === 0 ? "Closes tonight at 23:59" : `${feedbackStatus.daysRemaining} days remaining (until ${feedbackStatus.closesOnDate})`}
+                </span>
+              </div>
+              <h2 className="serif" style={{ margin: "0 0 6px", fontSize: "1.25rem", color: "var(--forest, #14352a)" }}>
+                How was your trail experience?
+              </h2>
+              <p className="small muted" style={{ margin: 0 }}>
+                This trail has completed! Please share your thoughts in our official Google Form before submissions close on <strong>{feedbackStatus.closesOnDate}</strong>.
+              </p>
+            </div>
+            <div>
+              <a
+                href={feedbackStatus.formUrl!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-primary"
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px", textDecoration: "none", whiteSpace: "nowrap" }}
+              >
+                <span>Fill Google Form</span>
+                <span>↗</span>
+              </a>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {feedbackStatus.configured && feedbackStatus.state === "closed" && (
+        <div style={{ marginBottom: "20px", padding: "12px 18px", borderRadius: "8px", background: "var(--paper, #fdfbf7)", border: "1px solid var(--line, #e2d9cd)", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <span className="pill past" style={{ fontSize: "10px" }}>Feedback Closed</span>
+          <span className="small muted">
+            The feedback window for {trip.name} closed on {feedbackStatus.closesOnDate}. Thank you for traveling with us!
+          </span>
+        </div>
+      )}
 
       {trip.status !== "published" && (
         <p className="form-note">
@@ -156,23 +271,34 @@ export default function TripDetailView({
         )}
       </section>
 
-      <div className="trip-footer-actions">
-        {userRole === "traveller" && (
-          <>
-            <Link className="btn btn-secondary" href={`/dashboard/trips/${trip.id}/feedback`}>
-              Leave feedback
+      {(isLeader || userRole === "admin") && (
+        <div className="trip-footer-actions">
+          {isLeader && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setShowBroadcastModal(true)}
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+            >
+              <span>📢</span>
+              <span>Send Trail Notification</span>
+            </button>
+          )}
+          {userRole === "admin" && (
+            <Link className="btn btn-secondary" href={`/admin/trips/${trip.id}`}>
+              Edit in admin
             </Link>
-            <Link className="btn btn-secondary" href={`/dashboard/trips/${trip.id}/survey`}>
-              Trail survey
-            </Link>
-          </>
-        )}
-        {canContribute && (
-          <Link className="btn btn-secondary" href={`/admin/trips/${trip.id}`}>
-            Edit in admin
-          </Link>
-        )}
-      </div>
+          )}
+        </div>
+      )}
+
+      {isLeader && (
+        <TrailBroadcastModal
+          trip={trip}
+          isOpen={showBroadcastModal}
+          onClose={() => setShowBroadcastModal(false)}
+        />
+      )}
     </div>
   );
 }

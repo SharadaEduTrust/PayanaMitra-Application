@@ -63,6 +63,8 @@ export type Trip = {
   status: TripStatus;
   is_active: boolean;
   remarks: string | null;
+  feedback_form_url?: string | null;
+  feedback_window_days?: number | null;
   created_at: string;
   updated_at: string;
 };

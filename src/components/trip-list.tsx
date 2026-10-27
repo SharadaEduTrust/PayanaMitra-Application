@@ -11,6 +11,10 @@ export type TripSummary = {
   endDate: string | null;
   status: string;
   publication: string;
+  feedbackState?: "not_configured" | "upcoming" | "open" | "closed";
+  feedbackClosesOn?: string | null;
+  feedbackDaysRemaining?: number;
+  feedbackFormUrl?: string | null;
 };
 
 const sections = [
@@ -88,6 +92,60 @@ export default function TripList({
                         {trip.endDate &&
                           ` – ${new Date(trip.endDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`}
                       </p>
+                      {/* Time left for feedback after completion of trail */}
+                      {trip.status === "past" && (
+                        trip.feedbackState === "open" ? (
+                          <div
+                            style={{
+                              margin: "10px 0 12px",
+                              padding: "7px 11px",
+                              borderRadius: "6px",
+                              background: "rgba(20,53,42,0.06)",
+                              border: "1px solid var(--forest, #14352a)",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              fontSize: "11px",
+                            }}
+                          >
+                            <span style={{ color: "var(--forest, #14352a)", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                              <span>⏱️</span>
+                              <span>
+                                {(trip.feedbackDaysRemaining ?? 0) === 0
+                                  ? "Feedback closes tonight (23:59 IST)"
+                                  : `${trip.feedbackDaysRemaining ?? 0} day${(trip.feedbackDaysRemaining ?? 0) > 1 ? "s" : ""} left for feedback`}
+                              </span>
+                            </span>
+                            {trip.feedbackClosesOn && (
+                              <span className="muted" style={{ fontSize: "10px" }}>
+                                until {trip.feedbackClosesOn}
+                              </span>
+                            )}
+                          </div>
+                        ) : trip.feedbackState === "closed" ? (
+                          <div
+                            style={{
+                              margin: "10px 0 12px",
+                              padding: "6px 10px",
+                              borderRadius: "6px",
+                              background: "var(--paper, #fdfbf7)",
+                              border: "1px solid var(--line, #e2d9cd)",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              fontSize: "11px",
+                              color: "var(--muted, #64748b)",
+                            }}
+                          >
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                              <span>🔒</span>
+                              <span>Feedback window closed {trip.feedbackClosesOn ? `on ${trip.feedbackClosesOn}` : ""}</span>
+                            </span>
+                            <span style={{ fontStyle: "italic", fontSize: "10px" }}>Review available</span>
+                          </div>
+                        ) : null
+                      )}
+
                       {trip.status === "closed" ? (
                         <p className="muted small">Your coordinator has not published this trail yet.</p>
                       ) : (
@@ -95,6 +153,15 @@ export default function TripList({
                           <Link className="btn btn-primary" href={`/dashboard/trips/${trip.id}`}>
                             View itinerary
                           </Link>
+                          {(role === "traveller" || role === "leader" || !role) &&
+                            (trip.status === "past" || trip.feedbackState === "open") && (
+                              <Link
+                                className="btn btn-secondary trip-card-feedback-btn"
+                                href={`/dashboard/trips/${trip.id}/feedback`}
+                              >
+                                Feedback
+                              </Link>
+                            )}
                         </div>
                       )}
                     </article>

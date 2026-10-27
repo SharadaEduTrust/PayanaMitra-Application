@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const links = [
-  { href: "/dashboard", label: "All Trails" },
+  { href: "/dashboard", label: "My Trails" },
   { href: "/dashboard/profile", label: "My Profile" },
   { href: "/dashboard/documents", label: "My Documents" },
   { href: "/dashboard/notifications", label: "Notifications" },
@@ -37,6 +37,9 @@ export default function DashboardNav({ role }: { role: string }) {
           <div className="side-label">Trail Lead</div>
           <Link className={`side-link ${isActive("/dashboard/guests") ? "active" : ""}`} href="/dashboard/guests" prefetch={true}>
             Assigned Guests
+          </Link>
+          <Link className={`side-link ${isActive("/dashboard/feedback") ? "active" : ""}`} href="/dashboard/feedback" prefetch={true}>
+            Guest Feedback
           </Link>
         </>
       )}

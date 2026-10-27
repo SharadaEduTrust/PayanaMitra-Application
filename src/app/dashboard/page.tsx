@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth";
 import type { Trip, TripMember } from "@/lib/types";
 import TripList from "@/components/trip-list";
+import { calculateFeedbackStatus } from "@/lib/feedback";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +66,7 @@ export default async function DashboardPage() {
 }
 
 function decorate(trip: Trip) {
+  const fbStatus = calculateFeedbackStatus(trip);
   return {
     id: trip.id,
     tripCode: trip.trip_code,
@@ -74,5 +76,9 @@ function decorate(trip: Trip) {
     endDate: trip.end_date,
     status: tripStatus(trip),
     publication: trip.status,
+    feedbackState: fbStatus.state,
+    feedbackClosesOn: fbStatus.closesOnDate,
+    feedbackDaysRemaining: fbStatus.daysRemaining,
+    feedbackFormUrl: fbStatus.formUrl,
   };
 }

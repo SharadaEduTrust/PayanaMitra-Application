@@ -1,9 +1,9 @@
-import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth";
 import type { Activity, ItineraryDay, Trip, TripContact } from "@/lib/types";
 import TripDetailView from "@/components/trip-detail-view";
+import { extractFeedbackConfig, cleanRemarks } from "@/lib/feedback";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +47,8 @@ export default async function TripPage({ params }: Params) {
     activities = (data ?? []) as Activity[];
   }
 
+  const fbConfig = extractFeedbackConfig(trip);
+
   return (
     <TripDetailView
       trip={{
@@ -57,7 +59,9 @@ export default async function TripPage({ params }: Params) {
         startDate: trip.start_date,
         endDate: trip.end_date,
         status: trip.status,
-        remarks: trip.remarks,
+        remarks: cleanRemarks(trip.remarks),
+        feedbackFormUrl: fbConfig.url,
+        feedbackWindowDays: fbConfig.windowDays,
       }}
       days={days.map((day) => ({
         id: day.id,
@@ -86,6 +90,7 @@ export default async function TripPage({ params }: Params) {
       }))}
       canContribute={profile.role === "admin" || profile.role === "leader"}
       userRole={profile.role}
+      isLeader={profile.role === "admin" || trip.leader_id === profile.id}
     />
   );
 }

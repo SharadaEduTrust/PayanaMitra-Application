@@ -32,6 +32,7 @@ export default async function AdminPanelLayout({ children }: { children: React.R
             { href: "/admin/users", label: "Guests" },
             { href: "/admin/trips", label: "Trails" },
             { href: "/admin/destinations", label: "Destinations" },
+            { href: "/admin/feedback", label: "Feedback" },
             { href: "/admin/import", label: "CSV Import" },
             { href: "/admin/notifications", label: `Notifications${count ? ` (${count})` : ""}` },
             { href: "/admin/audit-log", label: "Audit log" },

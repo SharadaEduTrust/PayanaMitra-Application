@@ -411,6 +411,9 @@ export default function TripListAdmin({ trips }: { trips: TrailLeaderView[] }) {
                           <Link className="link-btn" href={`/dashboard/trips/${trip.trip_id}`}>
                             Preview
                           </Link>
+                          <Link className="link-btn" href={`/admin/feedback?trip_id=${trip.trip_id}`}>
+                            Feedback
+                          </Link>
                           <button
                             type="button"
                             className="link-btn"

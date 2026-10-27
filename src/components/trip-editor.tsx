@@ -35,12 +35,18 @@ export default function TripEditor({
     isActive: boolean;
     remarks: string;
     leaderId: string;
+    feedbackFormUrl?: string;
+    feedbackWindowDays?: number;
   };
   days: EditableDay[];
   leaders: { id: string; name: string }[];
 }) {
   const router = useRouter();
-  const [form, setForm] = useState(trip);
+  const [form, setForm] = useState({
+    ...trip,
+    feedbackFormUrl: trip.feedbackFormUrl ?? "",
+    feedbackWindowDays: trip.feedbackWindowDays ?? 7,
+  });
   const [rows, setRows] = useState<EditableDay[]>(days);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -56,11 +62,10 @@ export default function TripEditor({
   // Broadcast state
   const [broadcastTitle, setBroadcastTitle] = useState("");
   const [broadcastBody, setBroadcastBody] = useState("");
-  const [sendWhatsapp, setSendWhatsapp] = useState(false);
   const [broadcasting, setBroadcasting] = useState(false);
   const [broadcastStatus, setBroadcastStatus] = useState("");
 
-  function set(key: keyof typeof form, value: string | boolean) {
+  function set(key: keyof typeof form, value: string | boolean | number) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
@@ -164,6 +169,8 @@ export default function TripEditor({
           status: form.status,
           is_active: form.isActive,
           remarks: form.remarks?.trim() || null,
+          feedback_form_url: form.feedbackFormUrl?.trim() || null,
+          feedback_window_days: Number(form.feedbackWindowDays) || 7,
         }),
       });
 
@@ -463,7 +470,6 @@ export default function TripEditor({
           trip_id: trip.id,
           title: broadcastTitle.trim(),
           body: broadcastBody.trim() || undefined,
-          sendWhatsapp,
         }),
       });
 
@@ -476,8 +482,7 @@ export default function TripEditor({
       }
 
       setBroadcastStatus(
-        `Broadcast sent! Push notifications: ${json.sent} sent (${json.failed} failed). In-app: ${json.inAppCreated ?? 0}.` +
-          (sendWhatsapp ? ` WhatsApp: ${json.whatsappSent ?? 0} sent (${json.whatsappFailed ?? 0} failed).` : "")
+        `Broadcast sent! Push notifications: ${json.sent} sent (${json.failed} failed). In-app: ${json.inAppCreated ?? 0}.`
       );
       setBroadcastTitle("");
       setBroadcastBody("");
@@ -552,6 +557,72 @@ export default function TripEditor({
             ))}
           </select>
         </label>
+
+        <div style={{ margin: "16px 0", padding: "16px", borderRadius: "8px", border: "1px solid var(--line, #334155)", background: "rgba(255,255,255,0.02)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
+            <div>
+              <h3 className="serif" style={{ margin: 0, fontSize: "1.05rem" }}>Post-Trail Feedback (Google Form)</h3>
+              <p className="small muted" style={{ margin: "2px 0 0" }}>
+                Optionally link a Google Form to capture guest feedback once the trail concludes.
+              </p>
+            </div>
+            {form.feedbackFormUrl ? (
+              <a
+                href={form.feedbackFormUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-secondary"
+                style={{ padding: "6px 12px", fontSize: "12px" }}
+              >
+                Open Google Form ↗
+              </a>
+            ) : null}
+          </div>
+
+          <div className="field-row">
+            <label className="form-field" style={{ flex: 2 }}>
+              Google Form Link
+              <input
+                type="url"
+                value={form.feedbackFormUrl ?? ""}
+                onChange={(e) => set("feedbackFormUrl", e.target.value)}
+                placeholder="https://forms.gle/... or https://docs.google.com/forms/..."
+              />
+            </label>
+            <label className="form-field" style={{ flex: 1, minWidth: "170px" }}>
+              Submission Window (Days after trail ends)
+              <input
+                type="number"
+                min={1}
+                max={90}
+                value={form.feedbackWindowDays ?? 7}
+                onChange={(e) => set("feedbackWindowDays", Number(e.target.value) || 7)}
+                placeholder="7"
+              />
+            </label>
+          </div>
+
+          {form.feedbackFormUrl ? (
+            <div style={{ marginTop: "10px", padding: "10px 14px", borderRadius: "6px", background: "var(--soft, rgba(30,41,59,0.5))", fontSize: "12px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <span className="pill on" style={{ fontSize: "10px" }}>Window Timing</span>
+              <span>
+                {form.endDate ? (
+                  <>
+                    Feedback opens when the trail ends on <strong>{form.endDate}</strong> and remains open for <strong>{form.feedbackWindowDays ?? 7} days</strong>.
+                  </>
+                ) : (
+                  <>
+                    Feedback window is set to <strong>{form.feedbackWindowDays ?? 7} days</strong> after the trail end date.
+                  </>
+                )}
+              </span>
+            </div>
+          ) : (
+            <p className="small muted" style={{ margin: "8px 0 0" }}>
+              Provide a Google Form link to prompt guests for feedback after this trail finishes.
+            </p>
+          )}
+        </div>
 
         <label className="form-field">
           Remarks
@@ -790,15 +861,6 @@ export default function TripEditor({
               onChange={(e) => setBroadcastBody(e.target.value)}
               placeholder="Provide any additional details or instructions for guests..."
             />
-          </label>
-
-          <label className="form-field" style={{ display: "flex", gap: "10px", alignItems: "center", margin: "12px 0" }}>
-            <input
-              type="checkbox"
-              checked={sendWhatsapp}
-              onChange={(e) => setSendWhatsapp(e.target.checked)}
-            />
-            <span>Also send as WhatsApp message to all guests</span>
           </label>
 
           {broadcastStatus && <p className="form-notice" role="status">{broadcastStatus}</p>}

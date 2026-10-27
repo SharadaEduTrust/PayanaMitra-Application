@@ -8,18 +8,20 @@ export default async function AdminOverviewPage() {
   const admin = await requireProfile(["admin"]);
   const supabase = await createClient();
 
-  const [{ count: travellers }, { count: trips }, { count: published }, { count: unread }] =
+  const [{ count: travellers }, { count: trips }, { count: published }, { count: unread }, { count: feedbackCount }] =
     await Promise.all([
       supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "traveller"),
       supabase.from("trips").select("id", { count: "exact", head: true }),
       supabase.from("trips").select("id", { count: "exact", head: true }).eq("status", "published"),
       supabase.from("notifications").select("id", { count: "exact", head: true }).eq("is_read", false),
+      supabase.from("feedback").select("id", { count: "exact", head: true }),
     ]);
 
   const stats = [
     { label: "Guests", value: travellers ?? 0, href: "/admin/users" },
     { label: "Trails", value: trips ?? 0, href: "/admin/trips" },
     { label: "Published trails", value: published ?? 0, href: "/admin/trips" },
+    { label: "Guest feedback", value: feedbackCount ?? 0, href: "/admin/feedback" },
     { label: "Unread notifications", value: unread ?? 0, href: "/admin/notifications" },
   ];
 

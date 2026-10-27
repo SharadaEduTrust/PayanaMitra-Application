@@ -6,23 +6,31 @@ import { encrypt } from "@/lib/server/crypto";
 
 export const runtime = "nodejs";
 
+const optionalDate = z.preprocess(
+  (val) => (typeof val === "string" && val.trim() === "" ? null : val),
+  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD").nullable().optional()
+);
+
 const schema = z.object({
-  dob: z.string().optional().nullable(),
+  dob: optionalDate,
   pan: z.string().trim().max(10).optional().nullable(),
   passport_no: z.string().trim().max(10).optional().nullable(),
-  passport_issue_date: z.string().optional().nullable(),
-  passport_expiry: z.string().optional().nullable(),
-  passport_issued_location: z.string().trim().max(120).optional().nullable(),
+  passport_issue_date: optionalDate,
+  passport_expiry: optionalDate,
+  passport_issued_location: z.string().trim().max(50, "Max 50 characters").optional().nullable(),
   visa_no: z.string().trim().max(10).optional().nullable(),
-  visa_expiry: z.string().optional().nullable(),
-  visa_country: z.string().trim().max(120).optional().nullable(),
-  travel_insurance_no: z.string().trim().max(80).optional().nullable(),
-  insurance_company: z.string().trim().max(120).optional().nullable(),
-  insurance_expiry: z.string().optional().nullable(),
+  visa_expiry: optionalDate,
+  visa_country: z.string().trim().max(50, "Max 50 characters").optional().nullable(),
+  travel_insurance_no: z.string().trim().max(50, "Max 50 characters").optional().nullable(),
+  insurance_company: z.string().trim().max(50, "Max 50 characters").optional().nullable(),
+  insurance_expiry: optionalDate,
   food_preference: z.enum(["veg", "non_veg"]).optional().nullable(),
-  food_allergy: z.string().trim().max(200).optional().nullable(),
-  emergency_contact_name: z.string().trim().max(120).optional().nullable(),
-  emergency_contact_no: z.string().trim().max(20).optional().nullable(),
+  food_allergy: z.string().trim().max(50, "Max 50 characters").optional().nullable(),
+  emergency_contact_name: z.string().trim().max(50, "Max 50 characters").optional().nullable(),
+  emergency_contact_no: z.preprocess(
+    (val) => (typeof val === "string" && val.trim() === "" ? null : val),
+    z.string().trim().regex(/^\+?[0-9]{10,15}$/, "Emergency contact number must be 10-15 digits").nullable().optional()
+  ),
 });
 
 const emptyToNull = (value?: string | null) => (value && value.trim().length > 0 ? value.trim() : null);

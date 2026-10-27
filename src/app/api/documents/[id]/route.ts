@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/server/auth'
+import { decrypt } from '@/lib/server/crypto'
 
 interface Params { params: Promise<{ id: string }> }
 
@@ -72,12 +73,26 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const placeVal = (doc.issued_place as string | null) ?? (doc.issued_country as string | null) ?? null
   const countryVal = (doc.issued_country as string | null) ?? (doc.issued_place as string | null) ?? null
 
+  let doc_number: string | null = null
+  if (doc.doc_number_enc && doc.iv && doc.auth_tag) {
+    try {
+      doc_number = await decrypt({
+        ciphertext: doc.doc_number_enc as string,
+        iv: doc.iv as string,
+        authTag: doc.auth_tag as string,
+      })
+    } catch {
+      doc_number = null
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { doc_number_enc, iv, auth_tag, ...safe } = doc
   return NextResponse.json({
     ok: true,
     data: {
       ...safe,
+      doc_number,
       issued_date: (doc.issued_date as string | null) ?? null,
       issued_place: placeVal,
       issued_country: countryVal,

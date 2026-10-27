@@ -268,11 +268,6 @@ export async function POST(req: NextRequest) {
     ciphertext = encResult.ciphertext
     iv = encResult.iv
     authTag = encResult.authTag
-  } else {
-    // Generate dummy IV/tag if doc_number is optional for purely file uploads
-    const dummy = await encrypt('N/A')
-    iv = dummy.iv
-    authTag = dummy.authTag
   }
 
   // Insert document record

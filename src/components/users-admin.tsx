@@ -140,13 +140,16 @@ export default function UsersAdmin({
 
   // CSV import modal state
   const [showImport, setShowImport] = useState(false);
+  const [importStep, setImportStep] = useState<'users' | 'details'>('users');
   const [importing, setImporting] = useState(false);
   const [importReport, setImportReport] = useState<{
     created: number;
+    updated?: number;
     skipped: number;
     errorCount?: number;
     results?: Array<{ row: number; phone: string; status: string; error?: string }>;
   } | null>(null);
+  const [importError, setImportError] = useState("");
 
   // Pagination state
   const [page, setPage] = useState(1);
@@ -657,6 +660,7 @@ export default function UsersAdmin({
 
     setImporting(true);
     setImportReport(null);
+    setImportError("");
     setError("");
     setStatus("");
 
@@ -664,7 +668,14 @@ export default function UsersAdmin({
       const fd = new FormData();
       fd.append("file", file);
 
-      const res = await fetch("/api/admin/users/import", {
+      // Append ?type=guest_details when user is on Step 2 so the server enforces
+      // that all phones already exist (logical flow guard).
+      const url =
+        importStep === 'details'
+          ? "/api/admin/users/import?type=guest_details"
+          : "/api/admin/users/import";
+
+      const res = await fetch(url, {
         method: "POST",
         body: fd,
       });
@@ -673,16 +684,38 @@ export default function UsersAdmin({
       setImporting(false);
 
       if (!res.ok) {
-        setError(json?.error ?? "Failed to process CSV import.");
+        const errMsg = json?.error ?? "Failed to process CSV import.";
+        setImportError(errMsg);
+        // Still show per-row results if available (e.g. all-rows-failed scenario)
+        if (json?.results) setImportReport(json);
         return;
       }
 
       setImportReport(json);
-      setStatus(`Guest CSV import complete: ${json.created} created, ${json.skipped} skipped.`);
+      const created = json?.created ?? 0;
+      const updated = json?.updated ?? 0;
+      const skipped = json?.skipped ?? 0;
+      const errCnt  = json?.errorCount ?? 0;
+
+      if (importStep === 'users') {
+        setStatus(
+          `Step 1 complete: ${created} user${created !== 1 ? 's' : ''} created, ${skipped} skipped${
+            errCnt > 0 ? `, ${errCnt} errors` : ''
+          }. You can now upload Guest Details in Step 2.`
+        );
+        // Auto-advance to step 2 if users were actually created/skipped
+        if (created > 0 || skipped > 0) setImportStep('details');
+      } else {
+        setStatus(
+          `Step 2 complete: ${updated} guest detail record${updated !== 1 ? 's' : ''} updated, ${skipped} skipped${
+            errCnt > 0 ? `, ${errCnt} errors` : ''
+          }.`
+        );
+      }
       router.refresh();
     } catch {
       setImporting(false);
-      setError("Network error while importing guests CSV.");
+      setImportError("Network error while importing CSV.");
     }
   }
 
@@ -885,46 +918,99 @@ export default function UsersAdmin({
 
         {showImport && (
           <div style={{ margin: "16px 0", padding: "20px", background: "#f8fafc", borderRadius: "10px", border: "1px dashed #cbd5e1" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "10px" }}>
+            {/* Step Tabs */}
+            <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => { setImportStep('users'); setImportReport(null); setImportError(""); }}
+                style={{
+                  padding: "6px 16px", borderRadius: "20px", border: "2px solid",
+                  fontWeight: 600, fontSize: "13px", cursor: "pointer",
+                  background: importStep === 'users' ? "var(--forest, #1e3a2b)" : "transparent",
+                  color: importStep === 'users' ? "#fff" : "#334155",
+                  borderColor: importStep === 'users' ? "var(--forest, #1e3a2b)" : "#cbd5e1",
+                }}
+              >
+                Step 1 · User Details
+              </button>
+              <button
+                type="button"
+                onClick={() => { setImportStep('details'); setImportReport(null); setImportError(""); }}
+                style={{
+                  padding: "6px 16px", borderRadius: "20px", border: "2px solid",
+                  fontWeight: 600, fontSize: "13px", cursor: "pointer",
+                  background: importStep === 'details' ? "var(--forest, #1e3a2b)" : "transparent",
+                  color: importStep === 'details' ? "#fff" : "#334155",
+                  borderColor: importStep === 'details' ? "var(--forest, #1e3a2b)" : "#cbd5e1",
+                }}
+              >
+                Step 2 · Guest Details
+              </button>
+            </div>
+
+            {importStep === 'users' ? (
               <div>
-                <h3 className="serif" style={{ margin: 0, fontSize: "1.15rem", color: "#0f172a" }}>Bulk Import Guests (CSV)</h3>
-                <p className="admin-hint" style={{ margin: "4px 0 0", color: "#475569" }}>
-                  Upload a UTF-8 CSV with columns: <code>Mobile Number</code>, <code>First Name</code>, <code>Last Name</code>, <code>Role</code>, <code>Leader Name</code>, <code>Date of Joining</code>, <code>Location</code>, <code>email id</code>, <code>Referral&apos;s Name</code>.
+                <h3 className="serif" style={{ margin: "0 0 6px", fontSize: "1.1rem", color: "#0f172a" }}>Step 1 — Upload User Details CSV</h3>
+                <p className="admin-hint" style={{ margin: "0 0 10px", color: "#475569" }}>
+                  This creates new guest accounts. Columns: <code>Mobile Number</code>, <code>First Name</code>, <code>Last Name</code>, <code>Role</code>, <code>Leader Name</code>, <code>Date of Joining</code>, <code>Location</code>, <code>email id</code>, <code>Referral&apos;s Name</code>.<br />
+                  <strong>Complete this step before uploading Guest Details.</strong>
                 </p>
-              </div>
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 <a
-                  href="/api/admin/users/import?template=users"
+                  href="/api/admin/users/import?type=users"
                   download="users_import_template.csv"
                   className="link-btn"
-                  style={{ fontWeight: 600 }}
+                  style={{ fontWeight: 600, marginBottom: "10px", display: "inline-block" }}
                 >
-                  Download User Table Template
-                </a>
-                <a
-                  href="/api/admin/users/import?template=guest_details"
-                  download="guest_details_import_template.csv"
-                  className="link-btn"
-                  style={{ fontWeight: 600 }}
-                >
-                  Download Guest Details Template
+                  ⬇ Download User Table Template
                 </a>
               </div>
-            </div>
+            ) : (
+              <div>
+                <h3 className="serif" style={{ margin: "0 0 6px", fontSize: "1.1rem", color: "#0f172a" }}>Step 2 — Upload Guest Details CSV</h3>
+                <p className="admin-hint" style={{ margin: "0 0 10px", color: "#475569" }}>
+                  Enriches existing accounts with travel details. Only <code>Mobile Number</code> is needed as identifier — do <strong>not</strong> include First Name or Last Name here. Columns: <code>Mobile Number</code>, <code>Date of Birth</code>, <code>PAN</code>, <code>Passport No.</code>, <code>Food Preference</code>, <code>Emergency Contact Name</code>, etc.<br />
+                  <strong style={{ color: "#b45309" }}>⚠ Users must already exist from Step 1 before uploading this file.</strong>
+                </p>
+                <a
+                  href="/api/admin/users/import?type=guest_details"
+                  download="guest_details_import_template.csv"
+                  className="link-btn"
+                  style={{ fontWeight: 600, marginBottom: "10px", display: "inline-block" }}
+                >
+                  ⬇ Download Guest Details Template
+                </a>
+              </div>
+            )}
+
             <input
+              key={importStep}
               type="file"
               accept=".csv"
               onChange={handleCsvUpload}
               disabled={importing}
-              style={{ marginTop: "8px" }}
+              style={{ marginTop: "8px", display: "block" }}
             />
-            {importing && <p className="muted small" style={{ marginTop: "8px" }}>Processing CSV import batch…</p>}
+            {importing && <p className="muted small" style={{ marginTop: "8px" }}>Processing CSV…</p>}
+
+            {/* Error banner */}
+            {importError && (
+              <div style={{ marginTop: "12px", padding: "10px 14px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: "6px", color: "#b91c1c" }}>
+                <strong>❌ Import Failed:</strong> {importError}
+              </div>
+            )}
+
             {importReport && (
               <div style={{ marginTop: "14px", padding: "12px", background: "rgba(0,0,0,0.05)", borderRadius: "6px" }}>
-                <strong>Import Results:</strong> Created: {importReport.created} · Skipped (duplicates): {importReport.skipped}
+                <strong>Import Results:</strong>{" "}
+                {importStep === 'users'
+                  ? <>Created: {importReport.created} · Skipped (duplicates): {importReport.skipped}</>
+                  : <>Updated: {importReport.updated ?? 0} · Skipped: {importReport.skipped}</>}
+                {importReport.errorCount != null && importReport.errorCount > 0 && (
+                  <span style={{ color: "var(--color-danger, #ef4444)", marginLeft: "8px" }}>· Errors: {importReport.errorCount}</span>
+                )}
                 {importReport.results && importReport.results.some((r) => r.status === "error") && (
                   <div style={{ marginTop: "8px", color: "var(--color-danger, #ef4444)" }}>
-                    <strong>Errors:</strong>
+                    <strong>Row errors:</strong>
                     {importReport.results
                       .filter((r) => r.status === "error")
                       .map((err, i) => (

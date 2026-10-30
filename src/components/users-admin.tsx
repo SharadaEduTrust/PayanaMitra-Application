@@ -341,6 +341,11 @@ export default function UsersAdmin({
         formData.set("issued_place", newIssuedPlace.trim());
       }
       if (newDocFile) {
+        if (newDocFile.size > 1024 * 1024) {
+          setDocUploadError("File size exceeds 1MB limit. Please upload a file smaller than 1MB.");
+          setDocUploadLoading(false);
+          return;
+        }
         formData.set("file", newDocFile);
       }
 
@@ -1598,12 +1603,25 @@ export default function UsersAdmin({
                 </div>
 
                 <label className="form-field">
-                  Attachment (PDF or Image, Max 10MB)
+                  Attachment (PDF or Image, Max 1MB)
                   <input
                     type="file"
                     accept=".pdf,image/jpeg,image/png,image/webp"
-                    onChange={(e) => setNewDocFile(e.target.files?.[0] ?? null)}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      if (file && file.size > 1024 * 1024) {
+                        setDocUploadError("File size exceeds 1MB limit. Please choose a smaller file.");
+                        setNewDocFile(null);
+                        e.target.value = "";
+                        return;
+                      }
+                      setDocUploadError("");
+                      setNewDocFile(file);
+                    }}
                   />
+                  <span style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", display: "block" }}>
+                    Maximum file size is 1MB (PDF, JPEG, PNG, or WebP).
+                  </span>
                 </label>
 
                 <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>

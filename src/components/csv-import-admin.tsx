@@ -1214,7 +1214,7 @@ export default function CsvImportAdmin({
                   <tr>
                     <td className="mono">Meal Plan</td>
                     <td>Meals provided (Breakfast/Lunch/Dinner)</td>
-                    <td>Max 50 characters (e.g. <code>Breakfast & Dinner</code>)</td>
+                    <td>Max 50 characters (e.g. <code>Breakfast</code>, <code>Breakfast & Dinner</code>, <code>Lunch & Dinner</code>, <code>Breakfast, Lunch & Dinner</code>)</td>
                     <td>
                       <span className="pill optional">Optional</span>
                     </td>

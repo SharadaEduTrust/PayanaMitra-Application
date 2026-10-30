@@ -738,6 +738,8 @@ export default function TripEditor({
                     <option value="">None specified</option>
                     <option value="Breakfast">Breakfast</option>
                     <option value="Breakfast & Dinner">Breakfast & Dinner</option>
+                    <option value="Lunch & Dinner">Lunch & Dinner</option>
+                    <option value="Breakfast, Lunch & Dinner">Breakfast, Lunch & Dinner</option>
                   </select>
                 </label>
               </div>

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/server/auth'
 import { decrypt } from '@/lib/server/crypto'
+import { formatDocType } from '@/lib/documents'
 
 interface Params { params: Promise<{ id: string }> }
 
@@ -131,6 +132,33 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!doc) return NextResponse.json({ error: 'Document not found' }, { status: 404 })
   if (profile.role !== 'admin') {
     return NextResponse.json({ error: 'Forbidden: Only administrators can update documents' }, { status: 403 })
+  }
+
+  if (parsed.data.doc_type) {
+    const normType = parsed.data.doc_type.toLowerCase().trim()
+    const docTypesToCheck =
+      normType === 'aadhar' || normType === 'aadhaar'
+        ? ['aadhar', 'aadhaar']
+        : normType === 'driving_licence' || normType === 'driving_license'
+        ? ['driving_licence', 'driving_license']
+        : [normType]
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existingDocs } = await (admin.from('guest_documents') as any)
+      .select('id, doc_type')
+      .eq('user_id', doc.user_id)
+      .in('doc_type', docTypesToCheck)
+      .neq('id', id)
+      .limit(1)
+
+    if (existingDocs && existingDocs.length > 0) {
+      return NextResponse.json(
+        {
+          error: `A ${formatDocType(parsed.data.doc_type)} document already exists for this user. You cannot change this document to ${formatDocType(parsed.data.doc_type)} while an earlier one exists.`,
+        },
+        { status: 409 }
+      )
+    }
   }
 
   const updatePayload: Record<string, unknown> = {

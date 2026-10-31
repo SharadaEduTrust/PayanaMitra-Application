@@ -12,12 +12,15 @@ import { encryptDocumentNumber } from '@/lib/crypto'
  *   First Name              — string max 50 (required)
  *   Last Name               — string max 50 (required)
  *   Role                    — Guest / Leader / Admin (default: Guest)
- *   Leader Name             — Leader name or 10-15 digit phone of assigned leader (optional)
  *   Date of Joining         — DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD (optional)
  *   Active / Inactive       — Active or Inactive (optional, default: Active)
  *   Location                — optional home location / city (max 50)
  *   email id                — optional contact e-mail
  *   Remarks                 — freeform notes (optional)
+ *
+ * NOTE: Leader assignment is intentionally excluded from the CSV import because
+ * a user can have multiple Trail Leaders (many-to-many) and assigning a single
+ * leader via CSV would be misleading. Use the Edit UI to manage leader assignments.
  *
  * Optional Guest Details columns (from "Guest Details Table"):
  *   Date of Birth / dob     — DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD
@@ -166,14 +169,16 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  // User Table template: Mobile Number, name, role, leader, joining date, location, email, referral.
+  // User Table template: Mobile Number, name, role, joining date, location, email, referral.
+  // Leader assignment is intentionally excluded — a user can have multiple Trail Leaders
+  // (many-to-many relationship). Use the Edit UI to assign leaders after import.
   // Does NOT include guest detail fields (DOB, passport, insurance etc.) — use Guest Details template for those.
   const lines = [
-    'Mobile Number,First Name,Last Name,Role,Leader Name,Date of Joining,Location,email id,Referral\'s Name',
-    '9019911700,Arvind,Kamath,Guest,Anushree Kini,18/06/2025,Bengaluru,arvindakamath@gmail.com,Ramesh Bhat',
-    '9000000002,Anushree,Kini,Leader,,01/01/2025,Bengaluru,anushree@payana.app,',
-    '9876543210,Sunita,Sharma,Guest,Anushree Kini,10/02/2025,Mysuru,sunita.sharma@example.com,Anita Rao',
-    '9876543211,Rahul,Verma,Guest,Anushree Kini,15/03/2025,Delhi,rahul.verma@example.com,',
+    'Mobile Number,First Name,Last Name,Role,Date of Joining,Location,email id,Referral\'s Name',
+    '9019911700,Arvind,Kamath,Guest,18/06/2025,Bengaluru,arvindakamath@gmail.com,Ramesh Bhat',
+    '9000000002,Anushree,Kini,Leader,01/01/2025,Bengaluru,anushree@payana.app,',
+    '9876543210,Sunita,Sharma,Guest,10/02/2025,Mysuru,sunita.sharma@example.com,Anita Rao',
+    '9876543211,Rahul,Verma,Guest,15/03/2025,Delhi,rahul.verma@example.com,',
   ]
   return new NextResponse(lines.join('\n'), {
     status: 200,
@@ -285,7 +290,8 @@ export async function POST(req: NextRequest) {
     const first_name = getField(raw, 'First Name', 'FirstName', 'first_name', 'Guest 1st Name')
     const last_name  = getField(raw, 'Last Name', 'LastName', 'last_name', 'Guest Last Name')
     const rawRole    = getField(raw, 'Role', 'role') || 'Guest'
-    const leaderInput = getField(raw, 'Leader Name', 'LeaderName', 'Leader', 'leader_phone', 'leader_id')
+    // Note: Leader Name is intentionally not read from CSV — a user can have multiple
+    // Trail Leaders (many-to-many). Leader assignments are managed via the Edit UI.
     const activeInput = getField(raw, 'Active / Inactive', 'Active/Inactive', 'Active', 'status', 'is_active')
     const location    = getField(raw, 'Location', 'location', 'city') || null
     const rawDoj      = getField(raw, 'Date of Joining', 'DateOfJoining', 'date_of_joining', 'doj')
@@ -413,6 +419,7 @@ export async function POST(req: NextRequest) {
       // Update referral name if present
       if (referral_name) {
         try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (admin.from('profiles') as any).update({ referral_name }).eq('id', existingUserId)
         } catch {
           // Ignore if column not yet added
@@ -432,6 +439,7 @@ export async function POST(req: NextRequest) {
           const cleanVisaNo = visaNo ? visaNo.trim().toUpperCase() : null
 
           try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (admin.from('traveller_details') as any).upsert({
               user_id: existingUserId,
               dob,
@@ -449,6 +457,7 @@ export async function POST(req: NextRequest) {
               visa_country: visaCountry,
             }, { onConflict: 'user_id' })
           } catch {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (admin.from('traveller_details') as any).upsert({
               user_id: existingUserId,
               dob,
@@ -575,24 +584,11 @@ export async function POST(req: NextRequest) {
       continue
     }
 
-    // Role, Active status, and Leader assignment for new user creation
+    // Role and Active status for new user creation
+    // Leader assignment is NOT done via CSV (many-to-many; use the Edit UI instead)
     const mappedRole = ROLE_MAP[rawRole.toLowerCase().trim()] || 'traveller'
     const isInactive = activeInput ? (activeInput.toLowerCase() === 'inactive' || activeInput.toLowerCase() === 'no' || activeInput.toLowerCase() === 'off') : false
     const is_active = !isInactive
-
-    let leader_id: string | null = null
-    if (leaderInput) {
-      if (['leader', 'admin'].includes(mappedRole)) {
-        results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'Leaders and admins cannot be assigned a leader' })
-        continue
-      }
-      const cleanInput = leaderInput.trim().toLowerCase()
-      leader_id = leaderLookupMap.get(cleanInput) ?? leaderLookupMap.get(cleanInput.replace(/\s+/g, '')) ?? null
-      if (!leader_id) {
-        results.push({ row: rowNum, phone: rawPhone, status: 'error', error: `Assigned leader "${leaderInput}" not found. Enter leader's full name or phone number.` })
-        continue
-      }
-    }
 
     // Create auth user + profile
     try {
@@ -617,7 +613,6 @@ export async function POST(req: NextRequest) {
         first_name,
         last_name,
         role: mappedRole,
-        leader_id,
         email,
         location,
         date_of_joining,
@@ -635,6 +630,7 @@ export async function POST(req: NextRequest) {
 
       if (profileErr && profileErr.message?.includes('referral_name')) {
         delete insertPayload.referral_name
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const retry = await (admin.from('profiles') as any)
           .insert(insertPayload)
           .select('id')

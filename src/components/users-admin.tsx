@@ -141,6 +141,7 @@ export default function UsersAdmin({
   // CSV import modal state
   const [showImport, setShowImport] = useState(false);
   const [importStep, setImportStep] = useState<'users' | 'details'>('users');
+  const [step1Done, setStep1Done] = useState(false); // true once Step 1 is successfully processed
   const [importing, setImporting] = useState(false);
   const [importReport, setImportReport] = useState<{
     created: number;
@@ -292,6 +293,17 @@ export default function UsersAdmin({
   const [newIssuedPlace, setNewIssuedPlace] = useState("");
   const [newDocFile, setNewDocFile] = useState<File | null>(null);
 
+  const isDocTypeAlreadyUploaded = (type: string) => {
+    const t = type.toLowerCase().trim();
+    return guestDocs.some((d) => {
+      const dt = (d.doc_type || "").toLowerCase().trim();
+      if (dt === t) return true;
+      if ((dt === "aadhar" || dt === "aadhaar") && (t === "aadhar" || t === "aadhaar")) return true;
+      if ((dt === "driving_licence" || dt === "driving_license") && (t === "driving_licence" || t === "driving_license")) return true;
+      return false;
+    });
+  };
+
   async function openDocsModal(user: UserRow) {
     setDocsUser(user);
     setGuestDocs([]);
@@ -321,6 +333,12 @@ export default function UsersAdmin({
   async function handleAdminUploadDoc(e: FormEvent) {
     e.preventDefault();
     if (!docsUser) return;
+    if (isDocTypeAlreadyUploaded(newDocType)) {
+      setDocUploadError(
+        `A ${formatDocType(newDocType)} document already exists for this guest. You cannot upload the same document again unless the earlier ${formatDocType(newDocType)} is deleted.`
+      );
+      return;
+    }
     if (!newDocNumber.trim()) {
       setDocUploadError("Document number is required.");
       return;
@@ -703,19 +721,37 @@ export default function UsersAdmin({
       const errCnt  = json?.errorCount ?? 0;
 
       if (importStep === 'users') {
-        setStatus(
-          `Step 1 complete: ${created} user${created !== 1 ? 's' : ''} created, ${skipped} skipped${
-            errCnt > 0 ? `, ${errCnt} errors` : ''
-          }. You can now upload Guest Details in Step 2.`
-        );
-        // Auto-advance to step 2 if users were actually created/skipped
-        if (created > 0 || skipped > 0) setImportStep('details');
+        const anySuccess = created > 0 || skipped > 0;
+        if (errCnt > 0 && !anySuccess) {
+          // All rows failed — treat as failure
+          setImportError(`All rows failed. No users were created. Check the row errors below.`);
+        } else if (errCnt > 0) {
+          // Partial success — warn clearly (not a success message)
+          setImportError(
+            `Partially imported: ${created} user${created !== 1 ? 's' : ''} created, ${skipped} skipped, but ${errCnt} row${errCnt !== 1 ? 's' : ''} had errors. Review the row errors below and re-upload the corrected rows.`
+          );
+          // Advance to step 2 for the rows that did succeed
+          setImportStep('details');
+          setStep1Done(true);
+        } else {
+          setStatus(
+            `Step 1 complete: ${created} user${created !== 1 ? 's' : ''} created, ${skipped} already existing (skipped). You can now upload Guest Details in Step 2.`
+          );
+          // Auto-advance to step 2
+          if (anySuccess) { setImportStep('details'); setStep1Done(true); }
+        }
       } else {
-        setStatus(
-          `Step 2 complete: ${updated} guest detail record${updated !== 1 ? 's' : ''} updated, ${skipped} skipped${
-            errCnt > 0 ? `, ${errCnt} errors` : ''
-          }.`
-        );
+        if (errCnt > 0 && updated === 0 && skipped === 0) {
+          setImportError(`All rows failed. No guest details were updated. Check the row errors below.`);
+        } else if (errCnt > 0) {
+          setImportError(
+            `Partially updated: ${updated} record${updated !== 1 ? 's' : ''} updated, ${skipped} skipped, but ${errCnt} row${errCnt !== 1 ? 's' : ''} had errors. Review the row errors below and re-upload the corrected rows.`
+          );
+        } else {
+          setStatus(
+            `Step 2 complete: ${updated} guest detail record${updated !== 1 ? 's' : ''} updated, ${skipped} skipped.`
+          );
+        }
       }
       router.refresh();
     } catch {
@@ -909,7 +945,17 @@ export default function UsersAdmin({
             <button
               type="button"
               className="admin-control-btn admin-control-btn-secondary"
-              onClick={() => setShowImport(!showImport)}
+              onClick={() => {
+                if (showImport) {
+                  // Closing the panel — reset import state fully
+                  setStep1Done(false);
+                  setImportStep('users');
+                  setImportReport(null);
+                  setImportError('');
+                  setStatus('');
+                }
+                setShowImport((v) => !v);
+              }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -941,15 +987,19 @@ export default function UsersAdmin({
               <button
                 type="button"
                 onClick={() => { setImportStep('details'); setImportReport(null); setImportError(""); }}
+                disabled={!step1Done}
+                title={!step1Done ? "Complete Step 1 (upload User Details CSV) first" : "Upload Guest Details"}
                 style={{
                   padding: "6px 16px", borderRadius: "20px", border: "2px solid",
-                  fontWeight: 600, fontSize: "13px", cursor: "pointer",
+                  fontWeight: 600, fontSize: "13px",
+                  cursor: !step1Done ? "not-allowed" : "pointer",
+                  opacity: !step1Done ? 0.45 : 1,
                   background: importStep === 'details' ? "var(--forest, #1e3a2b)" : "transparent",
                   color: importStep === 'details' ? "#fff" : "#334155",
                   borderColor: importStep === 'details' ? "var(--forest, #1e3a2b)" : "#cbd5e1",
                 }}
               >
-                Step 2 · Guest Details
+                Step 2 · Guest Details {!step1Done && "🔒"}
               </button>
             </div>
 
@@ -957,7 +1007,8 @@ export default function UsersAdmin({
               <div>
                 <h3 className="serif" style={{ margin: "0 0 6px", fontSize: "1.1rem", color: "#0f172a" }}>Step 1 — Upload User Details CSV</h3>
                 <p className="admin-hint" style={{ margin: "0 0 10px", color: "#475569" }}>
-                  This creates new guest accounts. Columns: <code>Mobile Number</code>, <code>First Name</code>, <code>Last Name</code>, <code>Role</code>, <code>Leader Name</code>, <code>Date of Joining</code>, <code>Location</code>, <code>email id</code>, <code>Referral&apos;s Name</code>.<br />
+                  This creates new guest accounts. Columns: <code>Mobile Number</code>, <code>First Name</code>, <code>Last Name</code>, <code>Role</code>, <code>Date of Joining</code>, <code>Location</code>, <code>email id</code>, <code>Referral&apos;s Name</code>.<br />
+                  <strong>Note:</strong> Trail Leader assignment is <em>not</em> captured here — a user can have multiple Trail Leaders. Use the <strong>✏️ Edit</strong> button to assign leaders after import.<br />
                   <strong>Complete this step before uploading Guest Details.</strong>
                 </p>
                 <a
@@ -973,7 +1024,7 @@ export default function UsersAdmin({
               <div>
                 <h3 className="serif" style={{ margin: "0 0 6px", fontSize: "1.1rem", color: "#0f172a" }}>Step 2 — Upload Guest Details CSV</h3>
                 <p className="admin-hint" style={{ margin: "0 0 10px", color: "#475569" }}>
-                  Enriches existing accounts with travel details. Only <code>Mobile Number</code> is needed as identifier — do <strong>not</strong> include First Name or Last Name here. Columns: <code>Mobile Number</code>, <code>Date of Birth</code>, <code>PAN</code>, <code>Passport No.</code>, <code>Food Preference</code>, <code>Emergency Contact Name</code>, etc.<br />
+                  Enriches existing accounts with travel details. <strong>Only <code>Mobile Number</code> is used as the unique identifier</strong> — the system looks up the user by their mobile number alone, so name fields are not included and cannot cause duplicate or mismatched records. Columns: <code>Mobile Number</code>, <code>Date of Birth</code>, <code>PAN</code>, <code>Passport No.</code>, <code>Passport Issue Date</code>, <code>Passport Expiry Date</code>, <code>Passport Issued Location</code>, <code>Visa No.</code>, <code>Visa Expiry Date</code>, <code>Visa Country</code>, <code>Travel Insurance No.</code>, <code>Travel Insurance Company</code>, <code>Travel Insurance Expiry Date</code>, <code>Food Preference</code>, <code>Food Allergy</code>, <code>Emergency Contact Name</code>, <code>Emergency Contact Number</code>.<br />
                   <strong style={{ color: "#b45309" }}>⚠ Users must already exist from Step 1 before uploading this file.</strong>
                 </p>
                 <a
@@ -1555,14 +1606,46 @@ export default function UsersAdmin({
               <form onSubmit={handleAdminUploadDoc}>
                 <label className="form-field">
                   Document Type <span className="req">*</span>
-                  <select value={newDocType} onChange={(e) => setNewDocType(e.target.value)}>
-                    {DOCUMENT_TYPES.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
+                  <select
+                    value={newDocType}
+                    onChange={(e) => {
+                      setNewDocType(e.target.value);
+                      setDocUploadError("");
+                      setDocUploadStatus("");
+                    }}
+                  >
+                    {DOCUMENT_TYPES.map((item) => {
+                      const alreadyUploaded = isDocTypeAlreadyUploaded(item.value);
+                      return (
+                        <option key={item.value} value={item.value}>
+                          {item.label} {alreadyUploaded ? "— (Already on file - delete first)" : ""}
+                        </option>
+                      );
+                    })}
                   </select>
                 </label>
+
+                {isDocTypeAlreadyUploaded(newDocType) && (
+                  <div
+                    style={{
+                      margin: "-6px 0 14px",
+                      padding: "10px 14px",
+                      background: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      borderRadius: "6px",
+                      fontSize: "13px",
+                      color: "#b91c1c",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                  >
+                    <span>⚠️</span>
+                    <span>
+                      A <strong>{formatDocType(newDocType)}</strong> is already on file for this guest. You cannot upload another {formatDocType(newDocType)} unless the existing one is deleted from the list above.
+                    </span>
+                  </div>
+                )}
 
                 <label className="form-field">
                   Document Number <span className="req">*</span>
@@ -1625,8 +1708,17 @@ export default function UsersAdmin({
                 </label>
 
                 <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
-                  <button className="btn btn-primary" type="submit" disabled={docUploadLoading}>
-                    {docUploadLoading ? "Uploading & Encrypting…" : "Upload Document"}
+                  <button
+                    className="btn btn-primary"
+                    type="submit"
+                    disabled={docUploadLoading || isDocTypeAlreadyUploaded(newDocType)}
+                    title={isDocTypeAlreadyUploaded(newDocType) ? `Delete the existing ${formatDocType(newDocType)} first` : undefined}
+                  >
+                    {docUploadLoading
+                      ? "Uploading & Encrypting…"
+                      : isDocTypeAlreadyUploaded(newDocType)
+                      ? `${formatDocType(newDocType)} Already Uploaded`
+                      : "Upload Document"}
                   </button>
                   <button className="btn btn-secondary" type="button" onClick={() => setDocsUser(null)}>
                     Done

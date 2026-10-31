@@ -141,7 +141,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const page   = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
-  const limit  = Math.min(100, parseInt(searchParams.get('limit') ?? '20', 10))
+  const limit  = Math.min(1000, parseInt(searchParams.get('limit') ?? '20', 10))
   const search = searchParams.get('q') ?? ''
   const role   = searchParams.get('role')?.toLowerCase()
   const active = searchParams.get('active')

@@ -170,7 +170,7 @@ export default async function DocumentsPage() {
           <section className="panel">
             <h2 className="serif">Add a Document</h2>
             <p className="panel-note">Aadhar, PAN, Passport, or any other document your trail needs.</p>
-            <DocumentForm />
+            <DocumentForm existingDocTypes={docs.map((d) => d.doc_type)} />
           </section>
         )}
 

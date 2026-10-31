@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/server/auth'
 import { encrypt, decrypt } from '@/lib/server/crypto'
+import { formatDocType } from '@/lib/documents'
 
 /**
  * GET  /api/documents — list documents for the user (or authorized leader/admin) with decrypted doc numbers & signed download URLs
@@ -125,6 +126,28 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ ok: true, data: docs })
 }
 
+async function checkDuplicateDoc(admin: ReturnType<typeof createAdminClient>, targetUserId: string, doc_type: string) {
+  const normType = doc_type.toLowerCase().trim()
+  const docTypesToCheck =
+    normType === 'aadhar' || normType === 'aadhaar'
+      ? ['aadhar', 'aadhaar']
+      : normType === 'driving_licence' || normType === 'driving_license'
+      ? ['driving_licence', 'driving_license']
+      : [normType]
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: existingDocs } = await (admin.from('guest_documents') as any)
+    .select('id, doc_type')
+    .eq('user_id', targetUserId)
+    .in('doc_type', docTypesToCheck)
+    .limit(1)
+
+  if (existingDocs && existingDocs.length > 0) {
+    return `A ${formatDocType(doc_type)} document already exists for this user. You cannot upload the same document again unless the earlier ${formatDocType(doc_type)} is deleted.`
+  }
+  return null
+}
+
 export async function POST(req: NextRequest) {
   const profile = await getSession()
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -186,6 +209,11 @@ export async function POST(req: NextRequest) {
     }
     if (expiry_date && !/^\d{4}-\d{2}-\d{2}$/.test(expiry_date)) {
       return NextResponse.json({ error: 'Validation failed', fieldErrors: { expiry_date: ['expiry_date must be YYYY-MM-DD'] } }, { status: 422 })
+    }
+
+    const dupErr = await checkDuplicateDoc(admin, targetUserId, doc_type)
+    if (dupErr) {
+      return NextResponse.json({ error: dupErr }, { status: 409 })
     }
 
     const fileEntry = formData.get('file')
@@ -256,6 +284,11 @@ export async function POST(req: NextRequest) {
     issued_place = parsed.data.issued_place ?? parsed.data.issued_country ?? null
     issued_country = parsed.data.issued_country ?? parsed.data.issued_place ?? null
     trip_id = parsed.data.trip_id ?? null
+
+    const dupErr = await checkDuplicateDoc(admin, targetUserId, doc_type)
+    if (dupErr) {
+      return NextResponse.json({ error: dupErr }, { status: 409 })
+    }
   }
 
   // Encrypt document number if provided
@@ -268,11 +301,6 @@ export async function POST(req: NextRequest) {
     ciphertext = encResult.ciphertext
     iv = encResult.iv
     authTag = encResult.authTag
-  } else {
-    // Generate dummy IV/tag if doc_number is optional for purely file uploads
-    const dummy = await encrypt('N/A')
-    iv = dummy.iv
-    authTag = dummy.authTag
   }
 
   // Insert document record

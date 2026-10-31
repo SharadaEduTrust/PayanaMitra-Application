@@ -101,7 +101,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     return NextResponse.json(formatZodError(parsed.error), { status: 422 })
   }
 
-  const { reset_pin, ...fields } = parsed.data
+  const { reset_pin, reset_password, ...fields } = parsed.data
   const admin = createAdminClient()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -136,7 +136,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
   }
 
-  const shouldResetPassword = Boolean(reset_pin || (fields as Record<string, unknown>).reset_password)
+  const shouldResetPassword = Boolean(reset_pin || reset_password)
   if (shouldResetPassword) {
     const phone = current.phone
     const initialPin = phone.slice(-4)
@@ -210,6 +210,16 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
 
   const { id } = await params
   const admin = createAdminClient()
+
+  // Verify user exists first
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: existing, error: findErr } = await (admin.from('profiles') as any)
+    .select('id')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (findErr) return NextResponse.json({ error: findErr.message }, { status: 500 })
+  if (!existing) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
   // Deactivate the user
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

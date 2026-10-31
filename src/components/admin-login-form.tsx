@@ -18,6 +18,7 @@ export default function AdminLoginForm() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [welcomeMessage, setWelcomeMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function submit(event: FormEvent) {
@@ -61,8 +62,20 @@ export default function AdminLoginForm() {
       }
     }
 
-    router.push("/admin");
-    router.refresh();
+    const firstName = typeof data.firstName === "string" ? data.firstName.trim() : "";
+    const greeting = firstName ? `Welcome to Payana Mitra, ${firstName}` : "Welcome to Payana Mitra";
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("payana_last_active", String(Date.now()));
+      sessionStorage.setItem("payana_welcome", greeting);
+    }
+
+    setWelcomeMessage(greeting);
+
+    setTimeout(() => {
+      router.push("/admin");
+      router.refresh();
+    }, 500);
   }
 
   if (!isSupabaseConfigured()) return <SupabaseSetupNotice />;
@@ -109,9 +122,14 @@ export default function AdminLoginForm() {
       </label>
 
       {error && <p className="form-error" role="alert">{error}</p>}
+      {welcomeMessage && (
+        <p className="form-notice" role="status" style={{ marginTop: "12px", marginBottom: "12px" }}>
+          ✓ {welcomeMessage}
+        </p>
+      )}
 
       <button id="admin-pin-submit" className="btn btn-primary auth-submit" type="submit" disabled={loading}>
-        {loading ? "Checking access…" : "Open admin panel"}
+        {loading ? (welcomeMessage ? "Welcome!" : "Checking access…") : "Open admin panel"}
       </button>
     </form>
   );

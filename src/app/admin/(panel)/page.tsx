@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
+import WelcomeBanner from "@/components/welcome-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -29,11 +30,15 @@ export default async function AdminOverviewPage() {
     <>
       <header className="topbar">
         <div>
+          <p style={{ margin: "0 0 4px", fontSize: "13px", color: "var(--forest, #1e3a2b)", fontWeight: 600 }}>
+            Welcome to Payana Mitra{admin.first_name?.trim() ? `, ${admin.first_name.trim()}` : ""}
+          </p>
           <h1>Overview</h1>
           <small>Signed in as {admin.first_name} {admin.last_name}</small>
         </div>
       </header>
       <div className="admin-body">
+        <WelcomeBanner firstName={admin.first_name} />
         <div className="admin-stats">
           {stats.map((stat) => (
             <Link className="stat" key={stat.label} href={stat.href}>

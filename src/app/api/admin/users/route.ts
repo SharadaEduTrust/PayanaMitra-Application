@@ -141,7 +141,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const page   = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
-  const limit  = Math.min(100, parseInt(searchParams.get('limit') ?? '20', 10))
+  const limit  = Math.min(1000, parseInt(searchParams.get('limit') ?? '20', 10))
   const search = searchParams.get('q') ?? ''
   const role   = searchParams.get('role')?.toLowerCase()
   const active = searchParams.get('active')
@@ -160,8 +160,12 @@ export async function GET(req: NextRequest) {
     .range(from, from + limit - 1)
 
   if (search) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    query = (query as any).or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,phone.ilike.%${search}%`)
+    // Sanitize search input to prevent PostgREST query syntax injection (strip syntax characters)
+    const sanitizedSearch = search.replace(/[,.():\\]/g, '').trim()
+    if (sanitizedSearch) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query = (query as any).or(`first_name.ilike.%${sanitizedSearch}%,last_name.ilike.%${sanitizedSearch}%,phone.ilike.%${sanitizedSearch}%`)
+    }
   }
   if (role) {
     const mapped = ROLE_MAP[role]
@@ -329,12 +333,79 @@ export async function POST(req: NextRequest) {
         insurance_company: detailsSource.insurance_company ?? null,
         insurance_expiry: detailsSource.insurance_expiry ?? null,
         passport_issued_location: detailsSource.passport_issued_location ?? null,
+        passport_issue_date: detailsSource.passport_issue_date ?? null,
+        visa_no: detailsSource.visa_no ?? null,
+        visa_expiry: detailsSource.visa_expiry ?? null,
+        visa_country: detailsSource.visa_country ?? null,
       })
       .select()
       .single()
 
-    if (!tdErr) {
-      travellerDetails = tdData
+    if (tdErr) {
+      await (admin.from('profiles') as any).delete().eq('id', authData.user.id)
+      await admin.auth.admin.deleteUser(authData.user.id)
+      return NextResponse.json({ error: tdErr.message || 'Failed to save guest details' }, { status: 500 })
+    }
+
+    travellerDetails = tdData
+
+    // Handle PAN in guest_documents
+    const panVal = data.pan !== undefined ? data.pan : data.guest_details?.pan
+    if (panVal) {
+      try {
+        const enc = await encrypt(panVal.trim())
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from('guest_documents') as any).insert({
+          user_id: authData.user.id,
+          doc_type: 'pan',
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+        })
+      } catch (panErr) {
+        console.error('Failed to encrypt PAN:', panErr)
+      }
+    }
+
+    // Handle Passport in guest_documents
+    const passVal = data.passport_no !== undefined ? data.passport_no : data.guest_details?.passport_no
+    if (passVal) {
+      try {
+        const enc = await encrypt(passVal.trim())
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from('guest_documents') as any).insert({
+          user_id: authData.user.id,
+          doc_type: 'passport',
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+          expiry_date: data.passport_expiry ?? data.guest_details?.passport_expiry ?? null,
+          issued_date: detailsSource.passport_issue_date ?? null,
+          issued_country: detailsSource.passport_issued_location ?? 'India',
+        })
+      } catch (passErr) {
+        console.error('Failed to encrypt Passport:', passErr)
+      }
+    }
+
+    // Handle Visa in guest_documents
+    const visaVal = detailsSource.visa_no
+    if (visaVal) {
+      try {
+        const enc = await encrypt(visaVal.trim())
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from('guest_documents') as any).insert({
+          user_id: authData.user.id,
+          doc_type: 'visa',
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+          expiry_date: detailsSource.visa_expiry ?? null,
+          issued_country: detailsSource.visa_country ?? null,
+        })
+      } catch (visaErr) {
+        console.error('Failed to encrypt Visa:', visaErr)
+      }
     }
   }
 

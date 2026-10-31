@@ -13,6 +13,7 @@ export default function PinForm() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [welcomeMessage, setWelcomeMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function submit(event: FormEvent) {
@@ -56,16 +57,27 @@ export default function PinForm() {
       }
     }
 
+    const firstName = typeof data.firstName === "string" ? data.firstName.trim() : "";
+    const greeting = firstName ? `Welcome to Payana Mitra, ${firstName}` : "Welcome to Payana Mitra";
+
     if (typeof window !== "undefined") {
       localStorage.setItem("payana_last_active", String(Date.now()));
+      sessionStorage.setItem("payana_welcome", greeting);
     }
 
+    setWelcomeMessage(greeting);
+
     const nextUrl = new URLSearchParams(window.location.search).get("next");
-    if (nextUrl && (data.role === "admin" || !nextUrl.startsWith("/admin"))) {
-      router.push(nextUrl);
-    } else {
-      router.push(data.role === "admin" ? "/admin" : "/dashboard");
-    }
+    const targetUrl =
+      nextUrl && (data.role === "admin" || !nextUrl.startsWith("/admin"))
+        ? nextUrl
+        : data.role === "admin"
+        ? "/admin"
+        : "/dashboard";
+
+    setTimeout(() => {
+      router.push(targetUrl);
+    }, 500);
   }
 
   if (!isSupabaseConfigured()) return <SupabaseSetupNotice />;
@@ -112,9 +124,14 @@ export default function PinForm() {
       </label>
 
       {error && <p className="form-error" role="alert">{error}</p>}
+      {welcomeMessage && (
+        <p className="form-notice" role="status" style={{ marginTop: "12px", marginBottom: "12px" }}>
+          ✓ {welcomeMessage}
+        </p>
+      )}
 
       <button id="pin-submit" className="btn btn-primary auth-submit" type="submit" disabled={loading}>
-        {loading ? "Signing in…" : "Sign In"}
+        {loading ? (welcomeMessage ? "Welcome!" : "Signing in…") : "Sign In"}
       </button>
     </form>
   );

@@ -3,8 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const links = [
+import { ExternalLink } from "lucide-react";
+
+interface NavLinkItem {
+  href: string;
+  label: string;
+  external?: boolean;
+}
+
+const links: NavLinkItem[] = [
   { href: "/dashboard", label: "My Trails" },
+  { href: "https://tinyurl.com/4xnff2my", label: "Payana Quiz", external: true },
   { href: "/dashboard/profile", label: "My Profile" },
   { href: "/dashboard/documents", label: "My Documents" },
   { href: "/dashboard/notifications", label: "Notifications" },
@@ -21,16 +30,33 @@ export default function DashboardNav({ role }: { role: string }) {
   return (
     <>
       <div className="side-label">Your Trails</div>
-      {links.map((link) => (
-        <Link
-          key={link.href}
-          className={`side-link ${isActive(link.href) ? "active" : ""}`}
-          href={link.href}
-          prefetch={true}
-        >
-          {link.label}
-        </Link>
-      ))}
+      {links.map((link) =>
+        link.external ? (
+          <a
+            key={link.href}
+            className="side-link"
+            href={link.href}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span>{link.label}</span>
+            <ExternalLink
+              size={13}
+              style={{ marginLeft: "auto", opacity: 0.65, flexShrink: 0 }}
+              aria-hidden="true"
+            />
+          </a>
+        ) : (
+          <Link
+            key={link.href}
+            className={`side-link ${isActive(link.href) ? "active" : ""}`}
+            href={link.href}
+            prefetch={true}
+          >
+            {link.label}
+          </Link>
+        )
+      )}
 
       {(role === "leader" || role === "admin") && (
         <>

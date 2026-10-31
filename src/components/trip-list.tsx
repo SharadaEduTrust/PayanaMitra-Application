@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import WelcomeBanner from "@/components/welcome-banner";
 
 export type TripSummary = {
   id: string;
@@ -31,7 +32,7 @@ const statusLabel: Record<string, string> = {
 };
 
 export default function TripList({
-  firstName: _firstName,
+  firstName,
   role,
   grouped,
 }: {
@@ -45,6 +46,9 @@ export default function TripList({
     <>
       <header className="topbar">
         <div>
+          <p style={{ margin: "0 0 4px", fontSize: "13px", color: "var(--forest, #1e3a2b)", fontWeight: 600 }}>
+            Welcome to Payana Mitra{firstName?.trim() ? `, ${firstName.trim()}` : ""}
+          </p>
           <h1>My trails</h1>
           <small>Everything you are booked on.</small>
         </div>
@@ -57,6 +61,7 @@ export default function TripList({
       </header>
 
       <div className="trips-page">
+        <WelcomeBanner firstName={firstName} />
         {total === 0 ? (
           <div className="panel-empty">
             <img src="/illustrations/empty-state.webp" alt="" />

@@ -140,13 +140,17 @@ export default function UsersAdmin({
 
   // CSV import modal state
   const [showImport, setShowImport] = useState(false);
+  const [importStep, setImportStep] = useState<'users' | 'details'>('users');
+  const [step1Done, setStep1Done] = useState(false); // true once Step 1 is successfully processed
   const [importing, setImporting] = useState(false);
   const [importReport, setImportReport] = useState<{
     created: number;
+    updated?: number;
     skipped: number;
     errorCount?: number;
     results?: Array<{ row: number; phone: string; status: string; error?: string }>;
   } | null>(null);
+  const [importError, setImportError] = useState("");
 
   // Pagination state
   const [page, setPage] = useState(1);
@@ -289,6 +293,17 @@ export default function UsersAdmin({
   const [newIssuedPlace, setNewIssuedPlace] = useState("");
   const [newDocFile, setNewDocFile] = useState<File | null>(null);
 
+  const isDocTypeAlreadyUploaded = (type: string) => {
+    const t = type.toLowerCase().trim();
+    return guestDocs.some((d) => {
+      const dt = (d.doc_type || "").toLowerCase().trim();
+      if (dt === t) return true;
+      if ((dt === "aadhar" || dt === "aadhaar") && (t === "aadhar" || t === "aadhaar")) return true;
+      if ((dt === "driving_licence" || dt === "driving_license") && (t === "driving_licence" || t === "driving_license")) return true;
+      return false;
+    });
+  };
+
   async function openDocsModal(user: UserRow) {
     setDocsUser(user);
     setGuestDocs([]);
@@ -318,6 +333,12 @@ export default function UsersAdmin({
   async function handleAdminUploadDoc(e: FormEvent) {
     e.preventDefault();
     if (!docsUser) return;
+    if (isDocTypeAlreadyUploaded(newDocType)) {
+      setDocUploadError(
+        `A ${formatDocType(newDocType)} document already exists for this guest. You cannot upload the same document again unless the earlier ${formatDocType(newDocType)} is deleted.`
+      );
+      return;
+    }
     if (!newDocNumber.trim()) {
       setDocUploadError("Document number is required.");
       return;
@@ -338,6 +359,11 @@ export default function UsersAdmin({
         formData.set("issued_place", newIssuedPlace.trim());
       }
       if (newDocFile) {
+        if (newDocFile.size > 1024 * 1024) {
+          setDocUploadError("File size exceeds 1MB limit. Please upload a file smaller than 1MB.");
+          setDocUploadLoading(false);
+          return;
+        }
         formData.set("file", newDocFile);
       }
 
@@ -657,6 +683,7 @@ export default function UsersAdmin({
 
     setImporting(true);
     setImportReport(null);
+    setImportError("");
     setError("");
     setStatus("");
 
@@ -664,7 +691,14 @@ export default function UsersAdmin({
       const fd = new FormData();
       fd.append("file", file);
 
-      const res = await fetch("/api/admin/users/import", {
+      // Append ?type=guest_details when user is on Step 2 so the server enforces
+      // that all phones already exist (logical flow guard).
+      const url =
+        importStep === 'details'
+          ? "/api/admin/users/import?type=guest_details"
+          : "/api/admin/users/import";
+
+      const res = await fetch(url, {
         method: "POST",
         body: fd,
       });
@@ -673,16 +707,56 @@ export default function UsersAdmin({
       setImporting(false);
 
       if (!res.ok) {
-        setError(json?.error ?? "Failed to process CSV import.");
+        const errMsg = json?.error ?? "Failed to process CSV import.";
+        setImportError(errMsg);
+        // Still show per-row results if available (e.g. all-rows-failed scenario)
+        if (json?.results) setImportReport(json);
         return;
       }
 
       setImportReport(json);
-      setStatus(`Guest CSV import complete: ${json.created} created, ${json.skipped} skipped.`);
+      const created = json?.created ?? 0;
+      const updated = json?.updated ?? 0;
+      const skipped = json?.skipped ?? 0;
+      const errCnt  = json?.errorCount ?? 0;
+
+      if (importStep === 'users') {
+        const anySuccess = created > 0 || skipped > 0;
+        if (errCnt > 0 && !anySuccess) {
+          // All rows failed — treat as failure
+          setImportError(`All rows failed. No users were created. Check the row errors below.`);
+        } else if (errCnt > 0) {
+          // Partial success — warn clearly (not a success message)
+          setImportError(
+            `Partially imported: ${created} user${created !== 1 ? 's' : ''} created, ${skipped} skipped, but ${errCnt} row${errCnt !== 1 ? 's' : ''} had errors. Review the row errors below and re-upload the corrected rows.`
+          );
+          // Advance to step 2 for the rows that did succeed
+          setImportStep('details');
+          setStep1Done(true);
+        } else {
+          setStatus(
+            `Step 1 complete: ${created} user${created !== 1 ? 's' : ''} created, ${skipped} already existing (skipped). You can now upload Guest Details in Step 2.`
+          );
+          // Auto-advance to step 2
+          if (anySuccess) { setImportStep('details'); setStep1Done(true); }
+        }
+      } else {
+        if (errCnt > 0 && updated === 0 && skipped === 0) {
+          setImportError(`All rows failed. No guest details were updated. Check the row errors below.`);
+        } else if (errCnt > 0) {
+          setImportError(
+            `Partially updated: ${updated} record${updated !== 1 ? 's' : ''} updated, ${skipped} skipped, but ${errCnt} row${errCnt !== 1 ? 's' : ''} had errors. Review the row errors below and re-upload the corrected rows.`
+          );
+        } else {
+          setStatus(
+            `Step 2 complete: ${updated} guest detail record${updated !== 1 ? 's' : ''} updated, ${skipped} skipped.`
+          );
+        }
+      }
       router.refresh();
     } catch {
       setImporting(false);
-      setError("Network error while importing guests CSV.");
+      setImportError("Network error while importing CSV.");
     }
   }
 
@@ -871,7 +945,17 @@ export default function UsersAdmin({
             <button
               type="button"
               className="admin-control-btn admin-control-btn-secondary"
-              onClick={() => setShowImport(!showImport)}
+              onClick={() => {
+                if (showImport) {
+                  // Closing the panel — reset import state fully
+                  setStep1Done(false);
+                  setImportStep('users');
+                  setImportReport(null);
+                  setImportError('');
+                  setStatus('');
+                }
+                setShowImport((v) => !v);
+              }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -885,46 +969,104 @@ export default function UsersAdmin({
 
         {showImport && (
           <div style={{ margin: "16px 0", padding: "20px", background: "#f8fafc", borderRadius: "10px", border: "1px dashed #cbd5e1" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "10px" }}>
+            {/* Step Tabs */}
+            <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => { setImportStep('users'); setImportReport(null); setImportError(""); }}
+                style={{
+                  padding: "6px 16px", borderRadius: "20px", border: "2px solid",
+                  fontWeight: 600, fontSize: "13px", cursor: "pointer",
+                  background: importStep === 'users' ? "var(--forest, #1e3a2b)" : "transparent",
+                  color: importStep === 'users' ? "#fff" : "#334155",
+                  borderColor: importStep === 'users' ? "var(--forest, #1e3a2b)" : "#cbd5e1",
+                }}
+              >
+                Step 1 · User Details
+              </button>
+              <button
+                type="button"
+                onClick={() => { setImportStep('details'); setImportReport(null); setImportError(""); }}
+                disabled={!step1Done}
+                title={!step1Done ? "Complete Step 1 (upload User Details CSV) first" : "Upload Guest Details"}
+                style={{
+                  padding: "6px 16px", borderRadius: "20px", border: "2px solid",
+                  fontWeight: 600, fontSize: "13px",
+                  cursor: !step1Done ? "not-allowed" : "pointer",
+                  opacity: !step1Done ? 0.45 : 1,
+                  background: importStep === 'details' ? "var(--forest, #1e3a2b)" : "transparent",
+                  color: importStep === 'details' ? "#fff" : "#334155",
+                  borderColor: importStep === 'details' ? "var(--forest, #1e3a2b)" : "#cbd5e1",
+                }}
+              >
+                Step 2 · Guest Details {!step1Done && "🔒"}
+              </button>
+            </div>
+
+            {importStep === 'users' ? (
               <div>
-                <h3 className="serif" style={{ margin: 0, fontSize: "1.15rem", color: "#0f172a" }}>Bulk Import Guests (CSV)</h3>
-                <p className="admin-hint" style={{ margin: "4px 0 0", color: "#475569" }}>
-                  Upload a UTF-8 CSV with columns: <code>Mobile Number</code>, <code>First Name</code>, <code>Last Name</code>, <code>Role</code>, <code>Leader Name</code>, <code>Date of Joining</code>, <code>Location</code>, <code>email id</code>, <code>Referral&apos;s Name</code>.
+                <h3 className="serif" style={{ margin: "0 0 6px", fontSize: "1.1rem", color: "#0f172a" }}>Step 1 — Upload User Details CSV</h3>
+                <p className="admin-hint" style={{ margin: "0 0 10px", color: "#475569" }}>
+                  This creates new guest accounts. Columns: <code>Mobile Number</code>, <code>First Name</code>, <code>Last Name</code>, <code>Role</code>, <code>Date of Joining</code>, <code>Location</code>, <code>email id</code>, <code>Referral&apos;s Name</code>.<br />
+                  <strong>Note:</strong> Trail Leader assignment is <em>not</em> captured here — a user can have multiple Trail Leaders. Use the <strong>✏️ Edit</strong> button to assign leaders after import.<br />
+                  <strong>Complete this step before uploading Guest Details.</strong>
                 </p>
-              </div>
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 <a
-                  href="/api/admin/users/import?template=users"
+                  href="/api/admin/users/import?type=users"
                   download="users_import_template.csv"
                   className="link-btn"
-                  style={{ fontWeight: 600 }}
+                  style={{ fontWeight: 600, marginBottom: "10px", display: "inline-block" }}
                 >
-                  Download User Table Template
-                </a>
-                <a
-                  href="/api/admin/users/import?template=guest_details"
-                  download="guest_details_import_template.csv"
-                  className="link-btn"
-                  style={{ fontWeight: 600 }}
-                >
-                  Download Guest Details Template
+                  ⬇ Download User Table Template
                 </a>
               </div>
-            </div>
+            ) : (
+              <div>
+                <h3 className="serif" style={{ margin: "0 0 6px", fontSize: "1.1rem", color: "#0f172a" }}>Step 2 — Upload Guest Details CSV</h3>
+                <p className="admin-hint" style={{ margin: "0 0 10px", color: "#475569" }}>
+                  Enriches existing accounts with travel details. <strong>Only <code>Mobile Number</code> is used as the unique identifier</strong> — the system looks up the user by their mobile number alone, so name fields are not included and cannot cause duplicate or mismatched records. Columns: <code>Mobile Number</code>, <code>Date of Birth</code>, <code>PAN</code>, <code>Passport No.</code>, <code>Passport Issue Date</code>, <code>Passport Expiry Date</code>, <code>Passport Issued Location</code>, <code>Visa No.</code>, <code>Visa Expiry Date</code>, <code>Visa Country</code>, <code>Travel Insurance No.</code>, <code>Travel Insurance Company</code>, <code>Travel Insurance Expiry Date</code>, <code>Food Preference</code>, <code>Food Allergy</code>, <code>Emergency Contact Name</code>, <code>Emergency Contact Number</code>.<br />
+                  <strong style={{ color: "#b45309" }}>⚠ Users must already exist from Step 1 before uploading this file.</strong>
+                </p>
+                <a
+                  href="/api/admin/users/import?type=guest_details"
+                  download="guest_details_import_template.csv"
+                  className="link-btn"
+                  style={{ fontWeight: 600, marginBottom: "10px", display: "inline-block" }}
+                >
+                  ⬇ Download Guest Details Template
+                </a>
+              </div>
+            )}
+
             <input
+              key={importStep}
               type="file"
               accept=".csv"
               onChange={handleCsvUpload}
               disabled={importing}
-              style={{ marginTop: "8px" }}
+              style={{ marginTop: "8px", display: "block" }}
             />
-            {importing && <p className="muted small" style={{ marginTop: "8px" }}>Processing CSV import batch…</p>}
+            {importing && <p className="muted small" style={{ marginTop: "8px" }}>Processing CSV…</p>}
+
+            {/* Error banner */}
+            {importError && (
+              <div style={{ marginTop: "12px", padding: "10px 14px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: "6px", color: "#b91c1c" }}>
+                <strong>❌ Import Failed:</strong> {importError}
+              </div>
+            )}
+
             {importReport && (
               <div style={{ marginTop: "14px", padding: "12px", background: "rgba(0,0,0,0.05)", borderRadius: "6px" }}>
-                <strong>Import Results:</strong> Created: {importReport.created} · Skipped (duplicates): {importReport.skipped}
+                <strong>Import Results:</strong>{" "}
+                {importStep === 'users'
+                  ? <>Created: {importReport.created} · Skipped (duplicates): {importReport.skipped}</>
+                  : <>Updated: {importReport.updated ?? 0} · Skipped: {importReport.skipped}</>}
+                {importReport.errorCount != null && importReport.errorCount > 0 && (
+                  <span style={{ color: "var(--color-danger, #ef4444)", marginLeft: "8px" }}>· Errors: {importReport.errorCount}</span>
+                )}
                 {importReport.results && importReport.results.some((r) => r.status === "error") && (
                   <div style={{ marginTop: "8px", color: "var(--color-danger, #ef4444)" }}>
-                    <strong>Errors:</strong>
+                    <strong>Row errors:</strong>
                     {importReport.results
                       .filter((r) => r.status === "error")
                       .map((err, i) => (
@@ -1464,14 +1606,46 @@ export default function UsersAdmin({
               <form onSubmit={handleAdminUploadDoc}>
                 <label className="form-field">
                   Document Type <span className="req">*</span>
-                  <select value={newDocType} onChange={(e) => setNewDocType(e.target.value)}>
-                    {DOCUMENT_TYPES.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
+                  <select
+                    value={newDocType}
+                    onChange={(e) => {
+                      setNewDocType(e.target.value);
+                      setDocUploadError("");
+                      setDocUploadStatus("");
+                    }}
+                  >
+                    {DOCUMENT_TYPES.map((item) => {
+                      const alreadyUploaded = isDocTypeAlreadyUploaded(item.value);
+                      return (
+                        <option key={item.value} value={item.value}>
+                          {item.label} {alreadyUploaded ? "— (Already on file - delete first)" : ""}
+                        </option>
+                      );
+                    })}
                   </select>
                 </label>
+
+                {isDocTypeAlreadyUploaded(newDocType) && (
+                  <div
+                    style={{
+                      margin: "-6px 0 14px",
+                      padding: "10px 14px",
+                      background: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      borderRadius: "6px",
+                      fontSize: "13px",
+                      color: "#b91c1c",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                  >
+                    <span>⚠️</span>
+                    <span>
+                      A <strong>{formatDocType(newDocType)}</strong> is already on file for this guest. You cannot upload another {formatDocType(newDocType)} unless the existing one is deleted from the list above.
+                    </span>
+                  </div>
+                )}
 
                 <label className="form-field">
                   Document Number <span className="req">*</span>
@@ -1512,17 +1686,39 @@ export default function UsersAdmin({
                 </div>
 
                 <label className="form-field">
-                  Attachment (PDF or Image, Max 10MB)
+                  Attachment (PDF or Image, Max 1MB)
                   <input
                     type="file"
                     accept=".pdf,image/jpeg,image/png,image/webp"
-                    onChange={(e) => setNewDocFile(e.target.files?.[0] ?? null)}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      if (file && file.size > 1024 * 1024) {
+                        setDocUploadError("File size exceeds 1MB limit. Please choose a smaller file.");
+                        setNewDocFile(null);
+                        e.target.value = "";
+                        return;
+                      }
+                      setDocUploadError("");
+                      setNewDocFile(file);
+                    }}
                   />
+                  <span style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", display: "block" }}>
+                    Maximum file size is 1MB (PDF, JPEG, PNG, or WebP).
+                  </span>
                 </label>
 
                 <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
-                  <button className="btn btn-primary" type="submit" disabled={docUploadLoading}>
-                    {docUploadLoading ? "Uploading & Encrypting…" : "Upload Document"}
+                  <button
+                    className="btn btn-primary"
+                    type="submit"
+                    disabled={docUploadLoading || isDocTypeAlreadyUploaded(newDocType)}
+                    title={isDocTypeAlreadyUploaded(newDocType) ? `Delete the existing ${formatDocType(newDocType)} first` : undefined}
+                  >
+                    {docUploadLoading
+                      ? "Uploading & Encrypting…"
+                      : isDocTypeAlreadyUploaded(newDocType)
+                      ? `${formatDocType(newDocType)} Already Uploaded`
+                      : "Upload Document"}
                   </button>
                   <button className="btn btn-secondary" type="button" onClick={() => setDocsUser(null)}>
                     Done

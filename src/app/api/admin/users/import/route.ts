@@ -12,12 +12,15 @@ import { encryptDocumentNumber } from '@/lib/crypto'
  *   First Name              — string max 50 (required)
  *   Last Name               — string max 50 (required)
  *   Role                    — Guest / Leader / Admin (default: Guest)
- *   Leader Name             — Leader name or 10-15 digit phone of assigned leader (optional)
  *   Date of Joining         — DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD (optional)
  *   Active / Inactive       — Active or Inactive (optional, default: Active)
  *   Location                — optional home location / city (max 50)
  *   email id                — optional contact e-mail
  *   Remarks                 — freeform notes (optional)
+ *
+ * NOTE: Leader assignment is intentionally excluded from the CSV import because
+ * a user can have multiple Trail Leaders (many-to-many) and assigning a single
+ * leader via CSV would be misleading. Use the Edit UI to manage leader assignments.
  *
  * Optional Guest Details columns (from "Guest Details Table"):
  *   Date of Birth / dob     — DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD
@@ -144,14 +147,18 @@ export async function GET(req: NextRequest) {
   const guard = await requireAdmin()
   if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })
 
-  const type = req.nextUrl.searchParams.get('type')
+  // Accept both ?type= (legacy) and ?template= (UI links)
+  const type = req.nextUrl.searchParams.get('type') ?? req.nextUrl.searchParams.get('template')
 
   if (type === 'details' || type === 'guest_details') {
-    // Template matching "Guest Details Table"
+    // Guest Details template — Mobile Number is the user identifier only.
+    // First Name / Last Name are NOT included here; they belong in the User Table template.
+    // This file must be uploaded AFTER the User Table CSV so the phones already exist.
     const lines = [
-      'Mobile Number,First Name,Last Name,Date of Birth,PAN,Passport No.,Passport Issue Date,Passport Expiry Date,Passport Issued Location,Visa No.,Visa Expiry Date,Country,Travel Insurance No.,Travel Insurance Company,Travel Insurance Expiry Date,Food Preference,Food Allergy,Emergency Contact Name,Emergency Contact Number',
-      '9019911700,Arvind,Kamath,18/06/65,AAADK9754A,ZA495775,19/07/20,18/07/30,Bangalore,V123456789,15/08/28,Singapore,7103167389,TATA AIG,10/09/26,Veg,Peanuts and Milk,Anita Kamath,9019911700',
-      '9876543210,Sunita,Sharma,12/04/85,,,,,,,,ICICI Lombard,15/08/27,Non Veg,,Ramesh Sharma,9876543211',
+      'Mobile Number,Date of Birth,PAN,Passport No.,Passport Issue Date,Passport Expiry Date,Passport Issued Location,Visa No.,Visa Expiry Date,Visa Country,Travel Insurance No.,Travel Insurance Company,Travel Insurance Expiry Date,Food Preference,Food Allergy,Emergency Contact Name,Emergency Contact Number',
+      '9019911700,18/06/1965,AAADK9754A,ZA495775,19/07/2020,18/07/2030,Bangalore,V123456789,15/08/2028,Singapore,7103167389,TATA AIG,10/09/2026,Veg,Peanuts and Milk,Anita Kamath,9019911700',
+      '9876543210,12/04/1985,,,,,,,,,,ICICI Lombard,15/08/2027,Non Veg,,Ramesh Sharma,9876543211',
+      '9876543211,15/03/1990,,,,,,,,,,,,,,,',
     ]
     return new NextResponse(lines.join('\n'), {
       status: 200,
@@ -162,13 +169,16 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  // Template matching User Table: Mobile Number is user id (single column), Active is handled on backend, DD/MM/YY supported, Referral's Name included
+  // User Table template: Mobile Number, name, role, joining date, location, email, referral.
+  // Leader assignment is intentionally excluded — a user can have multiple Trail Leaders
+  // (many-to-many relationship). Use the Edit UI to assign leaders after import.
+  // Does NOT include guest detail fields (DOB, passport, insurance etc.) — use Guest Details template for those.
   const lines = [
-    'Mobile Number,First Name,Last Name,Role,Leader Name,Date of Joining,Location,email id,Referral\'s Name',
-    '9019911700,Arvind,Kamath,Guest,Anushree Kini,18/06/25,Bengaluru,arvindakamath@gmail.com,Ramesh Bhat',
-    '9000000002,Anushree,Kini,Leader,,01/01/25,Bengaluru,anushree@payana.app,',
-    '9876543210,Sunita,Sharma,Guest,Anushree Kini,10/02/25,Mysuru,sunita.sharma@example.com,Anita Rao',
-    '9876543211,Rahul,Verma,Guest,Anushree Kini,15/03/25,Delhi,rahul.verma@example.com,',
+    'Mobile Number,First Name,Last Name,Role,Date of Joining,Location,email id,Referral\'s Name',
+    '9019911700,Arvind,Kamath,Guest,18/06/2025,Bengaluru,arvindakamath@gmail.com,Ramesh Bhat',
+    '9000000002,Anushree,Kini,Leader,01/01/2025,Bengaluru,anushree@payana.app,',
+    '9876543210,Sunita,Sharma,Guest,10/02/2025,Mysuru,sunita.sharma@example.com,Anita Rao',
+    '9876543211,Rahul,Verma,Guest,15/03/2025,Delhi,rahul.verma@example.com,',
   ]
   return new NextResponse(lines.join('\n'), {
     status: 200,
@@ -251,12 +261,25 @@ export async function POST(req: NextRequest) {
   type RowResult = {
     row: number
     phone: string
-    status: 'created' | 'skipped' | 'error'
+    status: 'created' | 'skipped' | 'updated' | 'error'
     id?: string
     error?: string
   }
   const results: RowResult[] = []
-  const isDetailsOnlyImport = req.nextUrl.searchParams.get('type') === 'details' || req.nextUrl.searchParams.get('type') === 'guest_details'
+
+  // Auto-detect whether this is a Guest Details CSV by inspecting the header keys of the first row.
+  // A Guest Details CSV typically has NO Role / Leader Name / Date of Joining columns and has
+  // at least one of the detail-specific columns (DOB, Passport, Insurance, etc.).
+  // This detection lets us enforce the logical flow: User Details must be uploaded first.
+  const firstRowKeys = rows.length > 0 ? Object.keys(rows[0]).map(k => k.toLowerCase().replace(/[\s_/.-]/g, '')) : []
+  const hasUserTableCols = firstRowKeys.some(k => ['role', 'leadername', 'dateofjoining', 'doj'].includes(k))
+  const hasDetailCols = firstRowKeys.some(k => [
+    'dateofbirth', 'dob', 'passportno', 'travelinsuranceno', 'foodpreference', 'emergencycontactname',
+  ].includes(k))
+  // Treat as a Guest Details-only import if it has detail columns but no user-table-specific columns
+  const isDetailsOnlyImport = (!hasUserTableCols && hasDetailCols) ||
+    req.nextUrl.searchParams.get('type') === 'details' ||
+    req.nextUrl.searchParams.get('type') === 'guest_details'
 
   for (let i = 0; i < rows.length; i++) {
     const raw = rows[i]
@@ -267,7 +290,8 @@ export async function POST(req: NextRequest) {
     const first_name = getField(raw, 'First Name', 'FirstName', 'first_name', 'Guest 1st Name')
     const last_name  = getField(raw, 'Last Name', 'LastName', 'last_name', 'Guest Last Name')
     const rawRole    = getField(raw, 'Role', 'role') || 'Guest'
-    const leaderInput = getField(raw, 'Leader Name', 'LeaderName', 'Leader', 'leader_phone', 'leader_id')
+    // Note: Leader Name is intentionally not read from CSV — a user can have multiple
+    // Trail Leaders (many-to-many). Leader assignments are managed via the Edit UI.
     const activeInput = getField(raw, 'Active / Inactive', 'Active/Inactive', 'Active', 'status', 'is_active')
     const location    = getField(raw, 'Location', 'location', 'city') || null
     const rawDoj      = getField(raw, 'Date of Joining', 'DateOfJoining', 'date_of_joining', 'doj')
@@ -298,19 +322,19 @@ export async function POST(req: NextRequest) {
       results.push({ row: rowNum, phone: rawPhone || 'Row ' + rowNum, status: 'error', error: 'User Id / Mobile Number must be a valid 10-15 digit number' })
       continue
     }
-    if (!first_name || first_name.length > 50) {
-      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'First Name is required (max 50 chars)' })
-      continue
-    }
-    if (!last_name || last_name.length > 50) {
-      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'Last Name is required (max 50 chars)' })
-      continue
+    // For Guest Details-only imports, First Name and Last Name are not in the file —
+    // the user identifier is only the phone number.
+    if (!isDetailsOnlyImport) {
+      if (!first_name || first_name.length > 50) {
+        results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'First Name is required (max 50 chars)' })
+        continue
+      }
+      if (!last_name || last_name.length > 50) {
+        results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'Last Name is required (max 50 chars)' })
+        continue
+      }
     }
 
-    const mappedRole = ROLE_MAP[rawRole.toLowerCase().trim()] || 'traveller'
-    // Active is captured directly on the backend (default: active/true)
-    const isInactive = activeInput ? (activeInput.toLowerCase() === 'inactive' || activeInput.toLowerCase() === 'no' || activeInput.toLowerCase() === 'off') : false
-    const is_active = !isInactive
 
     if (location && location.length > 50) {
       results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'Location cannot exceed 50 characters' })
@@ -356,22 +380,38 @@ export async function POST(req: NextRequest) {
       continue
     }
 
-    const insurance_expiry = rawInsExp ? parseDateString(rawInsExp) : null
-
-    // Leader lookup
-    let leader_id: string | null = null
-    if (leaderInput) {
-      if (['leader', 'admin'].includes(mappedRole)) {
-        results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'Leaders and admins cannot be assigned a leader' })
-        continue
-      }
-      const cleanInput = leaderInput.trim().toLowerCase()
-      leader_id = leaderLookupMap.get(cleanInput) ?? leaderLookupMap.get(cleanInput.replace(/\s+/g, '')) ?? null
-      if (!leader_id) {
-        results.push({ row: rowNum, phone: rawPhone, status: 'error', error: `Assigned leader "${leaderInput}" not found. Enter leader's full name or phone number.` })
-        continue
-      }
+    // PAN / Passport / Visa number length guards
+    if (pan && pan.length > 10) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'PAN cannot exceed 10 characters' })
+      continue
     }
+    if (passportNo && passportNo.length > 20) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'Passport No. cannot exceed 20 characters' })
+      continue
+    }
+    if (visaNo && visaNo.length > 20) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'Visa No. cannot exceed 20 characters' })
+      continue
+    }
+
+    const insurance_expiry = rawInsExp ? parseDateString(rawInsExp) : null
+    if (rawInsExp && !insurance_expiry) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: `Travel Insurance Expiry Date "${rawInsExp}" is invalid. Use DD/MM/YYYY or YYYY-MM-DD.` })
+      continue
+    }
+
+    const preVisaExpiry = rawVisaExp ? parseDateString(rawVisaExp) : null
+    if (rawVisaExp && !preVisaExpiry) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: `Visa Expiry Date "${rawVisaExp}" is invalid. Use DD/MM/YYYY or YYYY-MM-DD.` })
+      continue
+    }
+
+    const prePassExpiry = rawPassExp ? parseDateString(rawPassExp) : null
+    if (rawPassExp && !prePassExpiry) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: `Passport Expiry Date "${rawPassExp}" is invalid. Use DD/MM/YYYY or YYYY-MM-DD.` })
+      continue
+    }
+
 
     // Duplicate detection / handling
     const existingUserId = existingPhoneMap.get(rawPhone)
@@ -379,6 +419,7 @@ export async function POST(req: NextRequest) {
       // Update referral name if present
       if (referral_name) {
         try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (admin.from('profiles') as any).update({ referral_name }).eq('id', existingUserId)
         } catch {
           // Ignore if column not yet added
@@ -394,10 +435,11 @@ export async function POST(req: NextRequest) {
         try {
           const food_preference = mappedFoodPref ?? (rawFoodPref ? (rawFoodPref.toLowerCase().includes('non') ? 'non_veg' : 'veg') : null)
           const passport_issue_date = rawPassIssue ? parseDateString(rawPassIssue) : null
-          const visa_expiry = rawVisaExp ? parseDateString(rawVisaExp) : null
+          const visa_expiry = preVisaExpiry   // already validated above
           const cleanVisaNo = visaNo ? visaNo.trim().toUpperCase() : null
 
           try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (admin.from('traveller_details') as any).upsert({
               user_id: existingUserId,
               dob,
@@ -415,6 +457,7 @@ export async function POST(req: NextRequest) {
               visa_country: visaCountry,
             }, { onConflict: 'user_id' })
           } catch {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (admin.from('traveller_details') as any).upsert({
               user_id: existingUserId,
               dob,
@@ -431,37 +474,93 @@ export async function POST(req: NextRequest) {
 
           if (pan) {
             const enc = encryptDocumentNumber(pan)
-            await admin.from('guest_documents').insert({
-              user_id: existingUserId,
-              doc_type: 'pan',
-              ...enc,
-            })
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: existingPan } = await (admin.from('guest_documents') as any)
+              .select('id')
+              .eq('user_id', existingUserId)
+              .eq('doc_type', 'pan')
+              .maybeSingle()
+
+            if (existingPan) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              await (admin.from('guest_documents') as any).update({
+                doc_number_enc: enc.doc_number_enc,
+                iv: enc.iv,
+                auth_tag: enc.auth_tag,
+                updated_at: new Date().toISOString(),
+              }).eq('id', existingPan.id)
+            } else {
+              await admin.from('guest_documents').insert({
+                user_id: existingUserId,
+                doc_type: 'pan',
+                ...enc,
+              })
+            }
           }
           if (passportNo) {
             const enc = encryptDocumentNumber(passportNo)
-            const expiry_date = rawPassExp ? parseDateString(rawPassExp) : null
+            const expiry_date = prePassExpiry   // already validated
             const issued_date = rawPassIssue ? parseDateString(rawPassIssue) : null
-            await admin.from('guest_documents').insert({
-              user_id: existingUserId,
-              doc_type: 'passport',
-              issued_date,
-              expiry_date,
-              issued_country: passLoc || 'India',
-              ...enc,
-            })
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: existingPassport } = await (admin.from('guest_documents') as any)
+              .select('id')
+              .eq('user_id', existingUserId)
+              .eq('doc_type', 'passport')
+              .maybeSingle()
+
+            if (existingPassport) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              await (admin.from('guest_documents') as any).update({
+                doc_number_enc: enc.doc_number_enc,
+                iv: enc.iv,
+                auth_tag: enc.auth_tag,
+                issued_date,
+                expiry_date,
+                issued_country: passLoc || 'India',
+                updated_at: new Date().toISOString(),
+              }).eq('id', existingPassport.id)
+            } else {
+              await admin.from('guest_documents').insert({
+                user_id: existingUserId,
+                doc_type: 'passport',
+                issued_date,
+                expiry_date,
+                issued_country: passLoc || 'India',
+                ...enc,
+              })
+            }
           }
           if (cleanVisaNo) {
             const enc = encryptDocumentNumber(cleanVisaNo)
-            const expiry_date = rawVisaExp ? parseDateString(rawVisaExp) : null
-            await admin.from('guest_documents').insert({
-              user_id: existingUserId,
-              doc_type: 'visa',
-              expiry_date,
-              issued_country: visaCountry || null,
-              ...enc,
-            })
+            const expiry_date = preVisaExpiry   // already validated
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: existingVisa } = await (admin.from('guest_documents') as any)
+              .select('id')
+              .eq('user_id', existingUserId)
+              .eq('doc_type', 'visa')
+              .maybeSingle()
+
+            if (existingVisa) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              await (admin.from('guest_documents') as any).update({
+                doc_number_enc: enc.doc_number_enc,
+                iv: enc.iv,
+                auth_tag: enc.auth_tag,
+                expiry_date,
+                issued_country: visaCountry || null,
+                updated_at: new Date().toISOString(),
+              }).eq('id', existingVisa.id)
+            } else {
+              await admin.from('guest_documents').insert({
+                user_id: existingUserId,
+                doc_type: 'visa',
+                expiry_date,
+                issued_country: visaCountry || null,
+                ...enc,
+              })
+            }
           }
-          results.push({ row: rowNum, phone: rawPhone, status: 'created', id: existingUserId })
+          results.push({ row: rowNum, phone: rawPhone, status: 'updated', id: existingUserId })
           continue
         } catch (detailErr) {
           results.push({ row: rowNum, phone: rawPhone, status: 'error', error: String(detailErr) })
@@ -470,9 +569,26 @@ export async function POST(req: NextRequest) {
       }
 
       // Standard user import skips existing phones without resetting credentials
-      results.push({ row: rowNum, phone: rawPhone, status: 'skipped', error: 'User Id / Mobile Number already registered' })
+      results.push({ row: rowNum, phone: rawPhone, status: 'skipped', error: 'User already registered — skipped (no changes made)' })
       continue
     }
+
+    // ── Logical flow enforcement: if this looks like a Guest Details CSV, phones MUST already exist ──
+    if (isDetailsOnlyImport) {
+      results.push({
+        row: rowNum,
+        phone: rawPhone,
+        status: 'error',
+        error: `Phone ${rawPhone} is not registered. Please upload the User Details CSV first to create the user account, then re-upload this Guest Details CSV.`,
+      })
+      continue
+    }
+
+    // Role and Active status for new user creation
+    // Leader assignment is NOT done via CSV (many-to-many; use the Edit UI instead)
+    const mappedRole = ROLE_MAP[rawRole.toLowerCase().trim()] || 'traveller'
+    const isInactive = activeInput ? (activeInput.toLowerCase() === 'inactive' || activeInput.toLowerCase() === 'no' || activeInput.toLowerCase() === 'off') : false
+    const is_active = !isInactive
 
     // Create auth user + profile
     try {
@@ -497,7 +613,6 @@ export async function POST(req: NextRequest) {
         first_name,
         last_name,
         role: mappedRole,
-        leader_id,
         email,
         location,
         date_of_joining,
@@ -515,6 +630,7 @@ export async function POST(req: NextRequest) {
 
       if (profileErr && profileErr.message?.includes('referral_name')) {
         delete insertPayload.referral_name
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const retry = await (admin.from('profiles') as any)
           .insert(insertPayload)
           .select('id')
@@ -534,7 +650,7 @@ export async function POST(req: NextRequest) {
       // Only write guest-specific details for Guest/traveller users if provided
       const food_preference = mappedFoodPref ?? (rawFoodPref ? (rawFoodPref.toLowerCase().includes('non') ? 'non_veg' : 'veg') : null)
       const passport_issue_date = rawPassIssue ? parseDateString(rawPassIssue) : null
-      const visa_expiry = rawVisaExp ? parseDateString(rawVisaExp) : null
+      const visa_expiry = preVisaExpiry   // already validated above
       const cleanVisaNo = visaNo ? visaNo.trim().toUpperCase() : null
 
       const hasGuestDetails = mappedRole === 'traveller' && Boolean(
@@ -599,7 +715,7 @@ export async function POST(req: NextRequest) {
       }
       if (passportNo) {
         const enc = encryptDocumentNumber(passportNo)
-        const expiry_date = rawPassExp ? parseDateString(rawPassExp) : null
+        const expiry_date = prePassExpiry   // already validated
         const issued_date = rawPassIssue ? parseDateString(rawPassIssue) : null
         await admin.from('guest_documents').insert({
           user_id: createdUserId,
@@ -612,7 +728,7 @@ export async function POST(req: NextRequest) {
       }
       if (cleanVisaNo) {
         const enc = encryptDocumentNumber(cleanVisaNo)
-        const expiry_date = rawVisaExp ? parseDateString(rawVisaExp) : null
+        const expiry_date = preVisaExpiry   // already validated
         await admin.from('guest_documents').insert({
           user_id: createdUserId,
           doc_type: 'visa',
@@ -642,11 +758,21 @@ export async function POST(req: NextRequest) {
   }
 
   const created    = results.filter(r => r.status === 'created').length
+  const updated    = results.filter(r => r.status === 'updated').length
   const skipped    = results.filter(r => r.status === 'skipped').length
   const errorCount = results.filter(r => r.status === 'error').length
 
+  // If every row errored, return 422 so the client can surface a clear failure (not a misleading success)
+  if (errorCount > 0 && created === 0 && updated === 0 && skipped === 0) {
+    return NextResponse.json(
+      { error: 'All rows failed validation. No data was imported.', created, updated, skipped, errorCount, results },
+      { status: 422 },
+    )
+  }
+
   return NextResponse.json({
     created,
+    updated,
     skipped,
     errorCount,
     results,

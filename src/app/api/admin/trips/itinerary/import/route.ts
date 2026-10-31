@@ -8,14 +8,16 @@ const TIME_RE = /^\d{2}:\d{2}(:\d{2})?$/
 const VALID_MEAL_PLANS = new Set([
   'Breakfast',
   'Breakfast & Dinner',
+  'Lunch & Dinner',
   'Breakfast, Lunch & Dinner',
 ])
 
 function normalizeMealPlan(val: string): string {
   const trimmed = val.trim()
   if (/^breakfast$/i.test(trimmed)) return 'Breakfast'
-  if (/^breakfast\s*(&|and)\s*dinner$/i.test(trimmed)) return 'Breakfast & Dinner'
-  if (/^breakfast,?\s*lunch\s*(&|and)\s*dinner$/i.test(trimmed)) return 'Breakfast, Lunch & Dinner'
+  if (/^breakfast\s*(?:&|and)\s*dinner$/i.test(trimmed)) return 'Breakfast & Dinner'
+  if (/^lunch\s*(?:&|and)\s*dinner$/i.test(trimmed)) return 'Lunch & Dinner'
+  if (/^breakfast\s*(?:,|&|and)?\s*lunch\s*(?:,|&|and)\s*dinner$/i.test(trimmed)) return 'Breakfast, Lunch & Dinner'
   return trimmed
 }
 
@@ -192,7 +194,7 @@ export async function POST(req: NextRequest) {
       if (!VALID_MEAL_PLANS.has(normalized)) {
         errors.push({
           row: rowNum,
-          error: `Invalid Meal Plan: "${rawMealPlan}". Supported values: "Breakfast", "Breakfast & Dinner", "Breakfast, Lunch & Dinner"`,
+          error: `Invalid Meal Plan: "${rawMealPlan}". Supported values: "Breakfast", "Breakfast & Dinner", "Lunch & Dinner", "Breakfast, Lunch & Dinner"`,
         })
         skipped++
         continue
@@ -256,7 +258,29 @@ export async function POST(req: NextRequest) {
         .select('id')
         .single()
 
-      if (dayErr || !upserted) {
+      if (dayErr && dayErr.message?.includes('meal_plan')) {
+        const { data: fallbackUpserted, error: fallbackErr } = await (admin.from('itinerary_days') as any)
+          .upsert(
+            {
+              trip_id:        d.trip_id,
+              day_number:     d.day_number,
+              destination:    d.destination,
+              hotel_name:     d.hotel_name,
+              itinerary_text: d.itinerary_text,
+            },
+            { onConflict: 'trip_id,day_number' },
+          )
+          .select('id')
+          .single()
+
+        if (fallbackErr || !fallbackUpserted) {
+          errors.push({ row: 0, error: `Trip Day ${d.day_number}: ${fallbackErr?.message ?? 'upsert failed'}` })
+          skipped++
+        } else {
+          dayIdMap.set(key, fallbackUpserted.id)
+          daysUpserted++
+        }
+      } else if (dayErr || !upserted) {
         errors.push({ row: 0, error: `Trip Day ${d.day_number}: ${dayErr?.message ?? 'upsert failed'}` })
         skipped++
       } else {

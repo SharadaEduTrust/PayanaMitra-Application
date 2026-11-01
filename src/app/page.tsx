@@ -12,7 +12,7 @@ export default function Home() {
     <main>
       <div className="container">
         <nav className="nav">
-          <Brand size={40} />
+          <Brand size={76} />
           <div className="navlinks">
             <a href="#how">How it works</a>
             <a href="#why">Why Payana Mitra</a>
@@ -173,7 +173,7 @@ export default function Home() {
         <div className="container">
           <div className="footer-top">
             <div className="footer-lead">
-              <Brand size={44} tone="light" />
+              <Brand size={88} tone="light" />
               <p className="footer-tagline serif">
                 A long way is only worth taking
                 <br />

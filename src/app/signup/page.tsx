@@ -6,7 +6,7 @@ export default function SignupPage() {
   return (
     <main className="auth-shell">
       <section className="auth-art">
-        <Brand size={44} tone="light" />
+        <Brand size={88} tone="light" />
         <div>
           <div className="eyebrow" style={{ color: "#D4A373" }}>
             Start your journey
@@ -18,7 +18,7 @@ export default function SignupPage() {
       </section>
       <section className="auth-form-wrap">
         <div className="auth-card">
-          <Brand size={36} />
+          <Brand size={72} />
           <h2>Create your account.</h2>
           <p>
             Your phone number identifies your account. The system automatically allocates the last four digits

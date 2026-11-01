@@ -24,7 +24,7 @@ export default async function AdminPanelLayout({ children }: { children: React.R
   return (
     <div className="admin admin-layout">
       <aside className="admin-side">
-        <Brand size={36} tone="light" href="/admin" />
+        <Brand size={64} tone="light" href="/admin" />
         <div className="side-label">Manage</div>
         <AdminNav
           links={[

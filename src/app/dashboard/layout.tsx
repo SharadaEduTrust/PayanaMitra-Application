@@ -11,7 +11,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="dashboard">
       <aside className="sidebar">
-        <Brand size={38} tone="light" />
+        <Brand size={68} tone="light" />
         <DashboardNav role={profile.role} />
         <div className="side-bottom">
           <Link className="side-user" href="/dashboard/profile">

@@ -15,7 +15,7 @@ export default async function LoginPage({ searchParams }: Props) {
   return (
     <main className="auth-shell">
       <section className="auth-art">
-        <Brand size={44} tone="light" />
+        <Brand size={88} tone="light" />
         <div>
           <div className="eyebrow" style={{ color: "#D4A373" }}>
             Your journey awaits
@@ -27,7 +27,7 @@ export default async function LoginPage({ searchParams }: Props) {
       </section>
       <section className="auth-form-wrap">
         <div className="auth-card">
-          <Brand size={36} />
+          <Brand size={72} />
           <h2>Welcome back.</h2>
           <p>Sign in with your registered phone number and password.</p>
           {isTimeout && (

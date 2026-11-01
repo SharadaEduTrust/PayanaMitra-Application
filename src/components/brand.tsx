@@ -17,7 +17,7 @@ export interface BrandProps {
  * Automatically adapts between tones ('dark' for light backgrounds, 'light' for dark backgrounds).
  */
 export default function Brand({
-  size = 40,
+  size = 76,
   tone = "dark",
   href = "/",
   variant = "responsive",
@@ -35,6 +35,11 @@ export default function Brand({
     tone === "light"
       ? "/brand/payana-mitra-mobile-light.webp"
       : "/brand/payana-mitra-mobile.webp";
+
+  const sizeStyle: React.CSSProperties = {
+    height: size,
+    width: "auto",
+  };
 
   let emblemContent: React.ReactNode;
 
@@ -57,7 +62,7 @@ export default function Brand({
         className="brand-emblem brand-emblem-desktop"
         src={desktopSrc}
         alt="Payana Mitra"
-        style={{ height: size, width: "auto" }}
+        style={sizeStyle}
       />
     );
   } else if (variant === "mobile") {
@@ -67,7 +72,7 @@ export default function Brand({
         className="brand-emblem brand-emblem-mobile"
         src={mobileSrc}
         alt="Payana Mitra"
-        style={{ height: size, width: "auto" }}
+        style={sizeStyle}
       />
     );
   } else {
@@ -79,7 +84,7 @@ export default function Brand({
           className="brand-emblem"
           src={mobileSrc}
           alt="Payana Mitra"
-          style={{ height: size, width: "auto" }}
+          style={sizeStyle}
         />
       </picture>
     );

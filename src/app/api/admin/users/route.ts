@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession, derivePassword, phoneToEmail, PHONE_REGEX } from '@/lib/server/auth'
 import { encrypt } from '@/lib/server/crypto'
 import { formatZodError } from '@/lib/server/zod-error'
+import { deleteUserAccount } from '@/lib/server/user-delete'
 
 /**
  * GET   /api/admin/users   — paginated, filterable user list with leader and guest details
@@ -342,6 +343,7 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (tdErr) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (admin.from('profiles') as any).delete().eq('id', authData.user.id)
       await admin.auth.admin.deleteUser(authData.user.id)
       return NextResponse.json({ error: tdErr.message || 'Failed to save guest details' }, { status: 500 })
@@ -665,5 +667,56 @@ export async function PATCH(req: NextRequest) {
       ...updatedProfile,
       traveller_details: travellerDetails,
     },
+  })
+}
+
+export async function DELETE(req: NextRequest) {
+  const guard = await requireAdmin()
+  if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })
+
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null
+  let body: { id?: string; ids?: string[]; user_ids?: string[] } | null = null
+
+  try {
+    body = await req.json()
+  } catch {
+    const { searchParams } = new URL(req.url)
+    const queryId = searchParams.get('id')
+    if (queryId) {
+      body = { id: queryId }
+    }
+  }
+
+  const idsToProcess: string[] = []
+  if (body?.id) idsToProcess.push(body.id)
+  if (Array.isArray(body?.ids)) idsToProcess.push(...body.ids)
+  if (Array.isArray(body?.user_ids)) idsToProcess.push(...body.user_ids)
+
+  const uniqueIds = Array.from(new Set(idsToProcess.filter(Boolean)))
+  if (uniqueIds.length === 0) {
+    return NextResponse.json({ error: 'No user ID provided for removal.' }, { status: 400 })
+  }
+
+  const deleted: Array<{ id: string; name: string }> = []
+  const failed: Array<{ id: string; error: string }> = []
+
+  for (const uid of uniqueIds) {
+    const res = await deleteUserAccount(uid, guard.profile.id, ip)
+    if (res.ok) {
+      deleted.push({ id: uid, name: res.deletedUser?.name ?? uid })
+    } else {
+      failed.push({ id: uid, error: res.error ?? 'Unknown error' })
+    }
+  }
+
+  if (deleted.length === 0 && failed.length > 0) {
+    return NextResponse.json({ error: failed[0].error, failed }, { status: 400 })
+  }
+
+  return NextResponse.json({
+    ok: true,
+    message: `Successfully removed ${deleted.length} user${deleted.length !== 1 ? 's' : ''}.`,
+    deleted,
+    failed,
   })
 }

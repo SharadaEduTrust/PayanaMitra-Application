@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent, type ChangeEvent } from "react";
+import { useMemo, useState, useEffect, type FormEvent, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { DOCUMENT_TYPES, formatDocType } from "@/lib/documents";
 import { createClient } from "@/lib/supabase/client";
@@ -105,6 +105,8 @@ export default function UsersAdmin({
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
   // Sorting state
   const [sortField, setSortField] = useState<SortField>("name");
@@ -244,6 +246,34 @@ export default function UsersAdmin({
     const start = (page - 1) * pageSize;
     return sortedRows.slice(start, start + pageSize);
   }, [sortedRows, page, pageSize]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const allPaginatedSelected = useMemo(() => {
+    if (paginatedRows.length === 0) return false;
+    return paginatedRows.every((r) => selectedUserIds.includes(r.id));
+  }, [paginatedRows, selectedUserIds]);
+
+  function toggleSelectAll() {
+    if (allPaginatedSelected) {
+      const pageIds = new Set(paginatedRows.map((r) => r.id));
+      setSelectedUserIds((prev) => prev.filter((id) => !pageIds.has(id)));
+    } else {
+      const updated = new Set(selectedUserIds);
+      paginatedRows.forEach((r) => updated.add(r.id));
+      setSelectedUserIds(Array.from(updated));
+    }
+  }
+
+  function toggleUserSelection(id: string) {
+    setSelectedUserIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+    );
+  }
 
   function toggleSort(field: SortField) {
     if (sortField === field) {
@@ -757,6 +787,79 @@ export default function UsersAdmin({
     }
   }
 
+  async function removeUser(user: UserRow) {
+    const confirmMessage = `Are you sure you want to permanently remove ${user.firstName} ${user.lastName} (${user.phone})?\n\nThis will permanently delete the user's account, profile, uploaded documents, and associated records. This action cannot be undone.`;
+    if (!window.confirm(confirmMessage)) return;
+
+    setError("");
+    setStatus("");
+    setDeletingUserId(user.id);
+
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}`, {
+        method: "DELETE",
+      });
+
+      const json = await res.json().catch(() => null);
+      setDeletingUserId(null);
+
+      if (!res.ok) {
+        setError(json?.error ?? "Failed to remove user.");
+        return;
+      }
+
+      setRows((current) => current.filter((r) => r.id !== user.id));
+      setSelectedUserIds((current) => current.filter((id) => id !== user.id));
+      if (editingUser?.id === user.id) {
+        setEditingUser(null);
+      }
+      setStatus(`User ${user.firstName} ${user.lastName} was permanently removed.`);
+      router.refresh();
+    } catch {
+      setDeletingUserId(null);
+      setError("Network error while removing user.");
+    }
+  }
+
+  async function removeSelectedUsers() {
+    if (selectedUserIds.length === 0) return;
+    const count = selectedUserIds.length;
+    const confirmMessage = `Are you sure you want to permanently remove ${count} selected user${count !== 1 ? "s" : ""}?\n\nThis will permanently delete their accounts, profiles, uploaded documents, and associated records. This action cannot be undone.`;
+    if (!window.confirm(confirmMessage)) return;
+
+    setError("");
+    setStatus("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedUserIds }),
+      });
+
+      const json = await res.json().catch(() => null);
+      setLoading(false);
+
+      if (!res.ok) {
+        setError(json?.error ?? "Failed to remove selected users.");
+        return;
+      }
+
+      const removedSet = new Set(selectedUserIds);
+      setRows((current) => current.filter((r) => !removedSet.has(r.id)));
+      if (editingUser && removedSet.has(editingUser.id)) {
+        setEditingUser(null);
+      }
+      setSelectedUserIds([]);
+      setStatus(`Successfully removed ${count} user${count !== 1 ? "s" : ""}.`);
+      router.refresh();
+    } catch {
+      setLoading(false);
+      setError("Network error while removing selected users.");
+    }
+  }
+
   async function handleCsvUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1047,6 +1150,32 @@ export default function UsersAdmin({
               </svg>
               {showImport ? "Close Import" : "Import Guests (CSV)"}
             </button>
+
+            {/* Remove Selected Button */}
+            {selectedUserIds.length > 0 && (
+              <button
+                type="button"
+                className="admin-control-btn"
+                onClick={removeSelectedUsers}
+                disabled={loading}
+                style={{
+                  backgroundColor: "#dc2626",
+                  color: "#ffffff",
+                  borderColor: "#b91c1c",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontWeight: 600,
+                }}
+                title="Permanently remove selected users"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                Remove Selected ({selectedUserIds.length})
+              </button>
+            )}
           </div>
         </div>
 
@@ -1179,6 +1308,16 @@ export default function UsersAdmin({
               <table className="admin-table admin-table-users">
                 <thead>
                   <tr>
+                    <th style={{ width: "38px", paddingLeft: "14px", textAlign: "center", userSelect: "none" }}>
+                      <input
+                        type="checkbox"
+                        checked={allPaginatedSelected}
+                        onChange={toggleSelectAll}
+                        title={allPaginatedSelected ? "Deselect all accounts on this page" : "Select all accounts on this page"}
+                        style={{ cursor: "pointer", width: "15px", height: "15px" }}
+                        aria-label="Select all accounts on this page"
+                      />
+                    </th>
                     {renderSortHeader("User Id / Mobile Number", "phone")}
                     {renderSortHeader("First Name", "name")}
                     <th style={{ userSelect: "none", whiteSpace: "nowrap" }}>Last Name</th>
@@ -1193,101 +1332,123 @@ export default function UsersAdmin({
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedRows.map((row) => (
-                    <tr key={row.id}>
-                      <td style={{ paddingLeft: "18px" }}>
-                        <span className="mono" style={{ fontWeight: 600, color: "#0f172a" }}>
-                          {row.phone}
-                        </span>
-                      </td>
-                      <td>
-                        <div style={{ display: "flex", alignItems: "center", gap: "9px", whiteSpace: "nowrap" }}>
-                          <span className="guest-avatar-bubble">
-                            {row.firstName?.charAt(0) || "U"}
+                  {paginatedRows.map((row) => {
+                    const isSelected = selectedUserIds.includes(row.id);
+                    return (
+                      <tr key={row.id} style={{ background: isSelected ? "rgba(239, 68, 68, 0.04)" : undefined }}>
+                        <td style={{ width: "38px", paddingLeft: "14px", textAlign: "center" }}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleUserSelection(row.id)}
+                            style={{ cursor: "pointer", width: "15px", height: "15px" }}
+                            aria-label={`Select ${row.firstName} ${row.lastName}`}
+                          />
+                        </td>
+                        <td>
+                          <span className="mono" style={{ fontWeight: 600, color: "#0f172a" }}>
+                            {row.phone}
                           </span>
-                          <strong style={{ color: "#0f172a" }}>{row.firstName}</strong>
-                        </div>
-                      </td>
-                      <td>
-                        <strong style={{ color: "#0f172a" }}>{row.lastName}</strong>
-                      </td>
-                      <td>
-                        <span className={`role-badge role-badge-${row.role === "traveller" ? "guest" : row.role}`}>
-                          {row.role === "traveller" ? "Guest" : row.role === "leader" ? "Trail Leader" : "Admin"}
-                        </span>
-                      </td>
-                      <td>
-                        <div>
-                          <div style={{ fontWeight: 600, color: row.leaderName ? "#0f172a" : "#94a3b8" }}>
-                            {row.leaderName || "—"}
+                        </td>
+                        <td>
+                          <div style={{ display: "flex", alignItems: "center", gap: "9px", whiteSpace: "nowrap" }}>
+                            <span className="guest-avatar-bubble">
+                              {row.firstName?.charAt(0) || "U"}
+                            </span>
+                            <strong style={{ color: "#0f172a" }}>{row.firstName}</strong>
                           </div>
-                          {row.trailLeaders && row.trailLeaders.length > 0 && (
-                            <div style={{ display: "flex", flexDirection: "column", gap: "2px", marginTop: "3px" }}>
-                              {row.trailLeaders.map((tl, i) => (
-                                <span key={i} className="trail-pill-sub" title={tl.trailName}>
-                                  Trail: {tl.trailName}
-                                </span>
-                              ))}
+                        </td>
+                        <td>
+                          <strong style={{ color: "#0f172a" }}>{row.lastName}</strong>
+                        </td>
+                        <td>
+                          <span className={`role-badge role-badge-${row.role === "traveller" ? "guest" : row.role}`}>
+                            {row.role === "traveller" ? "Guest" : row.role === "leader" ? "Trail Leader" : "Admin"}
+                          </span>
+                        </td>
+                        <td>
+                          <div>
+                            <div style={{ fontWeight: 600, color: row.leaderName ? "#0f172a" : "#94a3b8" }}>
+                              {row.leaderName || "—"}
                             </div>
-                          )}
-                        </div>
-                      </td>
-                      <td>{row.referralName || "—"}</td>
-                      <td>
-                        <span style={{ whiteSpace: "nowrap" }}>
-                          {row.location ? `📍 ${row.location}` : "—"}
-                        </span>
-                      </td>
-                      <td className="small" style={{ color: row.email ? "#334155" : "#94a3b8" }}>
-                        {row.email || "—"}
-                      </td>
-                      <td>
-                        <span className={`status-pill ${row.isActive ? "active" : "inactive"}`}>
-                          <span className="status-dot" />
-                          {row.isActive ? "Active" : "Suspended"}
-                        </span>
-                      </td>
-                      <td className="small muted" style={{ whiteSpace: "nowrap" }}>
-                        {row.lastActiveAt ? new Date(row.lastActiveAt).toLocaleDateString("en-IN") : "Never"}
-                      </td>
-                      <td style={{ textAlign: "right", paddingRight: "18px" }}>
-                        <div className="row-action-pills" style={{ justifyContent: "flex-end" }}>
-                          <button
-                            type="button"
-                            className="action-pill action-pill-neutral"
-                            onClick={() => openDocsModal(row)}
-                            title="View & upload travel documents"
-                          >
-                            📄 Docs
-                          </button>
-                          <button
-                            type="button"
-                            className="action-pill action-pill-primary"
-                            onClick={() => startEdit(row)}
-                            title="Edit account details"
-                          >
-                            ✏️ Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="action-pill action-pill-neutral"
-                            onClick={() => resetPassword(row)}
-                            title="Reset PIN to last 4 digits of phone"
-                          >
-                            🔑 Reset PIN
-                          </button>
-                          <button
-                            type="button"
-                            className={`action-pill ${row.isActive ? "action-pill-danger" : "action-pill-success"}`}
-                            onClick={() => updateUser(row.id, { is_active: !row.isActive }, row.isActive ? "Account suspended." : "Account restored.")}
-                            title={row.isActive ? "Suspend guest account" : "Restore guest account"}
-                          >
-                            {row.isActive ? "Suspend" : "Restore"}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            {row.trailLeaders && row.trailLeaders.length > 0 && (
+                              <div style={{ display: "flex", flexDirection: "column", gap: "2px", marginTop: "3px" }}>
+                                {row.trailLeaders.map((tl, i) => (
+                                  <span key={i} className="trail-pill-sub" title={tl.trailName}>
+                                    Trail: {tl.trailName}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td>{row.referralName || "—"}</td>
+                        <td>
+                          <span style={{ whiteSpace: "nowrap" }}>
+                            {row.location ? `📍 ${row.location}` : "—"}
+                          </span>
+                        </td>
+                        <td className="small" style={{ color: row.email ? "#334155" : "#94a3b8" }}>
+                          {row.email || "—"}
+                        </td>
+                        <td>
+                          <span className={`status-pill ${row.isActive ? "active" : "inactive"}`}>
+                            <span className="status-dot" />
+                            {row.isActive ? "Active" : "Suspended"}
+                          </span>
+                        </td>
+                        <td className="small muted" style={{ whiteSpace: "nowrap" }}>
+                          {row.lastActiveAt ? new Date(row.lastActiveAt).toLocaleDateString("en-IN") : "Never"}
+                        </td>
+                        <td style={{ textAlign: "right", paddingRight: "18px" }}>
+                          <div className="row-action-pills" style={{ justifyContent: "flex-end" }}>
+                            <button
+                              type="button"
+                              className="action-pill action-pill-neutral"
+                              onClick={() => openDocsModal(row)}
+                              title="View & upload travel documents"
+                            >
+                              📄 Docs
+                            </button>
+                            <button
+                              type="button"
+                              className="action-pill action-pill-primary"
+                              onClick={() => startEdit(row)}
+                              title="Edit account details"
+                            >
+                              ✏️ Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="action-pill action-pill-neutral"
+                              onClick={() => resetPassword(row)}
+                              title="Reset PIN to last 4 digits of phone"
+                            >
+                              🔑 Reset PIN
+                            </button>
+                            <button
+                              type="button"
+                              className={`action-pill ${row.isActive ? "action-pill-danger" : "action-pill-success"}`}
+                              onClick={() => updateUser(row.id, { is_active: !row.isActive }, row.isActive ? "Account suspended." : "Account restored.")}
+                              title={row.isActive ? "Suspend guest account" : "Restore guest account"}
+                            >
+                              {row.isActive ? "Suspend" : "Restore"}
+                            </button>
+                            <button
+                              type="button"
+                              className="action-pill action-pill-danger"
+                              onClick={() => removeUser(row)}
+                              disabled={deletingUserId === row.id}
+                              title="Permanently remove user"
+                              style={{ opacity: deletingUserId === row.id ? 0.6 : 1 }}
+                            >
+                              {deletingUserId === row.id ? "Removing…" : "🗑️ Remove"}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1547,12 +1708,27 @@ export default function UsersAdmin({
               <textarea rows={2} value={editForm.remarks} onChange={(e) => setEditForm({ ...editForm, remarks: e.target.value })} />
             </label>
 
-            <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
-              <button className="btn btn-primary" type="submit" disabled={loading}>
+            <div style={{ display: "flex", gap: "10px", marginTop: "16px", alignItems: "center" }}>
+              <button className="btn btn-primary" type="submit" disabled={loading || deletingUserId === editingUser.id}>
                 {loading ? "Saving…" : "Save changes"}
               </button>
               <button className="btn btn-secondary" type="button" onClick={() => setEditingUser(null)}>
                 Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={loading || deletingUserId === editingUser.id}
+                onClick={() => removeUser(editingUser)}
+                style={{
+                  marginLeft: "auto",
+                  backgroundColor: "#fee2e2",
+                  color: "#dc2626",
+                  borderColor: "#fca5a5",
+                }}
+                title="Permanently remove this user account"
+              >
+                {deletingUserId === editingUser.id ? "Removing…" : "🗑️ Remove User"}
               </button>
             </div>
           </form>

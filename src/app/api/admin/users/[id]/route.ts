@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession, derivePassword, PHONE_REGEX } from '@/lib/server/auth'
 import { formatZodError } from '@/lib/server/zod-error'
+import { deleteUserAccount } from '@/lib/server/user-delete'
 
 interface Params { params: Promise<{ id: string }> }
 
@@ -204,31 +205,21 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   })
 }
 
-export async function DELETE(_req: NextRequest, { params }: Params) {
+export async function DELETE(req: NextRequest, { params }: Params) {
   const guard = await requireAdmin()
   if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })
 
   const { id } = await params
-  const admin = createAdminClient()
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null
 
-  // Verify user exists first
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: existing, error: findErr } = await (admin.from('profiles') as any)
-    .select('id')
-    .eq('id', id)
-    .maybeSingle()
+  const result = await deleteUserAccount(id, guard.profile.id, ip)
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status ?? 500 })
+  }
 
-  if (findErr) return NextResponse.json({ error: findErr.message }, { status: 500 })
-  if (!existing) return NextResponse.json({ error: 'User not found' }, { status: 404 })
-
-  // Deactivate the user
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (admin.from('profiles') as any)
-    .update({ is_active: false, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .select('id, is_active')
-    .single()
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ message: 'User deactivated successfully', data })
+  return NextResponse.json({
+    ok: true,
+    message: `User ${result.deletedUser?.name || id} removed successfully`,
+    data: result.deletedUser,
+  })
 }

@@ -152,6 +152,7 @@ export default function UsersAdmin({
     results?: Array<{ row: number; phone: string; status: string; error?: string }>;
   } | null>(null);
   const [importError, setImportError] = useState("");
+  const [importNotice, setImportNotice] = useState("");
 
   // Pagination state
   const [page, setPage] = useState(1);
@@ -763,6 +764,7 @@ export default function UsersAdmin({
     setImporting(true);
     setImportReport(null);
     setImportError("");
+    setImportNotice("");
     setError("");
     setStatus("");
 
@@ -813,23 +815,24 @@ export default function UsersAdmin({
           setImportStep('details');
           setStep1Done(true);
         } else {
-          setStatus(
-            `Step 1 complete: ${created} user${created !== 1 ? 's' : ''} created, ${skipped} already existing (skipped). You can now upload Guest Details in Step 2.`
-          );
+          const msg = `Step 1 complete: ${created} user${created !== 1 ? 's' : ''} created, ${skipped} already existing (skipped). You can now upload Guest Details in Step 2.`;
+          setImportNotice(msg);
+          setStatus(msg);
           // Auto-advance to step 2
           if (anySuccess) { setImportStep('details'); setStep1Done(true); }
         }
       } else {
-        if (errCnt > 0 && updated === 0 && skipped === 0) {
+        const updatedCount = updated > 0 ? updated : created;
+        if (errCnt > 0 && updatedCount === 0 && skipped === 0) {
           setImportError(`All rows failed. No guest details were updated. Check the row errors below.`);
         } else if (errCnt > 0) {
           setImportError(
-            `Partially updated: ${updated} record${updated !== 1 ? 's' : ''} updated, ${skipped} skipped, but ${errCnt} row${errCnt !== 1 ? 's' : ''} had errors. Review the row errors below and re-upload the corrected rows.`
+            `Partially updated: ${updatedCount} record${updatedCount !== 1 ? 's' : ''} updated, ${skipped} skipped, but ${errCnt} row${errCnt !== 1 ? 's' : ''} had errors. Review the row errors below and re-upload the corrected rows.`
           );
         } else {
-          setStatus(
-            `Step 2 complete: ${updated} guest detail record${updated !== 1 ? 's' : ''} updated, ${skipped} skipped.`
-          );
+          const msg = `Step 2 complete: Successfully updated guest details for ${updatedCount} guest${updatedCount !== 1 ? 's' : ''} (${skipped} skipped).`;
+          setImportNotice(msg);
+          setStatus(msg);
         }
       }
       router.refresh();
@@ -1031,6 +1034,7 @@ export default function UsersAdmin({
                   setImportStep('users');
                   setImportReport(null);
                   setImportError('');
+                  setImportNotice('');
                   setStatus('');
                 }
                 setShowImport((v) => !v);
@@ -1134,12 +1138,19 @@ export default function UsersAdmin({
               </div>
             )}
 
+            {/* Success banner */}
+            {importNotice && (
+              <div style={{ marginTop: "12px", padding: "10px 14px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "6px", color: "#166534" }}>
+                <strong>✅ Success:</strong> {importNotice}
+              </div>
+            )}
+
             {importReport && (
               <div style={{ marginTop: "14px", padding: "12px", background: "rgba(0,0,0,0.05)", borderRadius: "6px" }}>
                 <strong>Import Results:</strong>{" "}
                 {importStep === 'users'
                   ? <>Created: {importReport.created} · Skipped (duplicates): {importReport.skipped}</>
-                  : <>Updated: {importReport.updated ?? 0} · Skipped: {importReport.skipped}</>}
+                  : <>Updated: {(importReport.updated ?? 0) > 0 ? importReport.updated : importReport.created} · Skipped: {importReport.skipped}</>}
                 {importReport.errorCount != null && importReport.errorCount > 0 && (
                   <span style={{ color: "var(--color-danger, #ef4444)", marginLeft: "8px" }}>· Errors: {importReport.errorCount}</span>
                 )}

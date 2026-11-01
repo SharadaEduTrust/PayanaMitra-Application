@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 interface ImportResult {
   created: number;
+  updated?: number;
   skipped: number;
   errorCount: number;
   results?: Array<{
@@ -14,7 +15,7 @@ interface ImportResult {
     trip_code?: string;
     guest_name?: string;
     trip_name?: string;
-    status: "created" | "skipped" | "error";
+    status: "created" | "updated" | "skipped" | "error";
     error?: string;
   }>;
 }
@@ -243,7 +244,10 @@ export default function CsvImportAdmin({
       }
 
       setDetailsReport(json);
-      setDetailsNotice(`Guest Details CSV successfully imported: ${json.created} records updated, ${json.skipped} skipped.`);
+      const updatedCount = (json.updated ?? 0) > 0 ? json.updated : (json.created ?? 0);
+      setDetailsNotice(
+        `Guest Details CSV successfully imported: ${updatedCount} record${updatedCount !== 1 ? "s" : ""} updated, ${json.skipped ?? 0} skipped.`
+      );
       if (detailsInputRef.current) detailsInputRef.current.value = "";
       setDetailsFile(null);
       router.refresh();
@@ -1416,8 +1420,10 @@ export default function CsvImportAdmin({
               >
                 <h3 className="serif" style={{ margin: "0 0 10px", fontSize: "1.1rem", color: "#0f172a" }}>Import Summary</h3>
                 <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
-                  <span className="pill mandatory">Created/Updated: {detailsReport.created}</span>
-                  <span className="pill optional">Skipped (duplicates): {detailsReport.skipped}</span>
+                  <span className="pill mandatory">
+                    Updated: {(detailsReport.updated ?? 0) > 0 ? detailsReport.updated : detailsReport.created}
+                  </span>
+                  <span className="pill optional">Skipped: {detailsReport.skipped}</span>
                   {detailsReport.errorCount > 0 && (
                     <span className="pill off" style={{ color: "#ef4444", borderColor: "#ef4444", fontWeight: 700 }}>
                       Errors: {detailsReport.errorCount}

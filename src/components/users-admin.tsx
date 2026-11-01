@@ -3,6 +3,7 @@
 import { useMemo, useState, type FormEvent, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { DOCUMENT_TYPES, formatDocType } from "@/lib/documents";
+import { createClient } from "@/lib/supabase/client";
 
 type AdminDoc = {
   id: string;
@@ -348,39 +349,117 @@ export default function UsersAdmin({
     setDocUploadLoading(true);
 
     try {
-      const formData = new FormData();
-      formData.set("user_id", docsUser.id);
-      formData.set("doc_type", newDocType);
-      formData.set("doc_number", newDocNumber.trim());
-      if (newIssuedDate) formData.set("issued_date", newIssuedDate);
-      if (newExpiryDate) formData.set("expiry_date", newExpiryDate);
-      if (newIssuedPlace.trim()) {
-        formData.set("issued_country", newIssuedPlace.trim());
-        formData.set("issued_place", newIssuedPlace.trim());
-      }
+      let storagePath: string | null = null;
+      let finalFileName: string | null = null;
+      let finalFileSize: number | null = null;
+      let finalMimeType: string | null = null;
+      let compressionFeedback = "Document uploaded successfully.";
+
       if (newDocFile) {
-        if (newDocFile.size > 1024 * 1024) {
-          setDocUploadError("File size exceeds 1MB limit. Please upload a file smaller than 1MB.");
+        if (newDocFile.size > 25 * 1024 * 1024) {
+          setDocUploadError("File size exceeds 25MB limit. Please upload a smaller file.");
           setDocUploadLoading(false);
           return;
         }
-        formData.set("file", newDocFile);
+
+        // 1. Request signed upload URL from server (admin-only)
+        const signedRes = await fetch("/api/admin/uploads/signed-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: newDocFile.name,
+            mimeType: newDocFile.type || "application/octet-stream",
+          }),
+        });
+
+        if (!signedRes.ok) {
+          const signedErr = await signedRes.json().catch(() => null);
+          setDocUploadError(signedErr?.error ?? "Failed to initialize upload.");
+          setDocUploadLoading(false);
+          return;
+        }
+
+        const { path, token, tempPath } = await signedRes.json();
+
+        // 2. Direct client-side upload to private temp bucket in Supabase Storage
+        const supabase = createClient();
+        const { error: uploadError } = await supabase.storage
+          .from("temp-uploads")
+          .uploadToSignedUrl(path, token, newDocFile);
+
+        if (uploadError) {
+          setDocUploadError(`Upload failed: ${uploadError.message}`);
+          setDocUploadLoading(false);
+          return;
+        }
+
+        // 3. Finalize upload on server: validates magic bytes, max size, compresses if > 1MB, deletes temp object
+        const finalizeRes = await fetch("/api/admin/uploads/finalize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tempPath,
+            fileName: newDocFile.name,
+            targetUserId: docsUser.id,
+          }),
+        });
+
+        if (!finalizeRes.ok) {
+          const finalizeErr = await finalizeRes.json().catch(() => null);
+          setDocUploadError(finalizeErr?.error ?? "Failed to process and finalize uploaded document.");
+          setDocUploadLoading(false);
+          return;
+        }
+
+        const finalizeData = await finalizeRes.json();
+        storagePath = finalizeData.storagePath;
+        finalFileName = finalizeData.fileName;
+        finalFileSize = finalizeData.fileSize;
+        finalMimeType = finalizeData.mimeType;
+
+        const formatSize = (bytes: number) => {
+          if (bytes < 1024) return `${bytes} B`;
+          if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+          return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        };
+
+        if (finalizeData.compressed) {
+          compressionFeedback = `Document uploaded. Compressed: ${formatSize(finalizeData.originalSize)} → ${formatSize(finalizeData.finalSize)}`;
+        } else if (finalizeData.originalSize > 1024 * 1024) {
+          compressionFeedback = `Document uploaded (${formatSize(finalizeData.finalSize)}, stored without compression${finalizeData.reason ? `: ${finalizeData.reason}` : ""}).`;
+        } else {
+          compressionFeedback = `Document uploaded (${formatSize(finalizeData.finalSize)}, stored without compression).`;
+        }
       }
 
+      // 4. Save document metadata in database
       const res = await fetch("/api/documents", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: docsUser.id,
+          doc_type: newDocType,
+          doc_number: newDocNumber.trim(),
+          issued_date: newIssuedDate || null,
+          expiry_date: newExpiryDate || null,
+          issued_place: newIssuedPlace.trim() || null,
+          issued_country: newIssuedPlace.trim() || null,
+          storage_path: storagePath,
+          file_name: finalFileName,
+          file_size: finalFileSize,
+          mime_type: finalMimeType,
+        }),
       });
 
       const json = await res.json().catch(() => null);
       setDocUploadLoading(false);
 
       if (!res.ok) {
-        setDocUploadError(json?.error ?? "Failed to upload document.");
+        setDocUploadError(json?.error ?? "Failed to save document record.");
         return;
       }
 
-      setDocUploadStatus("Document uploaded successfully.");
+      setDocUploadStatus(compressionFeedback);
       setNewDocNumber("");
       setNewIssuedDate("");
       setNewExpiryDate("");
@@ -1686,14 +1765,14 @@ export default function UsersAdmin({
                 </div>
 
                 <label className="form-field">
-                  Attachment (PDF or Image, Max 1MB)
+                  Attachment (PDF or Image, Max 25MB)
                   <input
                     type="file"
                     accept=".pdf,image/jpeg,image/png,image/webp"
                     onChange={(e) => {
                       const file = e.target.files?.[0] ?? null;
-                      if (file && file.size > 1024 * 1024) {
-                        setDocUploadError("File size exceeds 1MB limit. Please choose a smaller file.");
+                      if (file && file.size > 25 * 1024 * 1024) {
+                        setDocUploadError("File size exceeds 25MB limit. Please choose a smaller file.");
                         setNewDocFile(null);
                         e.target.value = "";
                         return;
@@ -1703,7 +1782,7 @@ export default function UsersAdmin({
                     }}
                   />
                   <span style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", display: "block" }}>
-                    Maximum file size is 1MB (PDF, JPEG, PNG, or WebP).
+                    Files larger than 1MB are automatically compressed with iLoveAPI before saving.
                   </span>
                 </label>
 

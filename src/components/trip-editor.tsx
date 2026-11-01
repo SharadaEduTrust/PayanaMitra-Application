@@ -51,6 +51,7 @@ export default function TripEditor({
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [savingDayIndex, setSavingDayIndex] = useState<number | null>(null);
   const [dayMessages, setDayMessages] = useState<Record<number, { type: "success" | "error"; text: string }>>({});
 
@@ -192,6 +193,35 @@ export default function TripEditor({
     } catch {
       setSaving(false);
       setError("Network error while saving trail.");
+    }
+  }
+
+  async function handleDeleteTrip() {
+    const confirmMessage = `Are you sure you want to permanently delete trail "${form.name}" (${form.tripCode})?\n\nThis will permanently remove the trail, its itinerary days, activities, and guest assignments. This action cannot be undone.`;
+    if (!window.confirm(confirmMessage)) return;
+
+    setDeleting(true);
+    setError("");
+    setStatus("");
+
+    try {
+      const res = await fetch(`/api/admin/trips/${trip.id}?hard=true`, {
+        method: "DELETE",
+      });
+
+      const json = await res.json().catch(() => null);
+      setDeleting(false);
+
+      if (!res.ok) {
+        setError(json?.error ?? "Failed to delete trail.");
+        return;
+      }
+
+      router.push("/admin/trips");
+      router.refresh();
+    } catch {
+      setDeleting(false);
+      setError("Network error while deleting trail.");
     }
   }
 
@@ -637,9 +667,20 @@ export default function TripEditor({
         {error && <p className="form-error" role="alert">{error}</p>}
         {status && <p className="form-notice" role="status">{status}</p>}
 
-        <button className="btn btn-primary" type="submit" disabled={saving}>
-          {saving ? "Saving…" : "Save trail"}
-        </button>
+        <div style={{ display: "flex", gap: "12px", alignItems: "center", marginTop: "12px", flexWrap: "wrap" }}>
+          <button className="btn btn-primary" type="submit" disabled={saving || deleting}>
+            {saving ? "Saving…" : "Save trail"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ color: "#ef4444", borderColor: "#fca5a5" }}
+            disabled={saving || deleting}
+            onClick={handleDeleteTrip}
+          >
+            {deleting ? "Deleting…" : "Delete trail"}
+          </button>
+        </div>
       </form>
 
       <section className="admin-card">

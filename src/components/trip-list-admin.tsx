@@ -268,6 +268,36 @@ export default function TripListAdmin({ trips }: { trips: TrailLeaderView[] }) {
     }
   }
 
+  async function deleteTrip(trip: TrailLeaderView) {
+    const confirmMessage = `Are you sure you want to permanently delete trail "${trip.trip_name}" (${trip.trip_code})?\n\nThis will permanently remove the trail, its itinerary days, activities, and guest assignments. This action cannot be undone.`;
+    if (!window.confirm(confirmMessage)) return;
+
+    setError("");
+    setNotice("");
+    setLoadingTripId(trip.trip_id);
+
+    try {
+      const res = await fetch(`/api/admin/trips/${trip.trip_id}?hard=true`, {
+        method: "DELETE",
+      });
+
+      const json = await res.json().catch(() => null);
+      setLoadingTripId(null);
+
+      if (!res.ok) {
+        setError(json?.error ?? "Failed to delete trail.");
+        return;
+      }
+
+      setRows((current) => current.filter((t) => t.trip_id !== trip.trip_id));
+      setNotice(`Trail "${trip.trip_name}" (${trip.trip_code}) deleted permanently.`);
+      router.refresh();
+    } catch {
+      setLoadingTripId(null);
+      setError("Network error while deleting trail.");
+    }
+  }
+
   const stats = useMemo(() => {
     const total = rows.length;
     const publishedCount = rows.filter((r) => r.status === "published").length;
@@ -663,6 +693,16 @@ export default function TripListAdmin({ trips }: { trips: TrailLeaderView[] }) {
                                 Restore
                               </button>
                             )}
+                            <button
+                              type="button"
+                              className="link-btn"
+                              style={{ color: "#ef4444", fontWeight: 600 }}
+                              disabled={isLoading}
+                              onClick={() => deleteTrip(trip)}
+                              title={`Delete trail ${trip.trip_code}`}
+                            >
+                              Delete
+                            </button>
                           </div>
                         </td>
                       </tr>

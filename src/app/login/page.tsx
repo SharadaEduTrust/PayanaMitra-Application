@@ -1,4 +1,3 @@
-import Link from "next/link";
 import Brand from "@/components/brand";
 import PinForm from "@/components/pin-form";
 import { Clock } from "lucide-react";
@@ -59,11 +58,8 @@ export default async function LoginPage({ searchParams }: Props) {
             </div>
           )}
           <PinForm />
-          <div className="auth-switch">
-            No account yet? <Link href="/signup">Register first</Link>
-          </div>
-          <p className="auth-note">
-            <strong>Trail Leader log in:</strong> Sign in with your registered phone number and password to access your assigned trails and guests.
+          <p className="auth-note" style={{ marginTop: "20px" }}>
+            Sign in with your registered phone number and password to access your assigned trails and guests.
           </p>
         </div>
       </section>

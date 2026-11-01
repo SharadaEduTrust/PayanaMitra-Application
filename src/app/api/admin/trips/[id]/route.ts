@@ -173,9 +173,13 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   const admin = createAdminClient()
 
   if (isHard) {
+    // Unlink non-cascading references safely to prevent foreign key errors
+    await admin.from('notifications').update({ trip_id: null }).eq('trip_id', id)
+    await admin.from('guest_documents').update({ trip_id: null }).eq('trip_id', id)
+
     const { error } = await admin.from('trips').delete().eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return new NextResponse(null, { status: 204 })
+    return NextResponse.json({ ok: true, message: 'Trail deleted permanently' }, { status: 200 })
   }
 
   // Default: Soft-deactivate to retain historical records

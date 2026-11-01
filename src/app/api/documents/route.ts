@@ -23,6 +23,10 @@ const CreateDocSchema = z.object({
   issued_place:   z.string().max(100, 'issued_place cannot exceed 100 characters').optional().nullable(),
   issued_country: z.string().max(100, 'issued_country cannot exceed 100 characters').optional().nullable(),
   trip_id:        z.string().uuid().optional().nullable(),
+  storage_path:   z.string().optional().nullable(),
+  file_name:      z.string().optional().nullable(),
+  file_size:      z.number().int().nonnegative().optional().nullable(),
+  mime_type:      z.string().optional().nullable(),
 })
 
 export async function GET(req: NextRequest) {
@@ -284,6 +288,10 @@ export async function POST(req: NextRequest) {
     issued_place = parsed.data.issued_place ?? parsed.data.issued_country ?? null
     issued_country = parsed.data.issued_country ?? parsed.data.issued_place ?? null
     trip_id = parsed.data.trip_id ?? null
+    storage_path = parsed.data.storage_path ?? null
+    file_name = parsed.data.file_name ?? null
+    file_size = parsed.data.file_size ?? null
+    mime_type = parsed.data.mime_type ?? null
 
     const dupErr = await checkDuplicateDoc(admin, targetUserId, doc_type)
     if (dupErr) {

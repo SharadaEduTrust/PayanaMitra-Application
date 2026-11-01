@@ -12,16 +12,13 @@ export default function Home() {
     <main>
       <div className="container">
         <nav className="nav">
-          <Brand size={40} />
+          <Brand size={76} />
           <div className="navlinks">
             <a href="#how">How it works</a>
             <a href="#why">Why Payana Mitra</a>
             <a href="#stories">Stories</a>
           </div>
           <div className="nav-actions">
-            <Link href="/login" className="login-link">
-              Log in
-            </Link>
             <Link href="/login" className="btn btn-primary">
               Sign in
             </Link>
@@ -49,12 +46,12 @@ export default function Home() {
             Small groups. Deeper experiences. Journeys, thoughtfully curated!
           </p>
           <div className="hero-actions">
-            <Link href="/signup" className="btn btn-hero">
-              Start your journey
+            <Link href="/login" className="btn btn-hero">
+              Sign in to your trail
             </Link>
-            <Link href="/login" className="btn btn-hero-ghost">
-              Sign in
-            </Link>
+            <a href="#how" className="btn btn-hero-ghost">
+              How it works
+            </a>
           </div>
         </div>
       </section>
@@ -72,8 +69,8 @@ export default function Home() {
             leave room for the unexpected.
           </p>
           <div className="hero-actions">
-            <Link href="/signup" className="btn btn-primary">
-              Start your first trail
+            <Link href="/login" className="btn btn-primary">
+              Sign in to your trail
             </Link>
             <a href="#how" className="btn btn-secondary">
               See how it works
@@ -168,7 +165,7 @@ export default function Home() {
         <div className="container cta-inner">
           <h2>Ready to travel on your terms?</h2>
           <Link href="/login" className="btn">
-            Start your journey
+            Sign in to your trail
           </Link>
         </div>
       </section>
@@ -176,7 +173,7 @@ export default function Home() {
         <div className="container">
           <div className="footer-top">
             <div className="footer-lead">
-              <Brand size={44} tone="light" />
+              <Brand size={88} tone="light" />
               <p className="footer-tagline serif">
                 A long way is only worth taking
                 <br />
@@ -184,10 +181,7 @@ export default function Home() {
               </p>
               <div className="footer-actions">
                 <Link href="/login" className="btn btn-primary">
-                  Plan a trail
-                </Link>
-                <Link href="/login" className="btn btn-outline-light">
-                  Log in
+                  Sign in
                 </Link>
               </div>
             </div>

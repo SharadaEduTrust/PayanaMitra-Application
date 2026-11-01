@@ -23,7 +23,7 @@ export default async function ChangePasswordPage({ searchParams }: Props) {
   return (
     <main className="auth-shell">
       <section className="auth-art">
-        <Brand size={44} tone="light" />
+        <Brand size={88} tone="light" />
         <div>
           <div className="eyebrow" style={{ color: "#D4A373" }}>
             Account Security & Privacy
@@ -37,7 +37,7 @@ export default async function ChangePasswordPage({ searchParams }: Props) {
       </section>
       <section className="auth-form-wrap">
         <div className="auth-card">
-          <Brand size={36} />
+          <Brand size={72} />
           <h2>Create a New Password</h2>
           <p>
             Enter your current password (initial password is the last 4 digits of your phone) and create a private password to ensure your documents cannot be accessed by others.

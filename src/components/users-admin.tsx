@@ -105,7 +105,6 @@ export default function UsersAdmin({
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
   // Sorting state
@@ -252,28 +251,6 @@ export default function UsersAdmin({
       setPage(totalPages);
     }
   }, [page, totalPages]);
-
-  const allPaginatedSelected = useMemo(() => {
-    if (paginatedRows.length === 0) return false;
-    return paginatedRows.every((r) => selectedUserIds.includes(r.id));
-  }, [paginatedRows, selectedUserIds]);
-
-  function toggleSelectAll() {
-    if (allPaginatedSelected) {
-      const pageIds = new Set(paginatedRows.map((r) => r.id));
-      setSelectedUserIds((prev) => prev.filter((id) => !pageIds.has(id)));
-    } else {
-      const updated = new Set(selectedUserIds);
-      paginatedRows.forEach((r) => updated.add(r.id));
-      setSelectedUserIds(Array.from(updated));
-    }
-  }
-
-  function toggleUserSelection(id: string) {
-    setSelectedUserIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
-    );
-  }
 
   function toggleSort(field: SortField) {
     if (sortField === field) {
@@ -809,7 +786,6 @@ export default function UsersAdmin({
       }
 
       setRows((current) => current.filter((r) => r.id !== user.id));
-      setSelectedUserIds((current) => current.filter((id) => id !== user.id));
       if (editingUser?.id === user.id) {
         setEditingUser(null);
       }
@@ -818,45 +794,6 @@ export default function UsersAdmin({
     } catch {
       setDeletingUserId(null);
       setError("Network error while removing user.");
-    }
-  }
-
-  async function removeSelectedUsers() {
-    if (selectedUserIds.length === 0) return;
-    const count = selectedUserIds.length;
-    const confirmMessage = `Are you sure you want to permanently remove ${count} selected user${count !== 1 ? "s" : ""}?\n\nThis will permanently delete their accounts, profiles, uploaded documents, and associated records. This action cannot be undone.`;
-    if (!window.confirm(confirmMessage)) return;
-
-    setError("");
-    setStatus("");
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/admin/users", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: selectedUserIds }),
-      });
-
-      const json = await res.json().catch(() => null);
-      setLoading(false);
-
-      if (!res.ok) {
-        setError(json?.error ?? "Failed to remove selected users.");
-        return;
-      }
-
-      const removedSet = new Set(selectedUserIds);
-      setRows((current) => current.filter((r) => !removedSet.has(r.id)));
-      if (editingUser && removedSet.has(editingUser.id)) {
-        setEditingUser(null);
-      }
-      setSelectedUserIds([]);
-      setStatus(`Successfully removed ${count} user${count !== 1 ? "s" : ""}.`);
-      router.refresh();
-    } catch {
-      setLoading(false);
-      setError("Network error while removing selected users.");
     }
   }
 
@@ -1150,32 +1087,6 @@ export default function UsersAdmin({
               </svg>
               {showImport ? "Close Import" : "Import Guests (CSV)"}
             </button>
-
-            {/* Remove Selected Button */}
-            {selectedUserIds.length > 0 && (
-              <button
-                type="button"
-                className="admin-control-btn"
-                onClick={removeSelectedUsers}
-                disabled={loading}
-                style={{
-                  backgroundColor: "#dc2626",
-                  color: "#ffffff",
-                  borderColor: "#b91c1c",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  fontWeight: 600,
-                }}
-                title="Permanently remove selected users"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                </svg>
-                Remove Selected ({selectedUserIds.length})
-              </button>
-            )}
           </div>
         </div>
 
@@ -1308,16 +1219,6 @@ export default function UsersAdmin({
               <table className="admin-table admin-table-users">
                 <thead>
                   <tr>
-                    <th style={{ width: "38px", paddingLeft: "14px", textAlign: "center", userSelect: "none" }}>
-                      <input
-                        type="checkbox"
-                        checked={allPaginatedSelected}
-                        onChange={toggleSelectAll}
-                        title={allPaginatedSelected ? "Deselect all accounts on this page" : "Select all accounts on this page"}
-                        style={{ cursor: "pointer", width: "15px", height: "15px" }}
-                        aria-label="Select all accounts on this page"
-                      />
-                    </th>
                     {renderSortHeader("User Id / Mobile Number", "phone")}
                     {renderSortHeader("First Name", "name")}
                     <th style={{ userSelect: "none", whiteSpace: "nowrap" }}>Last Name</th>
@@ -1332,24 +1233,13 @@ export default function UsersAdmin({
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedRows.map((row) => {
-                    const isSelected = selectedUserIds.includes(row.id);
-                    return (
-                      <tr key={row.id} style={{ background: isSelected ? "rgba(239, 68, 68, 0.04)" : undefined }}>
-                        <td style={{ width: "38px", paddingLeft: "14px", textAlign: "center" }}>
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleUserSelection(row.id)}
-                            style={{ cursor: "pointer", width: "15px", height: "15px" }}
-                            aria-label={`Select ${row.firstName} ${row.lastName}`}
-                          />
-                        </td>
-                        <td>
-                          <span className="mono" style={{ fontWeight: 600, color: "#0f172a" }}>
-                            {row.phone}
-                          </span>
-                        </td>
+                  {paginatedRows.map((row) => (
+                    <tr key={row.id}>
+                      <td style={{ paddingLeft: "18px" }}>
+                        <span className="mono" style={{ fontWeight: 600, color: "#0f172a" }}>
+                          {row.phone}
+                        </span>
+                      </td>
                         <td>
                           <div style={{ display: "flex", alignItems: "center", gap: "9px", whiteSpace: "nowrap" }}>
                             <span className="guest-avatar-bubble">
@@ -1447,8 +1337,7 @@ export default function UsersAdmin({
                           </div>
                         </td>
                       </tr>
-                    );
-                  })}
+                    ))}
                 </tbody>
               </table>
             </div>

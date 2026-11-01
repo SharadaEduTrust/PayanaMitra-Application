@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import SessionTimeoutWatcher from "@/components/session-timeout-watcher";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
   metadataBase: new URL(
@@ -31,6 +32,7 @@ export default function RootLayout({
       <body>
         <SessionTimeoutWatcher />
         {children}
+        <Analytics />
       </body>
     </html>
   );

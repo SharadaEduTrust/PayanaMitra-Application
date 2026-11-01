@@ -73,12 +73,11 @@ export async function compressWithILoveApi(
   // Step 1: Authenticate
   const token = await getAuthToken(baseUrl, publicKey)
 
-  // Step 2: Start Task
+  // Step 2: Start Task (iLoveAPI start endpoint requires GET)
   const startRes = await fetch(`${baseUrl}/v1/start/${tool}`, {
-    method: 'POST',
+    method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
     },
     signal: AbortSignal.timeout(15000),
   })

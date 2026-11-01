@@ -13,7 +13,7 @@ interface NavLinkItem {
 
 const links: NavLinkItem[] = [
   { href: "/dashboard", label: "My Trails" },
-  { href: "https://tinyurl.com/4xnff2my", label: "Payana Quiz", external: true },
+  { href: "https://sulabh2-frontend-341341131750.europe-west3.run.app/login", label: "Payana Quiz", external: true },
   { href: "/dashboard/profile", label: "My Profile" },
   { href: "/dashboard/documents", label: "My Documents" },
   { href: "/dashboard/notifications", label: "Notifications" },

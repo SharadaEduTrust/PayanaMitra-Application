@@ -608,13 +608,6 @@ export default function CsvImportAdmin({
                     <td>Guest (default)</td>
                   </tr>
                   <tr>
-                    <td className="mono">Leader Name</td>
-                    <td>Name or phone of assigned Trail Leader (for Guests)</td>
-                    <td>Max 50 characters / phone</td>
-                    <td><span className="pill optional">Optional</span></td>
-                    <td>Anushree Kini</td>
-                  </tr>
-                  <tr>
                     <td className="mono">Date of Joining</td>
                     <td>DD/MM/YY, DD/MM/YYYY, or DD-MM-YYYY</td>
                     <td>Calendar Date</td>
@@ -1488,20 +1481,6 @@ export default function CsvImportAdmin({
                     <td>10 to 15 digits</td>
                     <td><span className="pill mandatory">Mandatory</span></td>
                     <td className="mono">9019911700</td>
-                  </tr>
-                  <tr>
-                    <td className="mono"><strong>First Name</strong></td>
-                    <td>Alphabetic with special characters like . and space</td>
-                    <td>Max 20 characters</td>
-                    <td><span className="pill mandatory">Mandatory</span></td>
-                    <td>Arvind</td>
-                  </tr>
-                  <tr>
-                    <td className="mono"><strong>Last Name</strong></td>
-                    <td>Alphabetic with special characters like . and space</td>
-                    <td>Max 20 characters</td>
-                    <td><span className="pill mandatory">Mandatory</span></td>
-                    <td>Kamath</td>
                   </tr>
                   <tr>
                     <td className="mono">Date of Birth</td>

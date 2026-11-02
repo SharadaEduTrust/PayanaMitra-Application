@@ -64,9 +64,15 @@ export default async function ProfilePage() {
     hasChangedPassword = false;
   }
 
-  // Decrypt PAN and Passport if stored in documents
+  // Decrypt PAN, Aadhar, Passport and Visa if stored in documents
   const panDoc = (documents ?? []).find(
     (d: Record<string, unknown>) => String(d.doc_type || "").toLowerCase() === "pan",
+  );
+  const aadharDoc = (documents ?? []).find(
+    (d: Record<string, unknown>) => {
+      const dt = String(d.doc_type || "").toLowerCase();
+      return dt === "aadhar" || dt === "aadhaar";
+    },
   );
   const passportDoc = (documents ?? []).find(
     (d: Record<string, unknown>) => String(d.doc_type || "").toLowerCase() === "passport",
@@ -74,6 +80,19 @@ export default async function ProfilePage() {
   const visaDoc = (documents ?? []).find(
     (d: Record<string, unknown>) => String(d.doc_type || "").toLowerCase() === "visa",
   );
+
+  let initialAadhar = "";
+  if (aadharDoc && aadharDoc.doc_number_enc && aadharDoc.iv && aadharDoc.auth_tag) {
+    try {
+      initialAadhar = await decrypt({
+        ciphertext: String(aadharDoc.doc_number_enc),
+        iv: String(aadharDoc.iv),
+        authTag: String(aadharDoc.auth_tag),
+      });
+    } catch {
+      initialAadhar = "";
+    }
+  }
 
   let initialPan = "";
   if (panDoc && panDoc.doc_number_enc && panDoc.iv && panDoc.auth_tag) {
@@ -288,6 +307,7 @@ export default async function ProfilePage() {
           <TravellerDetailsForm
             details={traveller}
             initialPan={initialPan}
+            initialAadhar={initialAadhar}
             initialPassportNo={initialPassportNo}
             initialPassportIssueDate={initialPassportIssueDate}
             initialPassportExpiry={initialPassportExpiry}

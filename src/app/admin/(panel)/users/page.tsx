@@ -62,6 +62,7 @@ export default async function AdminUsersPage() {
   );
 
   const panByUser = new Map<string, string>();
+  const aadharByUser = new Map<string, string>();
   const passportByUser = new Map<string, string>();
   const passportIssueDateByUser = new Map<string, string>();
   const passportExpiryByUser = new Map<string, string>();
@@ -73,7 +74,7 @@ export default async function AdminUsersPage() {
   await Promise.all(
     (documents ?? []).map(async (doc: any) => {
       const docType = String(doc.doc_type || "").toLowerCase();
-      if (docType === "pan" || docType === "passport" || docType === "visa") {
+      if (docType === "pan" || docType === "aadhar" || docType === "aadhaar" || docType === "passport" || docType === "visa") {
         let docNum = "";
         if (doc.doc_number_enc && doc.iv && doc.auth_tag) {
           try {
@@ -88,6 +89,8 @@ export default async function AdminUsersPage() {
         }
         if (docType === "pan" && docNum) {
           panByUser.set(doc.user_id, docNum);
+        } else if ((docType === "aadhar" || docType === "aadhaar") && docNum) {
+          aadharByUser.set(doc.user_id, docNum);
         } else if (docType === "passport" && docNum) {
           passportByUser.set(doc.user_id, docNum);
           if (doc.issued_date) {
@@ -163,6 +166,7 @@ export default async function AdminUsersPage() {
       passportIssuedLocation: detail?.passport_issued_location ?? null,
       passportIssueDate: passportIssueDateByUser.get(profile.id) ?? detail?.passport_issue_date ?? null,
       pan: panByUser.get(profile.id) ?? null,
+      aadhar: aadharByUser.get(profile.id) ?? null,
       passportNo: passportByUser.get(profile.id) ?? null,
       passportExpiry: passportExpiryByUser.get(profile.id) ?? null,
       visaNo: visaByUser.get(profile.id) ?? detail?.visa_no ?? null,

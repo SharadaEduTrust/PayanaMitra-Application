@@ -25,6 +25,7 @@ import { encryptDocumentNumber } from '@/lib/crypto'
  * Optional Guest Details columns (from "Guest Details Table"):
  *   Date of Birth / dob     — DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD
  *   PAN                     — 10-char alphanumeric
+ *   Aadhar Card Number      — 12-digit numeric (optional)
  *   Passport No.            — alphanumeric
  *   Passport Expiry Date    — DD-MM-YYYY or YYYY-MM-DD
  *   Passport Issued Location— string max 50
@@ -155,10 +156,10 @@ export async function GET(req: NextRequest) {
     // First Name / Last Name are NOT included here; they belong in the User Table template.
     // This file must be uploaded AFTER the User Table CSV so the phones already exist.
     const lines = [
-      'Mobile Number,Date of Birth,PAN,Passport No.,Passport Issue Date,Passport Expiry Date,Passport Issued Location,Visa No.,Visa Expiry Date,Visa Country,Travel Insurance No.,Travel Insurance Company,Travel Insurance Expiry Date,Food Preference,Food Allergy,Emergency Contact Name,Emergency Contact Number',
-      '9019911700,18/06/1965,AAADK9754A,ZA495775,19/07/2020,18/07/2030,Bangalore,V123456789,15/08/2028,Singapore,7103167389,TATA AIG,10/09/2026,Veg,Peanuts and Milk,Anita Kamath,9019911700',
-      '9876543210,12/04/1985,,,,,,,,,,ICICI Lombard,15/08/2027,Non Veg,,Ramesh Sharma,9876543211',
-      '9876543211,15/03/1990,,,,,,,,,,,,,,,',
+      'Mobile Number,Date of Birth,PAN,Aadhar Card Number,Passport No.,Passport Issue Date,Passport Expiry Date,Passport Issued Location,Visa No.,Visa Expiry Date,Visa Country,Travel Insurance No.,Travel Insurance Company,Travel Insurance Expiry Date,Food Preference,Food Allergy,Emergency Contact Name,Emergency Contact Number',
+      '9019911700,18/06/1965,AAADK9754A,123456789012,ZA495775,19/07/2020,18/07/2030,Bangalore,V123456789,15/08/2028,Singapore,7103167389,TATA AIG,10/09/2026,Veg,Peanuts and Milk,Anita Kamath,9019911700',
+      '9876543210,12/04/1985,,,ZA495776,19/07/2021,18/07/2031,Mumbai,V987654321,15/08/2029,United Arab Emirates,7103167390,ICICI Lombard,15/08/2027,Non Veg,,Ramesh Sharma,9876543211',
+      '9876543211,15/03/1990,,,,,,,,,,,,,,,,',
     ]
     return new NextResponse(lines.join('\n'), {
       status: 200,
@@ -274,7 +275,7 @@ export async function POST(req: NextRequest) {
   const firstRowKeys = rows.length > 0 ? Object.keys(rows[0]).map(k => k.toLowerCase().replace(/[\s_/.-]/g, '')) : []
   const hasUserTableCols = firstRowKeys.some(k => ['role', 'leadername', 'dateofjoining', 'doj'].includes(k))
   const hasDetailCols = firstRowKeys.some(k => [
-    'dateofbirth', 'dob', 'passportno', 'travelinsuranceno', 'foodpreference', 'emergencycontactname',
+    'dateofbirth', 'dob', 'pan', 'aadhar', 'aadhaar', 'aadharcardnumber', 'aadharno', 'passportno', 'travelinsuranceno', 'foodpreference', 'emergencycontactname',
   ].includes(k))
   // Treat as a Guest Details-only import if it has detail columns but no user-table-specific columns
   const isDetailsOnlyImport = (!hasUserTableCols && hasDetailCols) ||
@@ -287,6 +288,7 @@ export async function POST(req: NextRequest) {
 
     // Field extraction supporting exact sheet names and common aliases
     const rawPhone = getField(raw, 'Mobile Number', 'MobileNumber', 'User Id', 'UserId', 'phone', 'phone_number').replace(/\s+/g, '')
+    const cleanPhone = rawPhone.replace(/[\s\-_().]/g, '')
     const first_name = getField(raw, 'First Name', 'FirstName', 'first_name', 'Guest 1st Name')
     const last_name  = getField(raw, 'Last Name', 'LastName', 'last_name', 'Guest Last Name')
     const rawRole    = getField(raw, 'Role', 'role') || 'Guest'
@@ -302,6 +304,7 @@ export async function POST(req: NextRequest) {
     // Guest Details fields
     const rawDob         = getField(raw, 'Date of Birth', 'DateOfBirth', 'dob')
     const pan            = getField(raw, 'PAN', 'pan') || null
+    const aadhar         = getField(raw, 'Aadhar Card Number', 'Aadhar Card No.', 'Aadhar Card No', 'Aadhar No.', 'Aadhar No', 'Aadhar', 'Aadhaar Card Number', 'Aadhaar Card No.', 'Aadhaar No.', 'Aadhaar No', 'Aadhaar', 'aadhar', 'aadhaar', 'aadhar_no', 'aadhaar_no') || null
     const passportNo     = getField(raw, 'Passport No.', 'Passport No', 'Passport Number', 'passport_no') || null
     const rawPassIssue   = getField(raw, 'Passport Issue Date', 'Passport Issued Date', 'Passport Issue', 'passport_issue_date', 'passport_issued_date')
     const rawPassExp     = getField(raw, 'Passport Expiry Date', 'Passport Expiry', 'passport_expiry')
@@ -318,7 +321,7 @@ export async function POST(req: NextRequest) {
     const emgNo          = getField(raw, 'Emergency Contact Number', 'Emergency Contact No', 'emergency_contact_no', 'emergency_phone') || null
 
     // Field validation
-    if (!PHONE_REGEX.test(rawPhone)) {
+    if (!PHONE_REGEX.test(cleanPhone)) {
       results.push({ row: rowNum, phone: rawPhone || 'Row ' + rowNum, status: 'error', error: 'User Id / Mobile Number must be a valid 10-15 digit number' })
       continue
     }
@@ -380,9 +383,13 @@ export async function POST(req: NextRequest) {
       continue
     }
 
-    // PAN / Passport / Visa number length guards
+    // PAN / Passport / Visa / Aadhar number length guards
     if (pan && pan.length > 10) {
       results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'PAN cannot exceed 10 characters' })
+      continue
+    }
+    if (aadhar && aadhar.replace(/\s+/g, '').length > 20) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'Aadhar Card Number cannot exceed 20 characters' })
       continue
     }
     if (passportNo && passportNo.length > 20) {
@@ -413,8 +420,81 @@ export async function POST(req: NextRequest) {
     }
 
 
-    // Duplicate detection / handling
-    const existingUserId = existingPhoneMap.get(rawPhone)
+    // Duplicate detection / handling with flexible phone normalization
+    let existingUserId = existingPhoneMap.get(cleanPhone)
+    if (!existingUserId && cleanPhone.startsWith('+91')) {
+      existingUserId = existingPhoneMap.get(cleanPhone.replace(/^\+91/, ''))
+    }
+    if (!existingUserId && cleanPhone.startsWith('91') && cleanPhone.length === 12) {
+      existingUserId = existingPhoneMap.get(cleanPhone.slice(2))
+    }
+    if (!existingUserId && !cleanPhone.startsWith('+')) {
+      existingUserId = existingPhoneMap.get(`+91${cleanPhone}`) || existingPhoneMap.get(`+${cleanPhone}`)
+    }
+    if (!existingUserId && cleanPhone.startsWith('0') && cleanPhone.length === 11) {
+      existingUserId = existingPhoneMap.get(cleanPhone.slice(1)) || existingPhoneMap.get(`+91${cleanPhone.slice(1)}`)
+    }
+
+    // If this is a details-only import but the user does not exist yet:
+    if (!existingUserId && isDetailsOnlyImport) {
+      if (first_name && last_name) {
+        // Auto-create user account if names are included in CSV
+        try {
+          const initialPin = cleanPhone.slice(-4)
+          const email_auth = phoneToEmail(cleanPhone)
+          const password   = await derivePassword(cleanPhone, initialPin)
+
+          const { data: authData, error: authErr } = await admin.auth.admin.createUser({
+            email: email_auth,
+            password,
+            email_confirm: true,
+            user_metadata: { phone: cleanPhone, first_name, last_name, role: 'traveller' },
+          })
+
+          if (authErr || !authData?.user) {
+            results.push({
+              row: rowNum,
+              phone: cleanPhone,
+              status: 'error',
+              error: `Failed to auto-create user account: ${authErr?.message || 'unknown error'}`,
+            })
+            continue
+          }
+
+          const createdUserId = authData.user.id
+          await admin.from('profiles').insert({
+            id: createdUserId,
+            phone: cleanPhone,
+            first_name,
+            last_name,
+            role: 'traveller',
+            is_active: true,
+            must_change_password: true,
+          })
+
+          existingPhoneMap.set(cleanPhone, createdUserId)
+          existingPhoneMap.set(`+91${cleanPhone.replace(/^\+91/, '')}`, createdUserId)
+          existingUserId = createdUserId
+        } catch (createErr) {
+          results.push({
+            row: rowNum,
+            phone: cleanPhone,
+            status: 'error',
+            error: `Failed to create user account: ${String(createErr)}`,
+          })
+          continue
+        }
+      } else {
+        results.push({
+          row: rowNum,
+          phone: cleanPhone,
+          status: 'error',
+          error: `Phone ${cleanPhone} is not registered yet. Please upload the User Table CSV first in Step 1 to create the user accounts (or add 'First Name' and 'Last Name' columns to this file), then re-upload this Guest Details CSV.`,
+        })
+        continue
+      }
+    }
+
     if (existingUserId) {
       // Update referral name if present
       if (referral_name) {
@@ -428,7 +508,7 @@ export async function POST(req: NextRequest) {
 
       // If user already exists and this is details table import or row contains guest details, update details
       const hasExistingGuestDetails = isDetailsOnlyImport || Boolean(
-        dob || mappedFoodPref || rawFoodPref || foodAllergy || emgName || emgNo || insNo || insCo || passLoc || passportNo || rawPassIssue || rawPassExp || visaNo || rawVisaExp || visaCountry || pan
+        dob || mappedFoodPref || rawFoodPref || foodAllergy || emgName || emgNo || insNo || insCo || passLoc || passportNo || rawPassIssue || rawPassExp || visaNo || rawVisaExp || visaCountry || pan || aadhar
       )
 
       if (hasExistingGuestDetails) {
@@ -493,6 +573,32 @@ export async function POST(req: NextRequest) {
               await admin.from('guest_documents').insert({
                 user_id: existingUserId,
                 doc_type: 'pan',
+                ...enc,
+              })
+            }
+          }
+          if (aadhar) {
+            const cleanAadhar = aadhar.replace(/\s+/g, '')
+            const enc = encryptDocumentNumber(cleanAadhar)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: existingAadhar } = await (admin.from('guest_documents') as any)
+              .select('id')
+              .eq('user_id', existingUserId)
+              .in('doc_type', ['aadhar', 'aadhaar'])
+              .maybeSingle()
+
+            if (existingAadhar) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              await (admin.from('guest_documents') as any).update({
+                doc_number_enc: enc.doc_number_enc,
+                iv: enc.iv,
+                auth_tag: enc.auth_tag,
+                updated_at: new Date().toISOString(),
+              }).eq('id', existingAadhar.id)
+            } else {
+              await admin.from('guest_documents').insert({
+                user_id: existingUserId,
+                doc_type: 'aadhar',
                 ...enc,
               })
             }
@@ -570,17 +676,6 @@ export async function POST(req: NextRequest) {
 
       // Standard user import skips existing phones without resetting credentials
       results.push({ row: rowNum, phone: rawPhone, status: 'skipped', error: 'User already registered — skipped (no changes made)' })
-      continue
-    }
-
-    // ── Logical flow enforcement: if this looks like a Guest Details CSV, phones MUST already exist ──
-    if (isDetailsOnlyImport) {
-      results.push({
-        row: rowNum,
-        phone: rawPhone,
-        status: 'error',
-        error: `Phone ${rawPhone} is not registered. Please upload the User Details CSV first to create the user account, then re-upload this Guest Details CSV.`,
-      })
       continue
     }
 
@@ -713,6 +808,15 @@ export async function POST(req: NextRequest) {
           ...enc,
         })
       }
+      if (aadhar) {
+        const cleanAadhar = aadhar.replace(/\s+/g, '')
+        const enc = encryptDocumentNumber(cleanAadhar)
+        await admin.from('guest_documents').insert({
+          user_id: createdUserId,
+          doc_type: 'aadhar',
+          ...enc,
+        })
+      }
       if (passportNo) {
         const enc = encryptDocumentNumber(passportNo)
         const expiry_date = prePassExpiry   // already validated
@@ -765,7 +869,7 @@ export async function POST(req: NextRequest) {
   // If every row errored, return 422 so the client can surface a clear failure (not a misleading success)
   if (errorCount > 0 && created === 0 && updated === 0 && skipped === 0) {
     return NextResponse.json(
-      { error: 'All rows failed validation. No data was imported.', created, updated, skipped, errorCount, results },
+      { error: 'All rows failed validation. No data was imported. Please review the row-by-row error details below.', created, updated, skipped, errorCount, results },
       { status: 422 },
     )
   }

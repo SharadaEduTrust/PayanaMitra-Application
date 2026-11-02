@@ -21,12 +21,7 @@ interface RouteParams {
   }>
 }
 
-/**
- * PATCH /api/guests/[guestId]/documents/[docId]/attachment
- * Multipart form-data upload for attaching or replacing a file on an existing document.
- * Requires admin role.
- */
-export async function PATCH(req: NextRequest, { params }: RouteParams) {
+async function getAdminProfile(req: NextRequest) {
   let profile = await getSession()
 
   // Support direct Authorization header fallback on NextRequest
@@ -49,11 +44,20 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     }
   }
 
-  if (!profile) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!profile || profile.role !== 'admin') {
+    return null
   }
+  return profile
+}
 
-  if (profile.role !== 'admin') {
+/**
+ * PATCH /api/guests/[guestId]/documents/[docId]/attachment
+ * Multipart form-data upload for attaching or replacing a file on an existing document.
+ * Requires admin role.
+ */
+export async function PATCH(req: NextRequest, { params }: RouteParams) {
+  const profile = await getAdminProfile(req)
+  if (!profile) {
     return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
   }
 
@@ -253,6 +257,97 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       originalSize: compressionResult.originalSize,
       finalSize: compressionResult.finalSize,
       reason: compressionResult.reason ?? null,
+    },
+  })
+}
+
+/**
+ * DELETE /api/guests/[guestId]/documents/[docId]/attachment
+ * Detaches and removes only the uploaded file attachment from storage and DB,
+ * keeping the document metadata row intact.
+ * Requires admin role.
+ */
+export async function DELETE(req: NextRequest, { params }: RouteParams) {
+  const profile = await getAdminProfile(req)
+  if (!profile) {
+    return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
+  }
+
+  const { guestId, docId } = await params
+  if (!guestId || !docId) {
+    return NextResponse.json({ error: 'Invalid guestId or docId parameter' }, { status: 400 })
+  }
+
+  const admin = createAdminClient()
+
+  // 1. Confirm document exists and belongs to the specified guest
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: doc, error: fetchErr } = await (admin.from('guest_documents') as any)
+    .select('*')
+    .eq('id', docId)
+    .single()
+
+  if (fetchErr || !doc) {
+    return NextResponse.json({ error: 'Document not found' }, { status: 404 })
+  }
+
+  if (doc.user_id !== guestId) {
+    return NextResponse.json(
+      { error: 'Document does not belong to the specified guest' },
+      { status: 404 }
+    )
+  }
+
+  // 2. Remove file from storage if present
+  if (doc.storage_path) {
+    try {
+      await admin.storage.from('guest-documents').remove([doc.storage_path])
+    } catch (storageErr) {
+      console.warn(`[Attachment DELETE] Failed removing file from storage:`, storageErr)
+    }
+  }
+
+  // 3. Clear attachment columns on the document row
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: updatedDoc, error: updateErr } = await (admin.from('guest_documents') as any)
+    .update({
+      storage_path: null,
+      file_name: null,
+      file_size: null,
+      mime_type: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', docId)
+    .select()
+    .single()
+
+  if (updateErr) {
+    return NextResponse.json({ error: updateErr.message }, { status: 500 })
+  }
+
+  let doc_number: string | null = null
+  if (updatedDoc?.doc_number_enc && updatedDoc.iv && updatedDoc.auth_tag) {
+    try {
+      doc_number = await decrypt({
+        ciphertext: updatedDoc.doc_number_enc as string,
+        iv: updatedDoc.iv as string,
+        authTag: updatedDoc.auth_tag as string,
+      })
+    } catch {
+      doc_number = null
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { doc_number_enc, iv, auth_tag, ...safe } = updatedDoc
+
+  return NextResponse.json({
+    ok: true,
+    message: 'Attachment removed successfully',
+    data: {
+      ...safe,
+      doc_number,
+      download_url: null,
     },
   })
 }

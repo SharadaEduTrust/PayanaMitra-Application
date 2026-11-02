@@ -12,6 +12,7 @@ type AdminDoc = {
   issued_date?: string | null;
   expiry_date: string | null;
   issued_country: string | null;
+  issued_place?: string | null;
   file_name: string | null;
   download_url: string | null;
   created_at: string;
@@ -300,6 +301,23 @@ export default function UsersAdmin({
     Record<string, { type: "success" | "error"; message: string }>
   >({});
 
+  // Document inline edit state
+  const [editingDocId, setEditingDocId] = useState<string | null>(null);
+  const [editDocForm, setEditDocForm] = useState<{
+    doc_type: string;
+    doc_number: string;
+    issued_date: string;
+    expiry_date: string;
+    issued_place: string;
+  }>({
+    doc_type: "other",
+    doc_number: "",
+    issued_date: "",
+    expiry_date: "",
+    issued_place: "",
+  });
+  const [editDocLoading, setEditDocLoading] = useState(false);
+
   // Document upload form state
   const [newDocType, setNewDocType] = useState("aadhar");
   const [newDocNumber, setNewDocNumber] = useState("");
@@ -327,6 +345,7 @@ export default function UsersAdmin({
     setDocUploadStatus("");
     setRowAttachmentLoading({});
     setRowAttachmentStatus({});
+    setEditingDocId(null);
     setNewDocNumber("");
     setNewIssuedDate("");
     setNewExpiryDate("");
@@ -622,6 +641,138 @@ export default function UsersAdmin({
         [docId]: {
           type: "error",
           message: "Network error while uploading attachment.",
+        },
+      }));
+    } finally {
+      setRowAttachmentLoading((prev) => ({ ...prev, [docId]: false }));
+    }
+  }
+
+  function startEditDoc(doc: AdminDoc) {
+    setEditingDocId(doc.id);
+    setEditDocForm({
+      doc_type: doc.doc_type || "other",
+      doc_number: doc.doc_number || "",
+      issued_date: doc.issued_date ? doc.issued_date.substring(0, 10) : "",
+      expiry_date: doc.expiry_date ? doc.expiry_date.substring(0, 10) : "",
+      issued_place: doc.issued_place || doc.issued_country || "",
+    });
+  }
+
+  async function handleSaveEditDoc(docId: string) {
+    if (!docsUser) return;
+    setEditDocLoading(true);
+    setRowAttachmentStatus((prev) => {
+      const next = { ...prev };
+      delete next[docId];
+      return next;
+    });
+
+    try {
+      const res = await fetch(`/api/documents/${docId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          doc_type: editDocForm.doc_type,
+          doc_number: editDocForm.doc_number.trim() || null,
+          issued_date: editDocForm.issued_date || null,
+          expiry_date: editDocForm.expiry_date || null,
+          issued_place: editDocForm.issued_place.trim() || null,
+        }),
+      });
+
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        setRowAttachmentStatus((prev) => ({
+          ...prev,
+          [docId]: {
+            type: "error",
+            message: json?.error ?? "Failed to update document details.",
+          },
+        }));
+        return;
+      }
+
+      // Refresh guest docs
+      const refreshRes = await fetch(`/api/documents?user_id=${docsUser.id}`);
+      const refreshJson = await refreshRes.json().catch(() => ({ data: [] }));
+      if (refreshRes.ok && refreshJson.data) {
+        setGuestDocs(refreshJson.data);
+      }
+
+      setEditingDocId(null);
+      setRowAttachmentStatus((prev) => ({
+        ...prev,
+        [docId]: {
+          type: "success",
+          message: "Document details updated successfully.",
+        },
+      }));
+      router.refresh();
+    } catch {
+      setRowAttachmentStatus((prev) => ({
+        ...prev,
+        [docId]: {
+          type: "error",
+          message: "Network error while saving document details.",
+        },
+      }));
+    } finally {
+      setEditDocLoading(false);
+    }
+  }
+
+  async function handleRemoveAttachment(docId: string) {
+    if (!docsUser) return;
+    if (!window.confirm("Remove this attached file? The document record and its details will be kept.")) {
+      return;
+    }
+
+    setRowAttachmentLoading((prev) => ({ ...prev, [docId]: true }));
+    setRowAttachmentStatus((prev) => {
+      const next = { ...prev };
+      delete next[docId];
+      return next;
+    });
+
+    try {
+      const res = await fetch(`/api/guests/${docsUser.id}/documents/${docId}/attachment`, {
+        method: "DELETE",
+      });
+
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        setRowAttachmentStatus((prev) => ({
+          ...prev,
+          [docId]: {
+            type: "error",
+            message: json?.error ?? "Failed to remove attachment.",
+          },
+        }));
+        return;
+      }
+
+      // Refresh documents list
+      const refreshRes = await fetch(`/api/documents?user_id=${docsUser.id}`);
+      const refreshJson = await refreshRes.json().catch(() => ({ data: [] }));
+      if (refreshRes.ok && refreshJson.data) {
+        setGuestDocs(refreshJson.data);
+      }
+
+      setRowAttachmentStatus((prev) => ({
+        ...prev,
+        [docId]: {
+          type: "success",
+          message: "File attachment removed. Document record kept.",
+        },
+      }));
+      router.refresh();
+    } catch {
+      setRowAttachmentStatus((prev) => ({
+        ...prev,
+        [docId]: {
+          type: "error",
+          message: "Network error while removing attachment.",
         },
       }));
     } finally {
@@ -1881,7 +2032,7 @@ export default function UsersAdmin({
                                 color: hasAttachment ? undefined : "var(--forest, #2d5a27)",
                                 fontWeight: hasAttachment ? "normal" : 600,
                               }}
-                              disabled={rowLoading}
+                              disabled={rowLoading || editDocLoading}
                               onClick={() => document.getElementById(`doc-attachment-input-${doc.id}`)?.click()}
                             >
                               {rowLoading
@@ -1895,7 +2046,7 @@ export default function UsersAdmin({
                               type="file"
                               accept=".pdf,image/jpeg,image/png,image/webp"
                               style={{ display: "none" }}
-                              disabled={rowLoading}
+                              disabled={rowLoading || editDocLoading}
                               onChange={(e) => {
                                 const file = e.target.files?.[0];
                                 if (file) {
@@ -1904,11 +2055,42 @@ export default function UsersAdmin({
                                 e.target.value = "";
                               }}
                             />
+                            {hasAttachment && (
+                              <button
+                                type="button"
+                                className="link-btn"
+                                style={{ fontSize: "12px", color: "#b45309" }}
+                                disabled={rowLoading || editDocLoading}
+                                onClick={() => handleRemoveAttachment(doc.id)}
+                                title="Remove the uploaded file but keep document details"
+                              >
+                                Remove file
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="link-btn"
+                              style={{
+                                fontSize: "12px",
+                                color: editingDocId === doc.id ? "var(--color-text, #111)" : "var(--forest, #2d5a27)",
+                                fontWeight: editingDocId === doc.id ? 700 : "normal",
+                              }}
+                              disabled={rowLoading || editDocLoading}
+                              onClick={() => {
+                                if (editingDocId === doc.id) {
+                                  setEditingDocId(null);
+                                } else {
+                                  startEditDoc(doc);
+                                }
+                              }}
+                            >
+                              {editingDocId === doc.id ? "Cancel edit" : "Edit"}
+                            </button>
                             <button
                               type="button"
                               className="link-btn"
                               style={{ fontSize: "12px", color: "var(--color-danger, #ef4444)" }}
-                              disabled={rowLoading}
+                              disabled={rowLoading || editDocLoading}
                               onClick={() => handleAdminDeleteDoc(doc.id)}
                             >
                               Delete
@@ -1916,39 +2098,189 @@ export default function UsersAdmin({
                           </div>
                         </div>
 
-                        <div className="mono" style={{ fontSize: "14px", fontWeight: 600 }}>
-                          {doc.doc_number ? (
-                            <>
-                              <span style={{ opacity: 0.6 }}>•••• </span>
-                              <span>{doc.doc_number.slice(-4)}</span>
-                            </>
-                          ) : (
-                            "Document on file"
-                          )}
-                        </div>
+                        {editingDocId === doc.id ? (
+                          <div
+                            style={{
+                              marginTop: "6px",
+                              padding: "10px 12px",
+                              borderRadius: "6px",
+                              background: "rgba(0,0,0,0.03)",
+                              border: "1px solid var(--color-border, #ddd)",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "10px",
+                            }}
+                          >
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                              <div>
+                                <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                                  Document Type
+                                </label>
+                                <select
+                                  value={editDocForm.doc_type}
+                                  onChange={(e) => setEditDocForm((f) => ({ ...f, doc_type: e.target.value }))}
+                                  style={{
+                                    width: "100%",
+                                    padding: "6px 8px",
+                                    fontSize: "12px",
+                                    borderRadius: "4px",
+                                    border: "1px solid var(--color-border, #ccc)",
+                                    background: "var(--soft, #fff)",
+                                    color: "var(--color-text, #111)",
+                                  }}
+                                >
+                                  {DOCUMENT_TYPES.map((t) => (
+                                    <option key={t.value} value={t.value}>
+                                      {t.label}
+                                    </option>
+                                  ))}
+                                  {!DOCUMENT_TYPES.some((t) => t.value === editDocForm.doc_type) && (
+                                    <option value={editDocForm.doc_type}>{formatDocType(editDocForm.doc_type)}</option>
+                                  )}
+                                </select>
+                              </div>
 
-                        {(() => {
-                          const details: string[] = [];
-                          if (doc.issued_date) {
-                            try {
-                              details.push(`Issued: ${new Date(doc.issued_date).toLocaleDateString("en-IN")}`);
-                            } catch {
-                              details.push(`Issued: ${doc.issued_date}`);
-                            }
-                          }
-                          if (doc.expiry_date) {
-                            try {
-                              details.push(`Expires: ${new Date(doc.expiry_date).toLocaleDateString("en-IN")}`);
-                            } catch {
-                              details.push(`Expires: ${doc.expiry_date}`);
-                            }
-                          }
-                          if (doc.issued_country) {
-                            details.push(`Issued at: ${doc.issued_country}`);
-                          }
-                          if (details.length === 0) return null;
-                          return <span className="muted small">{details.join(" · ")}</span>;
-                        })()}
+                              <div>
+                                <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                                  Document Number
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editDocForm.doc_number}
+                                  onChange={(e) => setEditDocForm((f) => ({ ...f, doc_number: e.target.value }))}
+                                  placeholder="e.g. AAADK9754A"
+                                  style={{
+                                    width: "100%",
+                                    padding: "6px 8px",
+                                    fontSize: "12px",
+                                    borderRadius: "4px",
+                                    border: "1px solid var(--color-border, #ccc)",
+                                    background: "var(--soft, #fff)",
+                                    color: "var(--color-text, #111)",
+                                  }}
+                                />
+                              </div>
+
+                              <div>
+                                <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                                  Issued Date
+                                </label>
+                                <input
+                                  type="date"
+                                  value={editDocForm.issued_date}
+                                  onChange={(e) => setEditDocForm((f) => ({ ...f, issued_date: e.target.value }))}
+                                  style={{
+                                    width: "100%",
+                                    padding: "6px 8px",
+                                    fontSize: "12px",
+                                    borderRadius: "4px",
+                                    border: "1px solid var(--color-border, #ccc)",
+                                    background: "var(--soft, #fff)",
+                                    color: "var(--color-text, #111)",
+                                  }}
+                                />
+                              </div>
+
+                              <div>
+                                <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                                  Expiry Date
+                                </label>
+                                <input
+                                  type="date"
+                                  value={editDocForm.expiry_date}
+                                  onChange={(e) => setEditDocForm((f) => ({ ...f, expiry_date: e.target.value }))}
+                                  style={{
+                                    width: "100%",
+                                    padding: "6px 8px",
+                                    fontSize: "12px",
+                                    borderRadius: "4px",
+                                    border: "1px solid var(--color-border, #ccc)",
+                                    background: "var(--soft, #fff)",
+                                    color: "var(--color-text, #111)",
+                                  }}
+                                />
+                              </div>
+
+                              <div style={{ gridColumn: "1 / -1" }}>
+                                <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                                  Issued At / Place
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editDocForm.issued_place}
+                                  onChange={(e) => setEditDocForm((f) => ({ ...f, issued_place: e.target.value }))}
+                                  placeholder="e.g. Bengaluru, Karnataka"
+                                  style={{
+                                    width: "100%",
+                                    padding: "6px 8px",
+                                    fontSize: "12px",
+                                    borderRadius: "4px",
+                                    border: "1px solid var(--color-border, #ccc)",
+                                    background: "var(--soft, #fff)",
+                                    color: "var(--color-text, #111)",
+                                  }}
+                                />
+                              </div>
+                            </div>
+
+                            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", alignItems: "center" }}>
+                              <button
+                                type="button"
+                                className="link-btn"
+                                style={{ fontSize: "12px" }}
+                                disabled={editDocLoading}
+                                onClick={() => setEditingDocId(null)}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-primary"
+                                style={{ padding: "4px 12px", fontSize: "12px" }}
+                                disabled={editDocLoading}
+                                onClick={() => handleSaveEditDoc(doc.id)}
+                              >
+                                {editDocLoading ? "Saving…" : "Save changes"}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="mono" style={{ fontSize: "14px", fontWeight: 600 }}>
+                              {doc.doc_number ? (
+                                <>
+                                  <span style={{ opacity: 0.6 }}>•••• </span>
+                                  <span>{doc.doc_number.slice(-4)}</span>
+                                </>
+                              ) : (
+                                "Document on file"
+                              )}
+                            </div>
+
+                            {(() => {
+                              const details: string[] = [];
+                              if (doc.issued_date) {
+                                try {
+                                  details.push(`Issued: ${new Date(doc.issued_date).toLocaleDateString("en-IN")}`);
+                                } catch {
+                                  details.push(`Issued: ${doc.issued_date}`);
+                                }
+                              }
+                              if (doc.expiry_date) {
+                                try {
+                                  details.push(`Expires: ${new Date(doc.expiry_date).toLocaleDateString("en-IN")}`);
+                                } catch {
+                                  details.push(`Expires: ${doc.expiry_date}`);
+                                }
+                              }
+                              if (doc.issued_country || doc.issued_place) {
+                                details.push(`Issued at: ${doc.issued_country || doc.issued_place}`);
+                              }
+                              if (details.length === 0) return null;
+                              return <span className="muted small">{details.join(" · ")}</span>;
+                            })()}
+                          </>
+                        )}
 
                         {rowStatus && (
                           <div

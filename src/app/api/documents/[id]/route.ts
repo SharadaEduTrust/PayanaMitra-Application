@@ -2,15 +2,20 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/server/auth'
-import { decrypt } from '@/lib/server/crypto'
+import { encrypt, decrypt } from '@/lib/server/crypto'
 import { formatDocType } from '@/lib/documents'
 
 interface Params { params: Promise<{ id: string }> }
 
 const UpdateDocSchema = z.object({
   doc_type:       z.string().min(1).max(50).optional(),
-  expiry_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expiry_date must be YYYY-MM-DD').optional().nullable(),
-  issued_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'issued_date must be YYYY-MM-DD').optional().nullable(),
+  doc_number:     z.string().max(100).optional().nullable(),
+  expiry_date:    z.string().refine((val) => val === '' || /^\d{4}-\d{2}-\d{2}$/.test(val), {
+                    message: 'expiry_date must be YYYY-MM-DD or empty',
+                  }).optional().nullable(),
+  issued_date:    z.string().refine((val) => val === '' || /^\d{4}-\d{2}-\d{2}$/.test(val), {
+                    message: 'issued_date must be YYYY-MM-DD or empty',
+                  }).optional().nullable(),
   issued_place:   z.string().max(100).optional().nullable(),
   issued_country: z.string().max(100).optional().nullable(),
   trip_id:        z.string().uuid().optional().nullable(),
@@ -103,7 +108,25 @@ export async function GET(_req: NextRequest, { params }: Params) {
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
-  const profile = await getSession()
+  let profile = await getSession()
+  if (!profile) {
+    const authHeader = req.headers.get('authorization')
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.substring(7).trim()
+      const adminClient = createAdminClient()
+      const { data: { user }, error: userErr } = await adminClient.auth.getUser(token)
+      if (!userErr && user) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data } = await (adminClient.from('profiles') as any)
+          .select('*')
+          .eq('id', user.id)
+          .single()
+        if (data && data.is_active) {
+          profile = data
+        }
+      }
+    }
+  }
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
@@ -166,11 +189,38 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     updated_at: new Date().toISOString(),
   }
 
+  // Handle doc_number encryption
+  if (parsed.data.doc_number !== undefined) {
+    if (parsed.data.doc_number && parsed.data.doc_number.trim().length > 0) {
+      const encResult = await encrypt(parsed.data.doc_number.trim())
+      updatePayload.doc_number_enc = encResult.ciphertext
+      updatePayload.iv = encResult.iv
+      updatePayload.auth_tag = encResult.authTag
+    } else {
+      updatePayload.doc_number_enc = null
+      updatePayload.iv = ''
+      updatePayload.auth_tag = ''
+    }
+    delete updatePayload.doc_number
+  }
+
+  // Handle empty strings
+  if (parsed.data.expiry_date === '') {
+    updatePayload.expiry_date = null
+  }
+  if (parsed.data.issued_date === '') {
+    updatePayload.issued_date = null
+  }
+  if (parsed.data.issued_place === '') {
+    updatePayload.issued_place = null
+    updatePayload.issued_country = null
+  }
+
   // Cross-map place & country for legacy compatibility
   if (parsed.data.issued_place !== undefined && parsed.data.issued_country === undefined) {
-    updatePayload.issued_country = parsed.data.issued_place
+    updatePayload.issued_country = updatePayload.issued_place
   } else if (parsed.data.issued_country !== undefined && parsed.data.issued_place === undefined) {
-    updatePayload.issued_place = parsed.data.issued_country
+    updatePayload.issued_place = updatePayload.issued_country
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -199,12 +249,39 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const placeVal = updated?.issued_place ?? updated?.issued_country ?? null
   const countryVal = updated?.issued_country ?? updated?.issued_place ?? null
 
+  let download_url: string | null = null
+  if (updated?.storage_path) {
+    try {
+      const { data: signed } = await admin.storage
+        .from('guest-documents')
+        .createSignedUrl(updated.storage_path, 3600)
+      download_url = signed?.signedUrl ?? null
+    } catch {
+      download_url = null
+    }
+  }
+
+  let doc_number: string | null = null
+  if (updated?.doc_number_enc && updated.iv && updated.auth_tag) {
+    try {
+      doc_number = await decrypt({
+        ciphertext: updated.doc_number_enc as string,
+        iv: updated.iv as string,
+        authTag: updated.auth_tag as string,
+      })
+    } catch {
+      doc_number = null
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { doc_number_enc, iv, auth_tag, ...safe } = updated
   return NextResponse.json({
     ok: true,
     data: {
       ...safe,
+      doc_number,
+      download_url,
       issued_date: updated?.issued_date ?? parsed.data.issued_date ?? null,
       issued_place: placeVal,
       issued_country: countryVal,
@@ -212,8 +289,26 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   })
 }
 
-export async function DELETE(_req: NextRequest, { params }: Params) {
-  const profile = await getSession()
+export async function DELETE(req: NextRequest, { params }: Params) {
+  let profile = await getSession()
+  if (!profile) {
+    const authHeader = req.headers.get('authorization')
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.substring(7).trim()
+      const adminClient = createAdminClient()
+      const { data: { user }, error: userErr } = await adminClient.auth.getUser(token)
+      if (!userErr && user) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data } = await (adminClient.from('profiles') as any)
+          .select('*')
+          .eq('id', user.id)
+          .single()
+        if (data && data.is_active) {
+          profile = data
+        }
+      }
+    }
+  }
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params

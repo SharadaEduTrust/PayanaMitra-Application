@@ -12,6 +12,7 @@ type AdminDoc = {
   issued_date?: string | null;
   expiry_date: string | null;
   issued_country: string | null;
+  issued_place?: string | null;
   file_name: string | null;
   download_url: string | null;
   created_at: string;
@@ -295,6 +296,27 @@ export default function UsersAdmin({
   const [docUploadLoading, setDocUploadLoading] = useState(false);
   const [docUploadError, setDocUploadError] = useState("");
   const [docUploadStatus, setDocUploadStatus] = useState("");
+  const [rowAttachmentLoading, setRowAttachmentLoading] = useState<Record<string, boolean>>({});
+  const [rowAttachmentStatus, setRowAttachmentStatus] = useState<
+    Record<string, { type: "success" | "error"; message: string }>
+  >({});
+
+  // Document inline edit state
+  const [editingDocId, setEditingDocId] = useState<string | null>(null);
+  const [editDocForm, setEditDocForm] = useState<{
+    doc_type: string;
+    doc_number: string;
+    issued_date: string;
+    expiry_date: string;
+    issued_place: string;
+  }>({
+    doc_type: "other",
+    doc_number: "",
+    issued_date: "",
+    expiry_date: "",
+    issued_place: "",
+  });
+  const [editDocLoading, setEditDocLoading] = useState(false);
 
   // Document upload form state
   const [newDocType, setNewDocType] = useState("aadhar");
@@ -321,7 +343,9 @@ export default function UsersAdmin({
     setDocsLoading(true);
     setDocUploadError("");
     setDocUploadStatus("");
-    setNewDocType("aadhar");
+    setRowAttachmentLoading({});
+    setRowAttachmentStatus({});
+    setEditingDocId(null);
     setNewDocNumber("");
     setNewIssuedDate("");
     setNewExpiryDate("");
@@ -333,13 +357,40 @@ export default function UsersAdmin({
       const json = await res.json().catch(() => ({ data: [] }));
       if (res.ok && json.data) {
         setGuestDocs(json.data);
+        const docs = json.data as AdminDoc[];
+        const isAlreadyOn = (t: string) => docs.some((d) => {
+          const dt = (d.doc_type || "").toLowerCase().trim();
+          const norm = t.toLowerCase().trim();
+          if (dt === norm) return true;
+          if ((dt === "aadhar" || dt === "aadhaar") && (norm === "aadhar" || norm === "aadhaar")) return true;
+          if ((dt === "driving_licence" || dt === "driving_license") && (norm === "driving_licence" || norm === "driving_license")) return true;
+          return false;
+        });
+        const firstAvailable = DOCUMENT_TYPES.find((item) => !isAlreadyOn(item.value));
+        setNewDocType(firstAvailable ? firstAvailable.value : "aadhar");
+      } else {
+        setNewDocType("aadhar");
       }
     } catch {
       setDocUploadError("Failed to fetch documents for this guest.");
+      setNewDocType("aadhar");
     } finally {
       setDocsLoading(false);
     }
   }
+
+  // Deep-link directly into a user's documents modal via ?doc_user=<id>
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const docUserId = params.get("doc_user");
+    if (docUserId && rows.length > 0 && !docsUser) {
+      const target = rows.find((u) => u.id === docUserId);
+      if (target) {
+        openDocsModal(target);
+      }
+    }
+  }, [rows, docsUser]);
 
   async function handleAdminUploadDoc(e: FormEvent) {
     e.preventDefault();
@@ -503,6 +554,229 @@ export default function UsersAdmin({
       }
     } catch {
       setDocUploadError("Network error while deleting document.");
+    }
+  }
+
+  async function handleRowAttachment(docId: string, file: File) {
+    if (!docsUser) return;
+
+    // Client-side file size check (max 25MB)
+    if (file.size > 25 * 1024 * 1024) {
+      setRowAttachmentStatus((prev) => ({
+        ...prev,
+        [docId]: {
+          type: "error",
+          message: "File size exceeds 25MB limit. Please upload a smaller file.",
+        },
+      }));
+      return;
+    }
+
+    // Client-side allowed types check (PDF or image)
+    const allowedExtensions = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
+    const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
+    const allowedMimes = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+    if (!allowedExtensions.includes(ext) && (file.type && !allowedMimes.includes(file.type))) {
+      setRowAttachmentStatus((prev) => ({
+        ...prev,
+        [docId]: {
+          type: "error",
+          message: "Invalid file type. Allowed types: PDF, JPEG, PNG, WebP.",
+        },
+      }));
+      return;
+    }
+
+    setRowAttachmentLoading((prev) => ({ ...prev, [docId]: true }));
+    setRowAttachmentStatus((prev) => {
+      const next = { ...prev };
+      delete next[docId];
+      return next;
+    });
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch(`/api/guests/${docsUser.id}/documents/${docId}/attachment`, {
+        method: "PATCH",
+        body: formData,
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setRowAttachmentStatus((prev) => ({
+          ...prev,
+          [docId]: {
+            type: "error",
+            message: json?.error ?? "Failed to upload attachment.",
+          },
+        }));
+        return;
+      }
+
+      // Refresh documents list without closing modal
+      const refreshRes = await fetch(`/api/documents?user_id=${docsUser.id}`);
+      const refreshJson = await refreshRes.json().catch(() => ({ data: [] }));
+      if (refreshRes.ok && refreshJson.data) {
+        setGuestDocs(refreshJson.data);
+      }
+
+      const compressionNote = json?.compression?.compressed
+        ? ` (compressed: ${(json.compression.originalSize / 1024).toFixed(0)} KB → ${(json.compression.finalSize / 1024).toFixed(0)} KB)`
+        : "";
+
+      setRowAttachmentStatus((prev) => ({
+        ...prev,
+        [docId]: {
+          type: "success",
+          message: `Attachment saved successfully${compressionNote}.`,
+        },
+      }));
+      router.refresh();
+    } catch {
+      setRowAttachmentStatus((prev) => ({
+        ...prev,
+        [docId]: {
+          type: "error",
+          message: "Network error while uploading attachment.",
+        },
+      }));
+    } finally {
+      setRowAttachmentLoading((prev) => ({ ...prev, [docId]: false }));
+    }
+  }
+
+  function startEditDoc(doc: AdminDoc) {
+    setEditingDocId(doc.id);
+    setEditDocForm({
+      doc_type: doc.doc_type || "other",
+      doc_number: doc.doc_number || "",
+      issued_date: doc.issued_date ? doc.issued_date.substring(0, 10) : "",
+      expiry_date: doc.expiry_date ? doc.expiry_date.substring(0, 10) : "",
+      issued_place: doc.issued_place || doc.issued_country || "",
+    });
+  }
+
+  async function handleSaveEditDoc(docId: string) {
+    if (!docsUser) return;
+    setEditDocLoading(true);
+    setRowAttachmentStatus((prev) => {
+      const next = { ...prev };
+      delete next[docId];
+      return next;
+    });
+
+    try {
+      const res = await fetch(`/api/documents/${docId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          doc_type: editDocForm.doc_type,
+          doc_number: editDocForm.doc_number.trim() || null,
+          issued_date: editDocForm.issued_date || null,
+          expiry_date: editDocForm.expiry_date || null,
+          issued_place: editDocForm.issued_place.trim() || null,
+        }),
+      });
+
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        setRowAttachmentStatus((prev) => ({
+          ...prev,
+          [docId]: {
+            type: "error",
+            message: json?.error ?? "Failed to update document details.",
+          },
+        }));
+        return;
+      }
+
+      // Refresh guest docs
+      const refreshRes = await fetch(`/api/documents?user_id=${docsUser.id}`);
+      const refreshJson = await refreshRes.json().catch(() => ({ data: [] }));
+      if (refreshRes.ok && refreshJson.data) {
+        setGuestDocs(refreshJson.data);
+      }
+
+      setEditingDocId(null);
+      setRowAttachmentStatus((prev) => ({
+        ...prev,
+        [docId]: {
+          type: "success",
+          message: "Document details updated successfully.",
+        },
+      }));
+      router.refresh();
+    } catch {
+      setRowAttachmentStatus((prev) => ({
+        ...prev,
+        [docId]: {
+          type: "error",
+          message: "Network error while saving document details.",
+        },
+      }));
+    } finally {
+      setEditDocLoading(false);
+    }
+  }
+
+  async function handleRemoveAttachment(docId: string) {
+    if (!docsUser) return;
+    if (!window.confirm("Remove this attached file? The document record and its details will be kept.")) {
+      return;
+    }
+
+    setRowAttachmentLoading((prev) => ({ ...prev, [docId]: true }));
+    setRowAttachmentStatus((prev) => {
+      const next = { ...prev };
+      delete next[docId];
+      return next;
+    });
+
+    try {
+      const res = await fetch(`/api/guests/${docsUser.id}/documents/${docId}/attachment`, {
+        method: "DELETE",
+      });
+
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        setRowAttachmentStatus((prev) => ({
+          ...prev,
+          [docId]: {
+            type: "error",
+            message: json?.error ?? "Failed to remove attachment.",
+          },
+        }));
+        return;
+      }
+
+      // Refresh documents list
+      const refreshRes = await fetch(`/api/documents?user_id=${docsUser.id}`);
+      const refreshJson = await refreshRes.json().catch(() => ({ data: [] }));
+      if (refreshRes.ok && refreshJson.data) {
+        setGuestDocs(refreshJson.data);
+      }
+
+      setRowAttachmentStatus((prev) => ({
+        ...prev,
+        [docId]: {
+          type: "success",
+          message: "File attachment removed. Document record kept.",
+        },
+      }));
+      router.refresh();
+    } catch {
+      setRowAttachmentStatus((prev) => ({
+        ...prev,
+        [docId]: {
+          type: "error",
+          message: "Network error while removing attachment.",
+        },
+      }));
+    } finally {
+      setRowAttachmentLoading((prev) => ({ ...prev, [docId]: false }));
     }
   }
 
@@ -1673,94 +1947,359 @@ export default function UsersAdmin({
                 </p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {guestDocs.map((doc) => (
-                    <div
-                      key={doc.id}
-                      style={{
-                        padding: "10px 14px",
-                        border: "1px solid var(--color-border, rgba(255,255,255,0.1))",
-                        borderRadius: "6px",
-                        background: "rgba(0,0,0,0.02)",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "6px",
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
-                        <span
-                          style={{
-                            fontSize: "12px",
-                            fontWeight: 700,
-                            color: "var(--forest, #2d5a27)",
-                            background: "var(--soft, #f7f3ee)",
-                            padding: "2px 8px",
-                            borderRadius: "4px",
-                            border: "1px solid var(--line, #e3d5c4)",
-                          }}
-                        >
-                          {formatDocType(doc.doc_type)}
-                        </span>
-                        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                          {doc.download_url && (
-                            <a
-                              href={doc.download_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="link-btn"
-                              style={{ fontSize: "12px" }}
-                            >
-                              Download {doc.file_name ? doc.file_name : "File"} ↗
-                            </a>
-                          )}
-                          <button
-                            type="button"
-                            className="link-btn"
-                            style={{ fontSize: "12px", color: "var(--color-danger, #ef4444)" }}
-                            onClick={() => handleAdminDeleteDoc(doc.id)}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
+                  {guestDocs.map((doc) => {
+                    const rowLoading = Boolean(rowAttachmentLoading[doc.id]);
+                    const rowStatus = rowAttachmentStatus[doc.id];
+                    const hasAttachment = Boolean(doc.download_url);
 
-                      <div className="mono" style={{ fontSize: "14px", fontWeight: 600 }}>
-                        {doc.doc_number ? (
-                          <>
-                            <span style={{ opacity: 0.6 }}>•••• </span>
-                            <span>{doc.doc_number.slice(-4)}</span>
-                            <span className="muted small" style={{ marginLeft: "8px", fontWeight: "normal" }}>
-                              ({doc.doc_number})
+                    return (
+                      <div
+                        key={doc.id}
+                        style={{
+                          padding: "10px 14px",
+                          border: "1px solid var(--color-border, rgba(255,255,255,0.1))",
+                          borderRadius: "6px",
+                          background: "rgba(0,0,0,0.02)",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "8px",
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                            <span
+                              style={{
+                                fontSize: "12px",
+                                fontWeight: 700,
+                                color: "var(--forest, #2d5a27)",
+                                background: "var(--soft, #f7f3ee)",
+                                padding: "2px 8px",
+                                borderRadius: "4px",
+                                border: "1px solid var(--line, #e3d5c4)",
+                              }}
+                            >
+                              {formatDocType(doc.doc_type)}
                             </span>
-                          </>
+                            {!hasAttachment && (
+                              <span
+                                style={{
+                                  fontSize: "11px",
+                                  fontWeight: 600,
+                                  color: "#92400e",
+                                  background: "#fef3c7",
+                                  padding: "2px 8px",
+                                  borderRadius: "4px",
+                                  border: "1px solid #fde68a",
+                                }}
+                              >
+                                No file attached
+                              </span>
+                            )}
+                            {hasAttachment && doc.file_name && (
+                              <span
+                                className="muted small mono"
+                                style={{
+                                  fontSize: "11px",
+                                  maxWidth: "200px",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                                title={doc.file_name}
+                              >
+                                📎 {doc.file_name}
+                              </span>
+                            )}
+                          </div>
+
+                          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                            {hasAttachment && doc.download_url && (
+                              <a
+                                href={doc.download_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="link-btn"
+                                style={{ fontSize: "12px" }}
+                              >
+                                View ↗
+                              </a>
+                            )}
+                            <button
+                              type="button"
+                              className="link-btn"
+                              style={{
+                                fontSize: "12px",
+                                color: hasAttachment ? undefined : "var(--forest, #2d5a27)",
+                                fontWeight: hasAttachment ? "normal" : 600,
+                              }}
+                              disabled={rowLoading || editDocLoading}
+                              onClick={() => document.getElementById(`doc-attachment-input-${doc.id}`)?.click()}
+                            >
+                              {rowLoading
+                                ? "Uploading…"
+                                : hasAttachment
+                                ? "Replace file"
+                                : "Attach file"}
+                            </button>
+                            <input
+                              id={`doc-attachment-input-${doc.id}`}
+                              type="file"
+                              accept=".pdf,image/jpeg,image/png,image/webp"
+                              style={{ display: "none" }}
+                              disabled={rowLoading || editDocLoading}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  handleRowAttachment(doc.id, file);
+                                }
+                                e.target.value = "";
+                              }}
+                            />
+                            {hasAttachment && (
+                              <button
+                                type="button"
+                                className="link-btn"
+                                style={{ fontSize: "12px", color: "#b45309" }}
+                                disabled={rowLoading || editDocLoading}
+                                onClick={() => handleRemoveAttachment(doc.id)}
+                                title="Remove the uploaded file but keep document details"
+                              >
+                                Remove file
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="link-btn"
+                              style={{
+                                fontSize: "12px",
+                                color: editingDocId === doc.id ? "var(--color-text, #111)" : "var(--forest, #2d5a27)",
+                                fontWeight: editingDocId === doc.id ? 700 : "normal",
+                              }}
+                              disabled={rowLoading || editDocLoading}
+                              onClick={() => {
+                                if (editingDocId === doc.id) {
+                                  setEditingDocId(null);
+                                } else {
+                                  startEditDoc(doc);
+                                }
+                              }}
+                            >
+                              {editingDocId === doc.id ? "Cancel edit" : "Edit"}
+                            </button>
+                            <button
+                              type="button"
+                              className="link-btn"
+                              style={{ fontSize: "12px", color: "var(--color-danger, #ef4444)" }}
+                              disabled={rowLoading || editDocLoading}
+                              onClick={() => handleAdminDeleteDoc(doc.id)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+
+                        {editingDocId === doc.id ? (
+                          <div
+                            style={{
+                              marginTop: "6px",
+                              padding: "10px 12px",
+                              borderRadius: "6px",
+                              background: "rgba(0,0,0,0.03)",
+                              border: "1px solid var(--color-border, #ddd)",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "10px",
+                            }}
+                          >
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                              <div>
+                                <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                                  Document Type
+                                </label>
+                                <select
+                                  value={editDocForm.doc_type}
+                                  onChange={(e) => setEditDocForm((f) => ({ ...f, doc_type: e.target.value }))}
+                                  style={{
+                                    width: "100%",
+                                    padding: "6px 8px",
+                                    fontSize: "12px",
+                                    borderRadius: "4px",
+                                    border: "1px solid var(--color-border, #ccc)",
+                                    background: "var(--soft, #fff)",
+                                    color: "var(--color-text, #111)",
+                                  }}
+                                >
+                                  {DOCUMENT_TYPES.map((t) => (
+                                    <option key={t.value} value={t.value}>
+                                      {t.label}
+                                    </option>
+                                  ))}
+                                  {!DOCUMENT_TYPES.some((t) => t.value === editDocForm.doc_type) && (
+                                    <option value={editDocForm.doc_type}>{formatDocType(editDocForm.doc_type)}</option>
+                                  )}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                                  Document Number
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editDocForm.doc_number}
+                                  onChange={(e) => setEditDocForm((f) => ({ ...f, doc_number: e.target.value }))}
+                                  placeholder="e.g. AAADK9754A"
+                                  style={{
+                                    width: "100%",
+                                    padding: "6px 8px",
+                                    fontSize: "12px",
+                                    borderRadius: "4px",
+                                    border: "1px solid var(--color-border, #ccc)",
+                                    background: "var(--soft, #fff)",
+                                    color: "var(--color-text, #111)",
+                                  }}
+                                />
+                              </div>
+
+                              <div>
+                                <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                                  Issued Date
+                                </label>
+                                <input
+                                  type="date"
+                                  value={editDocForm.issued_date}
+                                  onChange={(e) => setEditDocForm((f) => ({ ...f, issued_date: e.target.value }))}
+                                  style={{
+                                    width: "100%",
+                                    padding: "6px 8px",
+                                    fontSize: "12px",
+                                    borderRadius: "4px",
+                                    border: "1px solid var(--color-border, #ccc)",
+                                    background: "var(--soft, #fff)",
+                                    color: "var(--color-text, #111)",
+                                  }}
+                                />
+                              </div>
+
+                              <div>
+                                <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                                  Expiry Date
+                                </label>
+                                <input
+                                  type="date"
+                                  value={editDocForm.expiry_date}
+                                  onChange={(e) => setEditDocForm((f) => ({ ...f, expiry_date: e.target.value }))}
+                                  style={{
+                                    width: "100%",
+                                    padding: "6px 8px",
+                                    fontSize: "12px",
+                                    borderRadius: "4px",
+                                    border: "1px solid var(--color-border, #ccc)",
+                                    background: "var(--soft, #fff)",
+                                    color: "var(--color-text, #111)",
+                                  }}
+                                />
+                              </div>
+
+                              <div style={{ gridColumn: "1 / -1" }}>
+                                <label style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                                  Issued At / Place
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editDocForm.issued_place}
+                                  onChange={(e) => setEditDocForm((f) => ({ ...f, issued_place: e.target.value }))}
+                                  placeholder="e.g. Bengaluru, Karnataka"
+                                  style={{
+                                    width: "100%",
+                                    padding: "6px 8px",
+                                    fontSize: "12px",
+                                    borderRadius: "4px",
+                                    border: "1px solid var(--color-border, #ccc)",
+                                    background: "var(--soft, #fff)",
+                                    color: "var(--color-text, #111)",
+                                  }}
+                                />
+                              </div>
+                            </div>
+
+                            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", alignItems: "center" }}>
+                              <button
+                                type="button"
+                                className="link-btn"
+                                style={{ fontSize: "12px" }}
+                                disabled={editDocLoading}
+                                onClick={() => setEditingDocId(null)}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-primary"
+                                style={{ padding: "4px 12px", fontSize: "12px" }}
+                                disabled={editDocLoading}
+                                onClick={() => handleSaveEditDoc(doc.id)}
+                              >
+                                {editDocLoading ? "Saving…" : "Save changes"}
+                              </button>
+                            </div>
+                          </div>
                         ) : (
-                          "Document on file"
+                          <>
+                            <div className="mono" style={{ fontSize: "14px", fontWeight: 600 }}>
+                              {doc.doc_number ? (
+                                <>
+                                  <span style={{ opacity: 0.6 }}>•••• </span>
+                                  <span>{doc.doc_number.slice(-4)}</span>
+                                </>
+                              ) : (
+                                "Document on file"
+                              )}
+                            </div>
+
+                            {(() => {
+                              const details: string[] = [];
+                              if (doc.issued_date) {
+                                try {
+                                  details.push(`Issued: ${new Date(doc.issued_date).toLocaleDateString("en-IN")}`);
+                                } catch {
+                                  details.push(`Issued: ${doc.issued_date}`);
+                                }
+                              }
+                              if (doc.expiry_date) {
+                                try {
+                                  details.push(`Expires: ${new Date(doc.expiry_date).toLocaleDateString("en-IN")}`);
+                                } catch {
+                                  details.push(`Expires: ${doc.expiry_date}`);
+                                }
+                              }
+                              if (doc.issued_country || doc.issued_place) {
+                                details.push(`Issued at: ${doc.issued_country || doc.issued_place}`);
+                              }
+                              if (details.length === 0) return null;
+                              return <span className="muted small">{details.join(" · ")}</span>;
+                            })()}
+                          </>
+                        )}
+
+                        {rowStatus && (
+                          <div
+                            style={{
+                              fontSize: "12px",
+                              padding: "6px 10px",
+                              borderRadius: "4px",
+                              marginTop: "2px",
+                              color: rowStatus.type === "error" ? "#b91c1c" : "#15803d",
+                              background: rowStatus.type === "error" ? "#fef2f2" : "#f0fdf4",
+                              border: `1px solid ${rowStatus.type === "error" ? "#fecaca" : "#bbf7d0"}`,
+                            }}
+                          >
+                            {rowStatus.message}
+                          </div>
                         )}
                       </div>
-
-                      {(() => {
-                        const details: string[] = [];
-                        if (doc.issued_date) {
-                          try {
-                            details.push(`Issued: ${new Date(doc.issued_date).toLocaleDateString("en-IN")}`);
-                          } catch {
-                            details.push(`Issued: ${doc.issued_date}`);
-                          }
-                        }
-                        if (doc.expiry_date) {
-                          try {
-                            details.push(`Expires: ${new Date(doc.expiry_date).toLocaleDateString("en-IN")}`);
-                          } catch {
-                            details.push(`Expires: ${doc.expiry_date}`);
-                          }
-                        }
-                        if (doc.issued_country) {
-                          details.push(`Issued at: ${doc.issued_country}`);
-                        }
-                        if (details.length === 0) return null;
-                        return <span className="muted small">{details.join(" · ")}</span>;
-                      })()}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1788,8 +2327,8 @@ export default function UsersAdmin({
                     {DOCUMENT_TYPES.map((item) => {
                       const alreadyUploaded = isDocTypeAlreadyUploaded(item.value);
                       return (
-                        <option key={item.value} value={item.value}>
-                          {item.label} {alreadyUploaded ? "— (Already on file - delete first)" : ""}
+                        <option key={item.value} value={item.value} disabled={alreadyUploaded}>
+                          {item.label} {alreadyUploaded ? "— (Already on file, use Attach file above)" : ""}
                         </option>
                       );
                     })}
@@ -1813,7 +2352,7 @@ export default function UsersAdmin({
                   >
                     <span>⚠️</span>
                     <span>
-                      A <strong>{formatDocType(newDocType)}</strong> is already on file for this guest. You cannot upload another {formatDocType(newDocType)} unless the existing one is deleted from the list above.
+                      A <strong>{formatDocType(newDocType)}</strong> is already on file for this guest. To attach or replace the file, use the <strong>Attach file</strong> or <strong>Replace file</strong> button on the document row above.
                     </span>
                   </div>
                 )}
@@ -1883,12 +2422,12 @@ export default function UsersAdmin({
                     className="btn btn-primary"
                     type="submit"
                     disabled={docUploadLoading || isDocTypeAlreadyUploaded(newDocType)}
-                    title={isDocTypeAlreadyUploaded(newDocType) ? `Delete the existing ${formatDocType(newDocType)} first` : undefined}
+                    title={isDocTypeAlreadyUploaded(newDocType) ? "Already on file, use Attach file above" : undefined}
                   >
                     {docUploadLoading
                       ? "Uploading & Encrypting…"
                       : isDocTypeAlreadyUploaded(newDocType)
-                      ? `${formatDocType(newDocType)} Already Uploaded`
+                      ? `${formatDocType(newDocType)} Already On File`
                       : "Upload Document"}
                   </button>
                   <button className="btn btn-secondary" type="button" onClick={() => setDocsUser(null)}>

@@ -14,6 +14,7 @@ const optionalDate = z.preprocess(
 const schema = z.object({
   dob: optionalDate,
   pan: z.string().trim().max(10).optional().nullable(),
+  aadhar: z.string().trim().max(20).optional().nullable(),
   passport_no: z.string().trim().max(10).optional().nullable(),
   passport_issue_date: optionalDate,
   passport_expiry: optionalDate,
@@ -118,6 +119,42 @@ export async function POST(request: Request) {
       }
     } catch (panErr) {
       console.error("Failed to encrypt PAN:", panErr);
+    }
+  }
+
+  // Handle Aadhar in guest_documents
+  const aadhar = emptyToNull(parsed.data.aadhar);
+  if (aadhar) {
+    try {
+      const enc = await encrypt(aadhar);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: existingAadhar } = await (admin.from("guest_documents") as any)
+        .select("id")
+        .eq("user_id", user.id)
+        .in("doc_type", ["aadhar", "aadhaar"])
+        .maybeSingle();
+
+      if (existingAadhar) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from("guest_documents") as any).update({
+          doc_type: "aadhar",
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+          updated_at: new Date().toISOString(),
+        }).eq("id", existingAadhar.id);
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from("guest_documents") as any).insert({
+          user_id: user.id,
+          doc_type: "aadhar",
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+        });
+      }
+    } catch (aadharErr) {
+      console.error("Failed to encrypt Aadhar:", aadharErr);
     }
   }
 

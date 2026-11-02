@@ -6,6 +6,7 @@ import type { TravellerDetails } from "@/lib/types";
 export default function TravellerDetailsForm({
   details,
   initialPan = "",
+  initialAadhar = "",
   initialPassportNo = "",
   initialPassportIssueDate = "",
   initialPassportExpiry = "",
@@ -15,6 +16,7 @@ export default function TravellerDetailsForm({
 }: {
   details: TravellerDetails | null;
   initialPan?: string;
+  initialAadhar?: string;
   initialPassportNo?: string;
   initialPassportIssueDate?: string;
   initialPassportExpiry?: string;
@@ -25,6 +27,7 @@ export default function TravellerDetailsForm({
   const [form, setForm] = useState({
     dob: details?.dob ?? "",
     pan: initialPan,
+    aadhar: initialAadhar,
     passport_no: initialPassportNo,
     passport_issue_date: initialPassportIssueDate || (details?.passport_issue_date ?? ""),
     passport_expiry: initialPassportExpiry,
@@ -87,6 +90,18 @@ export default function TravellerDetailsForm({
             maxLength={10}
             onChange={(event) => set("pan", event.target.value.toUpperCase())}
             placeholder="10 characters (e.g. AAADK9754A)"
+          />
+        </label>
+      </div>
+
+      <div className="field-row">
+        <label className="form-field">
+          Aadhar Card Number
+          <input
+            value={form.aadhar}
+            maxLength={14}
+            onChange={(event) => set("aadhar", event.target.value)}
+            placeholder="12 digits (e.g. 1234 5678 9012)"
           />
         </label>
       </div>

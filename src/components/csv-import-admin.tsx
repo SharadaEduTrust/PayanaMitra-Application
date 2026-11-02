@@ -239,6 +239,9 @@ export default function CsvImportAdmin({
       setDetailsImporting(false);
 
       if (!res.ok) {
+        if (json?.results && Array.isArray(json.results) && json.results.length > 0) {
+          setDetailsReport(json);
+        }
         setDetailsError(json?.error ?? "Failed to import guest details.");
         return;
       }
@@ -1314,8 +1317,11 @@ export default function CsvImportAdmin({
               <div>
                 <h2 className="serif">Guest Details Table</h2>
                 <p className="admin-hint" style={{ margin: "4px 0 0" }}>
-                  Field names match the <strong>Guest Details Table</strong> specification. Includes Date of Birth, PAN, Passport, Visa details (Visa No., Expiry & Country), Travel Insurance, and Food Preferences.
+                  Field names match the <strong>Guest Details Table</strong> specification. Includes Date of Birth, PAN, Aadhar Card Number, Passport, Visa details (Visa No., Expiry & Country), Travel Insurance, and Food Preferences.
                 </p>
+                <div style={{ marginTop: "10px", padding: "10px 14px", background: "rgba(212, 163, 115, 0.12)", borderLeft: "3px solid var(--color-accent, #d4a373)", borderRadius: "6px", fontSize: "13px", color: "var(--color-text-muted, #94a3b8)" }}>
+                  💡 <strong>Important Requirement:</strong> Guest details are matched to accounts using <strong>Mobile Number</strong>. Please make sure user accounts have already been created first (via <button type="button" onClick={() => setTab("users")} style={{ background: "none", border: "none", color: "var(--color-accent, #d4a373)", textDecoration: "underline", cursor: "pointer", padding: 0, font: "inherit", fontWeight: 600 }}>User Table CSV import</button> or the User Directory), OR include <code>First Name</code> and <code>Last Name</code> in this CSV to auto-create them.
+                </div>
               </div>
               <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
                 <a
@@ -1501,6 +1507,13 @@ export default function CsvImportAdmin({
                     <td>10 alphanumeric characters</td>
                     <td><span className="pill optional">Optional</span></td>
                     <td className="mono">AAADK9754A</td>
+                  </tr>
+                  <tr>
+                    <td className="mono">Aadhar Card Number</td>
+                    <td>12-digit numeric ID (Encrypted at rest)</td>
+                    <td>12 digits (or formatted with spaces)</td>
+                    <td><span className="pill optional">Optional</span></td>
+                    <td className="mono">1234 5678 9012</td>
                   </tr>
                   <tr>
                     <td className="mono">Passport No.</td>

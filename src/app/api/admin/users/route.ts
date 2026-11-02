@@ -38,6 +38,7 @@ const GuestDetailsSchema = z.object({
   passport_issued_location: z.string().max(50, 'Max 50 characters').nullable().optional(),
   passport_issue_date:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').nullable().optional(),
   pan:                      z.string().trim().max(10).nullable().optional(),
+  aadhar:                   z.string().trim().max(20).nullable().optional(),
   passport_no:              z.string().trim().max(10).nullable().optional(),
   passport_expiry:          z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   visa_no:                  z.string().trim().max(10).nullable().optional(),
@@ -88,6 +89,7 @@ const CreateUserSchema = z.object({
   passport_issued_location: z.string().max(50).nullable().optional(),
   passport_issue_date:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   pan:                      z.string().trim().max(10).nullable().optional(),
+  aadhar:                   z.string().trim().max(20).nullable().optional(),
   passport_no:              z.string().trim().max(10).nullable().optional(),
   passport_expiry:          z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   visa_no:                  z.string().trim().max(10).nullable().optional(),
@@ -122,6 +124,7 @@ const PatchUserSchema = z.object({
   passport_issued_location: z.string().max(50).nullable().optional(),
   passport_issue_date:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   pan:                      z.string().trim().max(10).nullable().optional(),
+  aadhar:                   z.string().trim().max(20).nullable().optional(),
   passport_no:              z.string().trim().max(10).nullable().optional(),
   passport_expiry:          z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   visa_no:                  z.string().trim().max(10).nullable().optional(),
@@ -369,6 +372,25 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Handle Aadhar in guest_documents
+    const aadharVal = data.aadhar !== undefined ? data.aadhar : data.guest_details?.aadhar
+    if (aadharVal) {
+      try {
+        const cleanAadhar = aadharVal.trim().replace(/\s+/g, '')
+        const enc = await encrypt(cleanAadhar)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from('guest_documents') as any).insert({
+          user_id: authData.user.id,
+          doc_type: 'aadhar',
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+        })
+      } catch (aadharErr) {
+        console.error('Failed to encrypt Aadhar:', aadharErr)
+      }
+    }
+
     // Handle Passport in guest_documents
     const passVal = data.passport_no !== undefined ? data.passport_no : data.guest_details?.passport_no
     if (passVal) {
@@ -572,6 +594,42 @@ export async function PATCH(req: NextRequest) {
       }
     } catch (panErr) {
       console.error('Failed to encrypt PAN in admin user PATCH:', panErr)
+    }
+  }
+
+  // Handle Aadhar in guest_documents
+  const aadharVal = fields.aadhar !== undefined ? fields.aadhar : guest_details?.aadhar
+  if (aadharVal) {
+    try {
+      const cleanAadhar = aadharVal.trim().replace(/\s+/g, '')
+      const enc = await encrypt(cleanAadhar)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: existingAadhar } = await (admin.from('guest_documents') as any)
+        .select('id')
+        .eq('user_id', id)
+        .in('doc_type', ['aadhar', 'aadhaar'])
+        .maybeSingle()
+
+      if (existingAadhar) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from('guest_documents') as any).update({
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+          updated_at: new Date().toISOString(),
+        }).eq('id', existingAadhar.id)
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from('guest_documents') as any).insert({
+          user_id: id,
+          doc_type: 'aadhar',
+          doc_number_enc: enc.ciphertext,
+          iv: enc.iv,
+          auth_tag: enc.authTag,
+        })
+      }
+    } catch (aadharErr) {
+      console.error('Failed to encrypt Aadhar in admin user PATCH:', aadharErr)
     }
   }
 

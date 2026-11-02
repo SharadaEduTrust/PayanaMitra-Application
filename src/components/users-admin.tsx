@@ -51,6 +51,7 @@ type UserRow = {
   passportIssuedLocation?: string | null;
   passportIssueDate?: string | null;
   pan?: string | null;
+  aadhar?: string | null;
   passportNo?: string | null;
   passportExpiry?: string | null;
   visaNo?: string | null;
@@ -133,6 +134,7 @@ export default function UsersAdmin({
     passportIssuedLocation: "",
     passportIssueDate: "",
     pan: "",
+    aadhar: "",
     passportNo: "",
     passportExpiry: "",
     visaNo: "",
@@ -526,6 +528,7 @@ export default function UsersAdmin({
       passportIssuedLocation: user.passportIssuedLocation ?? "",
       passportIssueDate: user.passportIssueDate ?? "",
       pan: user.pan ?? "",
+      aadhar: user.aadhar ?? "",
       passportNo: user.passportNo ?? "",
       passportExpiry: user.passportExpiry ?? "",
       visaNo: user.visaNo ?? "",
@@ -566,6 +569,7 @@ export default function UsersAdmin({
           passportIssuedLocation: editForm.passportIssuedLocation.trim() || null,
           passport_issue_date: editForm.passportIssueDate || null,
           pan: editForm.pan.trim().toUpperCase() || null,
+          aadhar: editForm.aadhar.trim() || null,
           passportNo: editForm.passportNo.trim().toUpperCase() || null,
           passportExpiry: editForm.passportExpiry || null,
           visa_no: editForm.visaNo.trim().toUpperCase() || null,
@@ -627,6 +631,7 @@ export default function UsersAdmin({
                 passportIssuedLocation: editForm.passportIssuedLocation.trim() || null,
                 passportIssueDate: editForm.passportIssueDate || null,
                 pan: editForm.pan.trim().toUpperCase() || null,
+                aadhar: editForm.aadhar.trim() || null,
                 passportNo: editForm.passportNo.trim().toUpperCase() || null,
                 passportExpiry: editForm.passportExpiry || null,
                 visaNo: editForm.visaNo.trim().toUpperCase() || null,
@@ -1147,7 +1152,7 @@ export default function UsersAdmin({
               <div>
                 <h3 className="serif" style={{ margin: "0 0 6px", fontSize: "1.1rem", color: "#0f172a" }}>Step 2 — Upload Guest Details CSV</h3>
                 <p className="admin-hint" style={{ margin: "0 0 10px", color: "#475569" }}>
-                  Enriches existing accounts with travel details. <strong>Only <code>Mobile Number</code> is used as the unique identifier</strong> — the system looks up the user by their mobile number alone, so name fields are not included and cannot cause duplicate or mismatched records. Columns: <code>Mobile Number</code>, <code>Date of Birth</code>, <code>PAN</code>, <code>Passport No.</code>, <code>Passport Issue Date</code>, <code>Passport Expiry Date</code>, <code>Passport Issued Location</code>, <code>Visa No.</code>, <code>Visa Expiry Date</code>, <code>Visa Country</code>, <code>Travel Insurance No.</code>, <code>Travel Insurance Company</code>, <code>Travel Insurance Expiry Date</code>, <code>Food Preference</code>, <code>Food Allergy</code>, <code>Emergency Contact Name</code>, <code>Emergency Contact Number</code>.<br />
+                  Enriches existing accounts with travel details. <strong>Only <code>Mobile Number</code> is used as the unique identifier</strong> — the system looks up the user by their mobile number alone, so name fields are not included and cannot cause duplicate or mismatched records. Columns: <code>Mobile Number</code>, <code>Date of Birth</code>, <code>PAN</code>, <code>Aadhar Card Number</code>, <code>Passport No.</code>, <code>Passport Issue Date</code>, <code>Passport Expiry Date</code>, <code>Passport Issued Location</code>, <code>Visa No.</code>, <code>Visa Expiry Date</code>, <code>Visa Country</code>, <code>Travel Insurance No.</code>, <code>Travel Insurance Company</code>, <code>Travel Insurance Expiry Date</code>, <code>Food Preference</code>, <code>Food Allergy</code>, <code>Emergency Contact Name</code>, <code>Emergency Contact Number</code>.<br />
                   <strong style={{ color: "#b45309" }}>⚠ Users must already exist from Step 1 before uploading this file.</strong>
                 </p>
                 <a
@@ -1447,6 +1452,17 @@ export default function UsersAdmin({
                   placeholder="10 characters (e.g. AAADK9754A)"
                 />
               </label>
+              <label className="form-field">
+                Aadhar Card Number
+                <input
+                  value={editForm.aadhar}
+                  maxLength={14}
+                  onChange={(e) => setEditForm({ ...editForm, aadhar: e.target.value.replace(/[^0-9\s]/g, "") })}
+                  placeholder="12 digits (e.g. 1234 5678 9012)"
+                />
+              </label>
+            </div>
+            <div className="field-row">
               <label className="form-field">
                 Passport No.
                 <input

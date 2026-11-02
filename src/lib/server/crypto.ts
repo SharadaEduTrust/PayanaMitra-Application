@@ -15,7 +15,7 @@ let cachedKey: CryptoKey | null = null
 
 async function getKey(): Promise<CryptoKey> {
   if (cachedKey) return cachedKey
-  const raw = process.env.ENCRYPTION_KEY
+  const raw = process.env.ENCRYPTION_KEY || process.env.DOCUMENT_ENCRYPTION_KEY
   if (!raw) throw new Error('ENCRYPTION_KEY is not set')
   const bytes = Buffer.from(raw, 'base64')
   if (bytes.length !== 32) {

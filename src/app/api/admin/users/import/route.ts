@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession, derivePassword, phoneToEmail, PHONE_REGEX } from '@/lib/server/auth'
 import { encryptDocumentNumber } from '@/lib/crypto'
+import { audit } from '@/lib/audit'
 
 /**
  * GET  /api/admin/users/import — Returns a downloadable CSV template with field names from the specification.
@@ -362,7 +363,7 @@ export async function POST(req: NextRequest) {
       const cleanFp = rawFoodPref.trim().toLowerCase()
       if (['veg', 'vegetarian'].includes(cleanFp)) {
         mappedFoodPref = 'veg'
-      } else if (['non_veg', 'non-veg', 'nonveg', 'non_vegetarian', 'non-vegetarian', 'non vegetarian'].includes(cleanFp)) {
+      } else if (['non_veg', 'non-veg', 'nonveg', 'non veg', 'non_vegetarian', 'non-vegetarian', 'non vegetarian', 'nonvegetarian'].includes(cleanFp)) {
         mappedFoodPref = 'non_veg'
       } else {
         results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'food_preference must be veg or non_veg' })
@@ -865,6 +866,25 @@ export async function POST(req: NextRequest) {
   const updated    = results.filter(r => r.status === 'updated').length
   const skipped    = results.filter(r => r.status === 'skipped').length
   const errorCount = results.filter(r => r.status === 'error').length
+
+  const section = isDetailsOnlyImport ? 'guest_details' : 'users'
+
+  // Log every import attempt to audit_log for history
+  await audit({
+    actorId: guard.profile.id,
+    action: 'csv_import',
+    entity: 'csv_import',
+    payload: {
+      section,
+      filename: file.name,
+      total_rows: rows.length,
+      created,
+      updated,
+      skipped,
+      error_count: errorCount,
+      status: errorCount > 0 && created === 0 && updated === 0 && skipped === 0 ? 'failed' : errorCount > 0 ? 'partial' : 'success',
+    },
+  })
 
   // If every row errored, return 422 so the client can surface a clear failure (not a misleading success)
   if (errorCount > 0 && created === 0 && updated === 0 && skipped === 0) {

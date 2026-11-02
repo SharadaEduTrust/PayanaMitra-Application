@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/server/auth'
+import { audit } from '@/lib/audit'
 
 /**
  * GET  /api/admin/trips/import — Returns a downloadable CSV template for importing trails.
@@ -311,6 +312,23 @@ export async function POST(req: NextRequest) {
   const created    = results.filter(r => r.status === 'created').length
   const skipped    = results.filter(r => r.status === 'skipped').length
   const errorCount = results.filter(r => r.status === 'error').length
+
+  // Log to audit_log for import history
+  await audit({
+    actorId: guard.profile.id,
+    action: 'csv_import',
+    entity: 'csv_import',
+    payload: {
+      section: 'trails',
+      filename: file.name,
+      total_rows: rows.length,
+      created,
+      updated: 0,
+      skipped,
+      error_count: errorCount,
+      status: errorCount > 0 && created === 0 && skipped === 0 ? 'failed' : errorCount > 0 ? 'partial' : 'success',
+    },
+  })
 
   return NextResponse.json({
     created,

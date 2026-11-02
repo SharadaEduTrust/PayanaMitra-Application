@@ -1,8 +1,174 @@
 "use client";
 
-import { useState, useRef, type ChangeEvent, type FormEvent } from "react";
+import { useState, useRef, useEffect, useCallback, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+
+// ─── Import History ────────────────────────────────────────────────────────────
+
+interface ImportHistoryEntry {
+  id: string;
+  payload: {
+    section: string;
+    filename: string;
+    total_rows: number;
+    created: number;
+    updated: number;
+    skipped: number;
+    error_count: number;
+    status: "success" | "partial" | "failed";
+  };
+  created_at: string;
+  profiles: { first_name: string; last_name: string; phone: string } | null;
+}
+
+function ImportHistory({ section, refreshKey }: { section: string; refreshKey: number }) {
+  const [entries, setEntries] = useState<ImportHistoryEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/csv-import/history?section=${section}&limit=15`);
+      if (res.ok) {
+        const json = await res.json();
+        setEntries(json.data ?? []);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [section]);
+
+  // Auto-open and refresh when a new import happens (refreshKey changes)
+  useEffect(() => {
+    if (refreshKey > 0) {
+      setOpen(true);
+      load();
+    }
+  }, [refreshKey, load]);
+
+  // Load when panel opens
+  useEffect(() => {
+    if (open && entries.length === 0) {
+      load();
+    }
+  }, [open, entries.length, load]);
+
+  const statusPill = (s: "success" | "partial" | "failed") => {
+    if (s === "success") return <span style={{ color: "#16a34a", fontWeight: 700, fontSize: "12px" }}>✅ Success</span>;
+    if (s === "partial") return <span style={{ color: "#d97706", fontWeight: 700, fontSize: "12px" }}>⚠️ Partial</span>;
+    return <span style={{ color: "#dc2626", fontWeight: 700, fontSize: "12px" }}>❌ Failed</span>;
+  };
+
+  const fmt = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  };
+
+  return (
+    <section className="admin-card" style={{ marginTop: "4px" }}>
+      <button
+        type="button"
+        onClick={() => { setOpen(o => !o); if (!open) load(); }}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          width: "100%",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          padding: "4px 0",
+          fontSize: "0.97rem",
+          fontWeight: 600,
+          color: "var(--ink, #334155)",
+          textAlign: "left",
+        }}
+      >
+        <span style={{ fontSize: "1.1rem" }}>{open ? "▾" : "▸"}</span>
+        📋 Import History
+        {entries.length > 0 && !loading && (
+          <span style={{ marginLeft: "6px", fontSize: "12px", color: "#64748b", fontWeight: 400 }}>
+            ({entries.length} recent)
+          </span>
+        )}
+        {loading && <span style={{ marginLeft: "6px", fontSize: "12px", color: "#64748b" }}>Loading…</span>}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); load(); }}
+          title="Refresh history"
+          style={{
+            marginLeft: "auto",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            fontSize: "14px",
+            color: "#64748b",
+            padding: "2px 6px",
+          }}
+        >
+          ↺
+        </button>
+      </button>
+
+      {open && (
+        <div style={{ marginTop: "12px" }}>
+          {entries.length === 0 && !loading ? (
+            <p style={{ fontSize: "13px", color: "#64748b", margin: 0 }}>No imports recorded yet for this section.</p>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table className="admin-table" style={{ margin: 0, fontSize: "13px" }}>
+                <thead>
+                  <tr>
+                    <th>Date / Time</th>
+                    <th>File Name</th>
+                    <th>Rows</th>
+                    <th>Created</th>
+                    <th>Updated</th>
+                    <th>Skipped</th>
+                    <th>Errors</th>
+                    <th>Status</th>
+                    <th>By</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {entries.map((e) => (
+                    <tr key={e.id}>
+                      <td className="mono" style={{ whiteSpace: "nowrap" }}>{fmt(e.created_at)}</td>
+                      <td style={{ maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                          title={e.payload?.filename}>
+                        {e.payload?.filename ?? "—"}
+                      </td>
+                      <td className="mono">{e.payload?.total_rows ?? 0}</td>
+                      <td className="mono" style={{ color: "#16a34a", fontWeight: (e.payload?.created ?? 0) > 0 ? 700 : 400 }}>
+                        {e.payload?.created ?? 0}
+                      </td>
+                      <td className="mono" style={{ color: "#2563eb", fontWeight: (e.payload?.updated ?? 0) > 0 ? 700 : 400 }}>
+                        {e.payload?.updated ?? 0}
+                      </td>
+                      <td className="mono">{e.payload?.skipped ?? 0}</td>
+                      <td className="mono" style={{ color: (e.payload?.error_count ?? 0) > 0 ? "#dc2626" : undefined, fontWeight: (e.payload?.error_count ?? 0) > 0 ? 700 : 400 }}>
+                        {e.payload?.error_count ?? 0}
+                      </td>
+                      <td>{statusPill(e.payload?.status ?? "failed")}</td>
+                      <td style={{ fontSize: "12px", color: "#64748b", whiteSpace: "nowrap" }}>
+                        {(() => {
+                          const prof = Array.isArray(e.profiles) ? e.profiles[0] : e.profiles;
+                          return prof ? `${prof.first_name || ""} ${prof.last_name || ""}`.trim() || prof.phone || "Admin" : "—";
+                        })()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
 
 interface ImportResult {
   created: number;
@@ -89,6 +255,13 @@ export default function CsvImportAdmin({
   const [mappingNotice, setMappingNotice] = useState("");
   const mappingInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Import history refresh keys — incremented after each successful import to auto-reload history
+  const [usersHistoryKey, setUsersHistoryKey] = useState(0);
+  const [trailsHistoryKey, setTrailsHistoryKey] = useState(0);
+  const [itineraryHistoryKey, setItineraryHistoryKey] = useState(0);
+  const [detailsHistoryKey, setDetailsHistoryKey] = useState(0);
+  const [mappingHistoryKey, setMappingHistoryKey] = useState(0);
+
   async function handleItinerarySubmit(e: FormEvent) {
     e.preventDefault();
     if (!itineraryFile) {
@@ -125,6 +298,7 @@ export default function CsvImportAdmin({
       setItineraryNotice(
         `Itinerary CSV successfully processed: ${json.createdDays ?? 0} day(s) upserted, ${json.createdActivities ?? 0} activity(ies) created, ${json.errorCount ?? 0} error(s).`
       );
+      setItineraryHistoryKey(k => k + 1);
       if (itineraryInputRef.current) itineraryInputRef.current.value = "";
       setItineraryFile(null);
       router.refresh();
@@ -159,12 +333,17 @@ export default function CsvImportAdmin({
       setUserImporting(false);
 
       if (!res.ok) {
-        setUserError(json?.error ?? "Failed to import user accounts.");
+        // Show row-level error table even on 422, so admin can see which rows failed and why
+        if (json?.results && Array.isArray(json.results) && json.results.length > 0) {
+          setUserReport(json);
+        }
+        setUserError(json?.error ?? "Failed to import user accounts. Please review the row-by-row error details below.");
         return;
       }
 
       setUserReport(json);
       setUserNotice(`Users CSV successfully imported: ${json.created} created/updated, ${json.skipped} skipped.`);
+      setUsersHistoryKey(k => k + 1);
       if (userInputRef.current) userInputRef.current.value = "";
       setUserFile(null);
       router.refresh();
@@ -205,6 +384,7 @@ export default function CsvImportAdmin({
 
       setTrailReport(json);
       setTrailNotice(`Trails CSV successfully imported: ${json.created} created, ${json.skipped} skipped.`);
+      setTrailsHistoryKey(k => k + 1);
       if (trailInputRef.current) trailInputRef.current.value = "";
       setTrailFile(null);
       router.refresh();
@@ -251,6 +431,7 @@ export default function CsvImportAdmin({
       setDetailsNotice(
         `Guest Details CSV successfully imported: ${updatedCount} record${updatedCount !== 1 ? "s" : ""} updated, ${json.skipped ?? 0} skipped.`
       );
+      setDetailsHistoryKey(k => k + 1);
       if (detailsInputRef.current) detailsInputRef.current.value = "";
       setDetailsFile(null);
       router.refresh();
@@ -293,6 +474,7 @@ export default function CsvImportAdmin({
       setMappingNotice(
         `Mapping CSV processed: ${json.created} guest(s) mapped, ${json.skipped} skipped, ${json.errorCount} error(s).`
       );
+      setMappingHistoryKey(k => k + 1);
       if (mappingInputRef.current) mappingInputRef.current.value = "";
       setMappingFile(null);
       router.refresh();
@@ -474,9 +656,26 @@ export default function CsvImportAdmin({
                   {userFile ? "Change CSV File" : "Select CSV File"}
                 </label>
                 {userFile ? (
-                  <p style={{ margin: "8px 0 0", fontSize: "14px", color: "var(--foreground)" }}>
-                    Selected file: <strong>{userFile.name}</strong> ({(userFile.size / 1024).toFixed(1)} KB)
-                  </p>
+                  <>
+                    <p style={{ margin: "8px 0 0", fontSize: "14px", color: "var(--foreground)" }}>
+                      Selected file: <strong>{userFile.name}</strong> ({(userFile.size / 1024).toFixed(1)} KB)
+                    </p>
+                    {userFile.name.toLowerCase().includes("guest_detail") && (
+                      <p style={{
+                        margin: "10px 0 0",
+                        padding: "8px 12px",
+                        background: "#fff7ed",
+                        border: "1px solid #fdba74",
+                        borderLeft: "4px solid #f97316",
+                        borderRadius: "6px",
+                        fontSize: "13px",
+                        color: "#9a3412",
+                        textAlign: "left",
+                      }}>
+                        ⚠️ <strong>Wrong tab?</strong> This looks like a <em>Guest Details</em> CSV. Upload it under the <strong>&quot;Guest Details Table&quot;</strong> tab instead. This tab is for creating user accounts (Mobile Number + Name).
+                      </p>
+                    )}
+                  </>
                 ) : (
                   <p className="admin-hint" style={{ margin: "6px 0 0" }}>
                     Select a UTF-8 CSV file containing User Table records
@@ -653,6 +852,7 @@ export default function CsvImportAdmin({
               </table>
             </div>
           </section>
+          <ImportHistory section="users" refreshKey={usersHistoryKey} />
         </div>
       )}
 
@@ -908,6 +1108,7 @@ export default function CsvImportAdmin({
               </button>
             </div>
           </section>
+          <ImportHistory section="trails" refreshKey={trailsHistoryKey} />
         </div>
       )}
 
@@ -1306,6 +1507,7 @@ export default function CsvImportAdmin({
               </ul>
             </div>
           </section>
+          <ImportHistory section="itinerary" refreshKey={itineraryHistoryKey} />
         </div>
       )}
 
@@ -1617,6 +1819,7 @@ export default function CsvImportAdmin({
               </table>
             </div>
           </section>
+          <ImportHistory section="guest_details" refreshKey={detailsHistoryKey} />
         </div>
       )}
 
@@ -1857,6 +2060,7 @@ export default function CsvImportAdmin({
               <strong>Tip:</strong> If a guest is already mapped to a trail, re-uploading will safely skip the duplicate without error. If a guest or trail is not found, the specific row will be flagged with a clear error while the remaining valid rows are processed.
             </div>
           </section>
+          <ImportHistory section="mapping" refreshKey={mappingHistoryKey} />
         </div>
       )}
     </div>

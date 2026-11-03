@@ -118,10 +118,10 @@ export async function GET() {
 
   // Uses Field Names matching "Trail Table" in the Table Details specification
   const lines = [
-    'Trail Id,Trail Name,Destination,Start Date,End Date,Leader User Id,Active / Inactive,Remarks',
-    'HIHGOK01,Heritage Gems of Karnataka,Hampi Karnataka,15/06/26,20/06/26,9000000002,Active,Heritage - India - Heritage Gems of Karnataka - Batch 1',
-    'HIHPTR01,Hampta Pass Trek,Manali Himachal Pradesh,10/07/26,16/07/26,9000000002,Active,High-altitude summer mountain pass trail',
-    'WKKUDR01,Kudremukh Peak Trail,Chikmagalur Karnataka,05/09/26,08/09/26,9000000002,Active,Western Ghats peak trail',
+    'Trail Id,Trail Name,Destination,Start Date,End Date,Leader User Id,Remarks',
+    'HIHGOK01,Heritage Gems of Karnataka,Hampi Karnataka,15/06/26,20/06/26,9000000002,Heritage - India - Heritage Gems of Karnataka - Batch 1',
+    'HIHPTR01,Hampta Pass Trek,Manali Himachal Pradesh,10/07/26,16/07/26,9000000002,High-altitude summer mountain pass trail',
+    'WKKUDR01,Kudremukh Peak Trail,Chikmagalur Karnataka,05/09/26,08/09/26,9000000002,Western Ghats peak trail',
   ]
 
   return new NextResponse(lines.join('\n'), {
@@ -268,10 +268,16 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Active / Inactive check
-    const isInactive = activeInput.toLowerCase() === 'inactive' || activeInput.toLowerCase() === 'no' || activeInput.toLowerCase() === 'off'
+    // Active / Inactive check (supports Active/Inactive if provided, defaults to active/published)
+    const cleanActive = activeInput.trim().toLowerCase()
+    const isInactive = cleanActive === 'inactive' || cleanActive === 'no' || cleanActive === 'off' || cleanActive === 'archived'
     const is_active = !isInactive
-    const status = isInactive ? 'archived' : 'active'
+    // Allowed values for Postgres enum trip_status: 'published' | 'draft' | 'archived'
+    const status: 'published' | 'draft' | 'archived' = isInactive
+      ? 'archived'
+      : cleanActive === 'draft'
+        ? 'draft'
+        : 'published'
 
     // Check duplicate
     if (existingCodes.has(trip_code.toLowerCase())) {

@@ -307,9 +307,18 @@ export async function POST(req: NextRequest) {
     const pan            = getField(raw, 'PAN', 'pan') || null
     const aadhar         = getField(raw, 'Aadhar Card Number', 'Aadhar Card No.', 'Aadhar Card No', 'Aadhar No.', 'Aadhar No', 'Aadhar', 'Aadhaar Card Number', 'Aadhaar Card No.', 'Aadhaar No.', 'Aadhaar No', 'Aadhaar', 'aadhar', 'aadhaar', 'aadhar_no', 'aadhaar_no') || null
     const passportNo     = getField(raw, 'Passport No.', 'Passport No', 'Passport Number', 'passport_no') || null
-    const rawPassIssue   = getField(raw, 'Passport Issue Date', 'Passport Issued Date', 'Passport Issue', 'passport_issue_date', 'passport_issued_date')
+    let rawPassIssue     = getField(raw, 'Passport Issue Date', 'Passport Issued Date', 'Passport Issue', 'passport_issue_date', 'passport_issued_date')
     const rawPassExp     = getField(raw, 'Passport Expiry Date', 'Passport Expiry', 'passport_expiry')
-    const passLoc        = getField(raw, 'Passport Issued Location', 'Passport Issue Location', 'passport_issued_location') || null
+    let passLoc          = getField(raw, 'Passport Issued Location', 'Passport Issue Location', 'passport_issued_location') || null
+
+    // Auto-detect swapped columns/values:
+    // If "Passport Issued Location" contains a date (e.g. "01/06/18") and
+    // "Passport Issue Date" contains text/city (e.g. "Mumbai") or is not a date
+    if (passLoc && parseDateString(passLoc) && !parseDateString(rawPassIssue)) {
+      const swappedLoc = rawPassIssue
+      rawPassIssue = passLoc
+      passLoc = swappedLoc || null
+    }
     const visaNo         = getField(raw, 'Visa No.', 'Visa No', 'Visa Number', 'visa_no', 'visa_number') || null
     const rawVisaExp     = getField(raw, 'Visa Expiry Date', 'Visa Expiry', 'visa_expiry', 'visa_expiry_date')
     const visaCountry    = getField(raw, 'Country', 'Visa Country', 'visa_country', 'Visa Issued Country') || null
@@ -419,6 +428,12 @@ export async function POST(req: NextRequest) {
       continue
     }
 
+    const prePassIssue = rawPassIssue ? parseDateString(rawPassIssue) : null
+    if (rawPassIssue && !prePassIssue) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: `Passport Issue Date "${rawPassIssue}" is invalid. Use DD/MM/YYYY or YYYY-MM-DD.` })
+      continue
+    }
+
 
     // Duplicate detection / handling with flexible phone normalization
     let existingUserId = existingPhoneMap.get(cleanPhone)
@@ -514,7 +529,7 @@ export async function POST(req: NextRequest) {
       if (hasExistingGuestDetails) {
         try {
           const food_preference = mappedFoodPref ?? (rawFoodPref ? (rawFoodPref.toLowerCase().includes('non') ? 'non_veg' : 'veg') : null)
-          const passport_issue_date = rawPassIssue ? parseDateString(rawPassIssue) : null
+          const passport_issue_date = prePassIssue
           const visa_expiry = preVisaExpiry   // already validated above
           const cleanVisaNo = visaNo ? visaNo.trim().toUpperCase() : null
 
@@ -606,7 +621,7 @@ export async function POST(req: NextRequest) {
           if (passportNo) {
             const enc = encryptDocumentNumber(passportNo)
             const expiry_date = prePassExpiry   // already validated
-            const issued_date = rawPassIssue ? parseDateString(rawPassIssue) : null
+            const issued_date = prePassIssue
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const { data: existingPassport } = await (admin.from('guest_documents') as any)
               .select('id')
@@ -744,7 +759,7 @@ export async function POST(req: NextRequest) {
 
       // Only write guest-specific details for Guest/traveller users if provided
       const food_preference = mappedFoodPref ?? (rawFoodPref ? (rawFoodPref.toLowerCase().includes('non') ? 'non_veg' : 'veg') : null)
-      const passport_issue_date = rawPassIssue ? parseDateString(rawPassIssue) : null
+      const passport_issue_date = prePassIssue
       const visa_expiry = preVisaExpiry   // already validated above
       const cleanVisaNo = visaNo ? visaNo.trim().toUpperCase() : null
 
@@ -820,7 +835,7 @@ export async function POST(req: NextRequest) {
       if (passportNo) {
         const enc = encryptDocumentNumber(passportNo)
         const expiry_date = prePassExpiry   // already validated
-        const issued_date = rawPassIssue ? parseDateString(rawPassIssue) : null
+        const issued_date = prePassIssue
         await admin.from('guest_documents').insert({
           user_id: createdUserId,
           doc_type: 'passport',

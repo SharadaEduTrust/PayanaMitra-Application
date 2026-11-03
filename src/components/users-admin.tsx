@@ -1707,10 +1707,6 @@ export default function UsersAdmin({
                 />
               </label>
               <label className="form-field">
-                Location
-                <input value={editForm.location} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} />
-              </label>
-              <label className="form-field">
                 Date of Birth
                 <input type="date" value={editForm.dob} onChange={(e) => setEditForm({ ...editForm, dob: e.target.value })} />
               </label>

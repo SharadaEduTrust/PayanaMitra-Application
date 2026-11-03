@@ -342,7 +342,7 @@ export default function TripListAdmin({ trips }: { trips: TrailLeaderView[] }) {
               </a>
             </div>
             <p className="admin-hint" style={{ margin: "4px 0 12px" }}>
-              Upload a UTF-8 CSV with columns: <code>Trail Id</code> (e.g. HIHGOK01), <code>Trail Name</code>, <code>Destination</code>, <code>Start Date</code>, <code>End Date</code>, <code>Leader User Id</code> (phone number), <code>Active / Inactive</code>, <code>Remarks</code>.
+              Upload a UTF-8 CSV with columns: <code>Trail Id</code> (e.g. HIHGOK01), <code>Trail Name</code>, <code>Destination</code>, <code>Start Date</code>, <code>End Date</code>, <code>Leader User Id</code> (phone number), <code>Remarks</code>.
             </p>
             <input
               type="file"
@@ -549,7 +549,7 @@ export default function TripListAdmin({ trips }: { trips: TrailLeaderView[] }) {
               <div>
                 <h3 className="serif" style={{ margin: 0, fontSize: "1.15rem", color: "#0f172a" }}>Bulk Import Trails (CSV)</h3>
                 <p className="admin-hint" style={{ margin: "4px 0 0", color: "#475569" }}>
-                  Upload a UTF-8 CSV with columns: <code>Trail Id</code> (e.g. HIHGOK01), <code>Trail Name</code>, <code>Destination</code>, <code>Start Date</code>, <code>End Date</code>, <code>Leader User Id</code> (phone number), <code>Active / Inactive</code>.
+                  Upload a UTF-8 CSV with columns: <code>Trail Id</code> (e.g. HIHGOK01), <code>Trail Name</code>, <code>Destination</code>, <code>Start Date</code>, <code>End Date</code>, <code>Leader User Id</code> (phone number), <code>Remarks</code>.
                 </p>
               </div>
               <a

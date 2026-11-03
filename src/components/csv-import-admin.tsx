@@ -1076,10 +1076,10 @@ export default function CsvImportAdmin({
                     <td className="mono">9000000002</td>
                   </tr>
                   <tr>
-                    <td className="mono">Active / Inactive</td>
-                    <td>Dropdown (Active or Inactive)</td>
-                    <td>Enum: Active / Inactive</td>
-                    <td><span className="pill optional">Optional</span></td>
+                    <td className="mono">Active Status</td>
+                    <td>Automatically enabled in backend on import (no CSV column needed)</td>
+                    <td>Defaults to Active / Published</td>
+                    <td><span className="pill" style={{ background: "#e0f2fe", color: "#0369a1", border: "1px solid #7dd3fc" }}>Auto (Backend)</span></td>
                     <td>Active</td>
                   </tr>
                   <tr>

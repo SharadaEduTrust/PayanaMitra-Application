@@ -881,6 +881,9 @@ export async function POST(req: NextRequest) {
   const skipped    = results.filter(r => r.status === 'skipped').length
   const errorCount = results.filter(r => r.status === 'error').length
 
+  const createdIds = results.filter(r => r.status === 'created' && r.id).map(r => r.id as string)
+  const updatedIds = results.filter(r => r.status === 'updated' && r.id).map(r => r.id as string)
+
   const section = isDetailsOnlyImport ? 'guest_details' : 'users'
 
   // Log every import attempt to audit_log for history
@@ -897,6 +900,8 @@ export async function POST(req: NextRequest) {
       skipped,
       error_count: errorCount,
       status: errorCount > 0 && created === 0 && updated === 0 && skipped === 0 ? 'failed' : errorCount > 0 ? 'partial' : 'success',
+      created_ids: createdIds,
+      updated_ids: updatedIds,
     },
   })
 

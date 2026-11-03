@@ -341,6 +341,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const dayIds = Array.from(dayIdMap.values())
+
   // Log to audit_log for import history
   await audit({
     actorId: guard.profile.id,
@@ -355,6 +357,7 @@ export async function POST(req: NextRequest) {
       skipped,
       error_count: errors.length,
       status: errors.length > 0 && daysUpserted === 0 && activitiesInserted === 0 ? 'failed' : errors.length > 0 ? 'partial' : 'success',
+      day_ids: dayIds,
     },
   })
 

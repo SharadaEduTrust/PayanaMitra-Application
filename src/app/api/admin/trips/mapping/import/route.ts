@@ -446,6 +446,8 @@ export async function POST(req: NextRequest) {
   const skipped = results.filter(r => r.status === 'skipped').length
   const errorCount = results.filter(r => r.status === 'error').length
 
+  const createdIds = results.filter(r => r.status === 'created' && r.id).map(r => r.id as string)
+
   // Log to audit_log for import history
   await audit({
     actorId: guard.profile.id,
@@ -460,6 +462,7 @@ export async function POST(req: NextRequest) {
       skipped,
       error_count: errorCount,
       status: errorCount > 0 && created === 0 && skipped === 0 ? 'failed' : errorCount > 0 ? 'partial' : 'success',
+      created_ids: createdIds,
     },
   })
 

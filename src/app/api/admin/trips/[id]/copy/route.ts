@@ -132,6 +132,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     .order('day_number', { ascending: true })
 
   // 5. Copy itinerary days and activities
+  const copyWarnings: string[] = []
   for (const oldDay of (oldDays ?? [])) {
     const dayInsertPayload: Record<string, unknown> = {
       trip_id: newTrip.id,
@@ -150,7 +151,12 @@ export async function POST(req: NextRequest, { params }: Params) {
       .select('id')
       .single()
 
-    if (!dayErr && newDay && oldDay.activities?.length > 0) {
+    if (dayErr || !newDay) {
+      copyWarnings.push(`Failed to copy Day ${oldDay.day_number}: ${dayErr?.message ?? 'Unknown error'}`)
+      continue
+    }
+
+    if (oldDay.activities?.length > 0) {
       const activitiesToInsert = oldDay.activities.map((act: Record<string, unknown>) => ({
         itinerary_day_id: newDay.id,
         title: act.title,
@@ -161,7 +167,10 @@ export async function POST(req: NextRequest, { params }: Params) {
       }))
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (admin.from('activities') as any).insert(activitiesToInsert)
+      const { error: actErr } = await (admin.from('activities') as any).insert(activitiesToInsert)
+      if (actErr) {
+        copyWarnings.push(`Failed to copy activities for Day ${oldDay.day_number}: ${actErr.message}`)
+      }
     }
   }
 
@@ -172,5 +181,8 @@ export async function POST(req: NextRequest, { params }: Params) {
     .eq('id', newTrip.id)
     .single()
 
-  return NextResponse.json({ data: fullTrip ?? newTrip }, { status: 201 })
+  return NextResponse.json({
+    data: fullTrip ?? newTrip,
+    ...(copyWarnings.length > 0 ? { warnings: copyWarnings, message: 'Trip copied, but some days or activities failed: ' + copyWarnings.join('; ') } : {}),
+  }, { status: 201 })
 }

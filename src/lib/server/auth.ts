@@ -171,8 +171,8 @@ export async function loginWithPhonePin(
     return { ok: false, error: GENERIC_ERROR, status: 401 }
   }
 
-  // 4. Check role requirement if requested
-  if (options?.requireRole && profile.role !== options.requireRole) {
+  // 4. Check role requirement if requested (admin is treated as superuser)
+  if (options?.requireRole && profile.role !== options.requireRole && profile.role !== 'admin') {
     await recordAttempt(rawPhone, ip, false)
     return { ok: false, error: GENERIC_ERROR, status: 401 }
   }
@@ -249,19 +249,9 @@ export async function loginWithPhonePin(
     return { ok: false, error: GENERIC_ERROR, status: 401 }
   }
 
-  // 6. Generate one-time magiclink tokenHash only as fallback if session is absent
-  let tokenHash: string | null = null
-  if (!session) {
-    try {
-      const { data: link } = await admin.auth.admin.generateLink({
-        type: 'magiclink',
-        email: authEmail,
-      })
-      tokenHash = link?.properties?.hashed_token ?? null
-    } catch {
-      // Non-fatal fallback
-    }
-  }
+  // 6. Session is confirmed present at this point (returned early above if absent).
+  //    tokenHash is kept for API shape compatibility but is null for session-based logins.
+  const tokenHash: string | null = null
 
   // 7. Neutralize must_change_password and update last_active_at
   const profileUpdates: Record<string, unknown> = {

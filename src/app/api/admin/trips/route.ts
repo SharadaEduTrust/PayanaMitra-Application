@@ -17,6 +17,7 @@ const CreateTripSchema = z.object({
   end_date:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').optional().nullable(),
   leader_id:   z.string().uuid('Invalid leader ID').optional().nullable(),
   remarks:     z.string().max(2000, 'Remarks cannot exceed 2000 characters').optional().nullable(),
+  status:      z.enum(['draft', 'published', 'archived']).optional(),
   feedback_form_url: z.string().trim().max(1000).optional().nullable(),
   feedback_window_days: z.coerce.number().int().min(1).max(365).optional().nullable(),
 }).refine(data => {
@@ -43,8 +44,10 @@ export async function GET(req: NextRequest) {
   if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })
 
   const { searchParams } = new URL(req.url)
-  const page   = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
-  const limit  = Math.min(100, parseInt(searchParams.get('limit') ?? '20', 10))
+  const rawPage = parseInt(searchParams.get('page') ?? '1', 10)
+  const rawLimit = parseInt(searchParams.get('limit') ?? '20', 10)
+  const page   = Math.max(1, Number.isNaN(rawPage) ? 1 : rawPage)
+  const limit  = Math.min(100, Math.max(1, Number.isNaN(rawLimit) ? 20 : rawLimit))
   const status = searchParams.get('status') // draft | published | archived
   const search = searchParams.get('q') ?? ''
   const active = searchParams.get('active')
@@ -70,8 +73,11 @@ export async function GET(req: NextRequest) {
     query = (query as any).eq('is_active', false)
   }
   if (search) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    query = (query as any).or(`name.ilike.%${search}%,trip_code.ilike.%${search}%,destination.ilike.%${search}%`)
+    const cleanSearch = search.replace(/[%_,()\\*]/g, ' ').trim()
+    if (cleanSearch) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query = (query as any).or(`name.ilike.%${cleanSearch}%,trip_code.ilike.%${cleanSearch}%,destination.ilike.%${cleanSearch}%`)
+    }
   }
 
   const { data, error, count } = await query
@@ -124,7 +130,7 @@ export async function POST(req: NextRequest) {
     ...parsed.data,
     feedback_form_url: parsed.data.feedback_form_url ? parsed.data.feedback_form_url.trim() : null,
     feedback_window_days: parsed.data.feedback_window_days ?? 7,
-    status: 'draft',
+    status: parsed.data.status ?? 'draft',
     is_active: true,
   }
 

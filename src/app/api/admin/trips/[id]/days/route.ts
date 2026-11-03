@@ -147,7 +147,18 @@ export async function POST(req: NextRequest, { params }: Params) {
       .insert(actInserts)
       .select()
 
-    if (!actsErr && acts) {
+    if (actsErr) {
+      console.error('[itinerary_days] Failed to insert activities:', actsErr.message)
+      return NextResponse.json(
+        {
+          data: { ...newDay, activities: [] },
+          warning: `Day created, but failed to insert activities: ${actsErr.message}`,
+        },
+        { status: 201 },
+      )
+    }
+
+    if (acts) {
       createdActivities = acts
     }
   }

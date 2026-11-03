@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/server/auth'
 import { encrypt, decrypt } from '@/lib/server/crypto'
 import { formatDocType } from '@/lib/documents'
+import { detectFileType } from '@/lib/compression'
 
 /**
  * GET  /api/documents — list documents for the user (or authorized leader/admin) with decrypted doc numbers & signed download URLs
@@ -234,19 +235,27 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'Invalid file type. Allowed types: PDF, JPEG, PNG, WebP' }, { status: 422 })
         }
 
+        const buffer = Buffer.from(await file.arrayBuffer())
+        const detected = detectFileType(buffer)
+        if (!detected) {
+          return NextResponse.json(
+            { error: 'Invalid file format. The file content does not match allowed types (PDF, JPEG, PNG, WebP).' },
+            { status: 422 },
+          )
+        }
+
         file_name = file.name
         file_size = file.size
-        mime_type = file.type
+        mime_type = detected.mimeType
 
-        const ext = file.name.split('.').pop() || 'bin'
+        const ext = detected.ext
         const safeDocType = doc_type.toLowerCase().replace(/[^a-z0-9]/g, '_')
         storage_path = `${targetUserId}/${safeDocType}_${Date.now()}_${crypto.randomUUID()}.${ext}`
 
-        const buffer = Buffer.from(await file.arrayBuffer())
         const { error: uploadErr } = await admin.storage
           .from('guest-documents')
           .upload(storage_path, buffer, {
-            contentType: file.type,
+            contentType: detected.mimeType,
             upsert: true,
           })
 

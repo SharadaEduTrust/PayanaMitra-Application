@@ -5,6 +5,7 @@ import { getSession } from '@/lib/server/auth'
 export async function GET() {
   const profile = await getSession()
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (profile.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const admin = createAdminClient()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

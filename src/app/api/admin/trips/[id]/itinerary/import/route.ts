@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/server/auth'
 import { parseCSV, getField, parseDayNumber, extractActivitiesFromRow } from '@/lib/csv'
+import { audit } from '@/lib/audit'
 
 interface Params { params: Promise<{ id: string }> }
 
@@ -247,6 +248,14 @@ export async function POST(req: NextRequest, { params }: Params) {
       continue
     }
 
+    // Delete existing activities for this day before inserting to prevent duplicates on re-import
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (admin.from('activities') as any).delete().eq('itinerary_day_id', dayId)
+    } catch {
+      // Non-fatal: proceed with inserts
+    }
+
     for (const a of acts) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -272,6 +281,23 @@ export async function POST(req: NextRequest, { params }: Params) {
       }
     }
   }
+
+  // Log to audit_log for import history
+  await audit({
+    actorId: guard.profile.id,
+    action: 'csv_import',
+    entity: 'csv_import',
+    payload: {
+      section: 'itinerary',
+      filename: file.name,
+      total_rows: rows.length,
+      created: daysUpserted + activitiesInserted,
+      updated: 0,
+      skipped,
+      error_count: errors.length,
+      status: errors.length > 0 && daysUpserted === 0 && activitiesInserted === 0 ? 'failed' : errors.length > 0 ? 'partial' : 'success',
+    },
+  })
 
   return NextResponse.json({
     days_upserted:       daysUpserted,

@@ -10,8 +10,8 @@ const FoodPrefSchema = z.enum(['veg', 'non_veg']).nullable().optional()
 const GuestDetailsSchema = z.object({
   dob:                      z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').nullable().optional(),
   food_preference:          FoodPrefSchema,
-  food_allergy:             z.string().max(50, 'Max 50 characters').nullable().optional(),
-  emergency_contact_name:   z.string().max(50, 'Max 50 characters').nullable().optional(),
+  food_allergy:             z.string().max(30, 'Max 30 characters').nullable().optional(),
+  emergency_contact_name:   z.string().max(20, 'Max 20 characters').nullable().optional(),
   emergency_contact_no:     z.string().regex(PHONE_REGEX, 'Must be 10-15 digits').nullable().optional(),
   travel_insurance_no:      z.string().max(50, 'Max 50 characters').nullable().optional(),
   insurance_company:        z.string().max(50, 'Max 50 characters').nullable().optional(),

@@ -29,8 +29,8 @@ const FoodPrefSchema = z.enum(['veg', 'non_veg']).nullable().optional()
 const GuestDetailsSchema = z.object({
   dob:                      z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').nullable().optional(),
   food_preference:          FoodPrefSchema,
-  food_allergy:             z.string().max(50, 'Max 50 characters').nullable().optional(),
-  emergency_contact_name:   z.string().max(50, 'Max 50 characters').nullable().optional(),
+  food_allergy:             z.string().max(30, 'Max 30 characters').nullable().optional(),
+  emergency_contact_name:   z.string().max(20, 'Max 20 characters').nullable().optional(),
   emergency_contact_no:     z.string().regex(PHONE_REGEX, 'Emergency contact number must be 10-15 digits').nullable().optional(),
   travel_insurance_no:      z.string().max(50, 'Max 50 characters').nullable().optional(),
   insurance_company:        z.string().max(50, 'Max 50 characters').nullable().optional(),
@@ -80,8 +80,8 @@ const CreateUserSchema = z.object({
   guest_details:   GuestDetailsSchema,
   dob:                      z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   food_preference:          FoodPrefSchema,
-  food_allergy:             z.string().max(50).nullable().optional(),
-  emergency_contact_name:   z.string().max(50).nullable().optional(),
+  food_allergy:             z.string().max(30).nullable().optional(),
+  emergency_contact_name:   z.string().max(20).nullable().optional(),
   emergency_contact_no:     z.string().regex(PHONE_REGEX).nullable().optional(),
   travel_insurance_no:      z.string().max(50).nullable().optional(),
   insurance_company:        z.string().max(50).nullable().optional(),
@@ -115,8 +115,8 @@ const PatchUserSchema = z.object({
   guest_details:   GuestDetailsSchema,
   dob:                      z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   food_preference:          FoodPrefSchema,
-  food_allergy:             z.string().max(50).nullable().optional(),
-  emergency_contact_name:   z.string().max(50).nullable().optional(),
+  food_allergy:             z.string().max(30).nullable().optional(),
+  emergency_contact_name:   z.string().max(20).nullable().optional(),
   emergency_contact_no:     z.string().regex(PHONE_REGEX).nullable().optional(),
   travel_insurance_no:      z.string().max(50).nullable().optional(),
   insurance_company:        z.string().max(50).nullable().optional(),
@@ -144,8 +144,10 @@ export async function GET(req: NextRequest) {
   if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })
 
   const { searchParams } = new URL(req.url)
-  const page   = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
-  const limit  = Math.min(1000, parseInt(searchParams.get('limit') ?? '20', 10))
+  const rawPage = parseInt(searchParams.get('page') ?? '1', 10)
+  const rawLimit = parseInt(searchParams.get('limit') ?? '20', 10)
+  const page   = Math.max(1, Number.isNaN(rawPage) ? 1 : rawPage)
+  const limit  = Math.min(200, Math.max(1, Number.isNaN(rawLimit) ? 20 : rawLimit))
   const search = searchParams.get('q') ?? ''
   const role   = searchParams.get('role')?.toLowerCase()
   const active = searchParams.get('active')
@@ -355,20 +357,26 @@ export async function POST(req: NextRequest) {
     travellerDetails = tdData
 
     // Handle PAN in guest_documents
+    const docWarnings: string[] = []
     const panVal = data.pan !== undefined ? data.pan : data.guest_details?.pan
     if (panVal) {
       try {
         const enc = await encrypt(panVal.trim())
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (admin.from('guest_documents') as any).insert({
+        const { error: panInsErr } = await (admin.from('guest_documents') as any).insert({
           user_id: authData.user.id,
           doc_type: 'pan',
           doc_number_enc: enc.ciphertext,
           iv: enc.iv,
           auth_tag: enc.authTag,
         })
+        if (panInsErr) {
+          console.error('Failed to save PAN:', panInsErr.message)
+          docWarnings.push('PAN could not be saved')
+        }
       } catch (panErr) {
         console.error('Failed to encrypt PAN:', panErr)
+        docWarnings.push('PAN could not be saved')
       }
     }
 
@@ -379,15 +387,20 @@ export async function POST(req: NextRequest) {
         const cleanAadhar = aadharVal.trim().replace(/\s+/g, '')
         const enc = await encrypt(cleanAadhar)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (admin.from('guest_documents') as any).insert({
+        const { error: aadharInsErr } = await (admin.from('guest_documents') as any).insert({
           user_id: authData.user.id,
           doc_type: 'aadhar',
           doc_number_enc: enc.ciphertext,
           iv: enc.iv,
           auth_tag: enc.authTag,
         })
+        if (aadharInsErr) {
+          console.error('Failed to save Aadhar:', aadharInsErr.message)
+          docWarnings.push('Aadhar could not be saved')
+        }
       } catch (aadharErr) {
         console.error('Failed to encrypt Aadhar:', aadharErr)
+        docWarnings.push('Aadhar could not be saved')
       }
     }
 
@@ -397,7 +410,7 @@ export async function POST(req: NextRequest) {
       try {
         const enc = await encrypt(passVal.trim())
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (admin.from('guest_documents') as any).insert({
+        const { error: passInsErr } = await (admin.from('guest_documents') as any).insert({
           user_id: authData.user.id,
           doc_type: 'passport',
           doc_number_enc: enc.ciphertext,
@@ -407,8 +420,13 @@ export async function POST(req: NextRequest) {
           issued_date: detailsSource.passport_issue_date ?? null,
           issued_country: detailsSource.passport_issued_location ?? 'India',
         })
+        if (passInsErr) {
+          console.error('Failed to save Passport:', passInsErr.message)
+          docWarnings.push('Passport could not be saved')
+        }
       } catch (passErr) {
         console.error('Failed to encrypt Passport:', passErr)
+        docWarnings.push('Passport could not be saved')
       }
     }
 
@@ -418,7 +436,7 @@ export async function POST(req: NextRequest) {
       try {
         const enc = await encrypt(visaVal.trim())
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (admin.from('guest_documents') as any).insert({
+        const { error: visaInsErr } = await (admin.from('guest_documents') as any).insert({
           user_id: authData.user.id,
           doc_type: 'visa',
           doc_number_enc: enc.ciphertext,
@@ -427,9 +445,25 @@ export async function POST(req: NextRequest) {
           expiry_date: detailsSource.visa_expiry ?? null,
           issued_country: detailsSource.visa_country ?? null,
         })
+        if (visaInsErr) {
+          console.error('Failed to save Visa:', visaInsErr.message)
+          docWarnings.push('Visa could not be saved')
+        }
       } catch (visaErr) {
         console.error('Failed to encrypt Visa:', visaErr)
+        docWarnings.push('Visa could not be saved')
       }
+    }
+
+    if (docWarnings.length > 0) {
+      return NextResponse.json(
+        {
+          data: { ...profileData, traveller_details: travellerDetails },
+          warnings: docWarnings,
+          message: 'User created but some documents could not be saved: ' + docWarnings.join(', '),
+        },
+        { status: 201 },
+      )
     }
   }
 

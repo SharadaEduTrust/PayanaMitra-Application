@@ -83,8 +83,10 @@ export async function GET(req: NextRequest, { params }: Params) {
   }
 
   const { searchParams } = new URL(req.url)
-  const page  = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
-  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '50', 10)))
+  const rawPage = parseInt(searchParams.get('page') ?? '1', 10)
+  const rawLimit = parseInt(searchParams.get('limit') ?? '50', 10)
+  const page  = Math.max(1, Number.isNaN(rawPage) ? 1 : rawPage)
+  const limit = Math.min(100, Math.max(1, Number.isNaN(rawLimit) ? 50 : rawLimit))
   const from  = (page - 1) * limit
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

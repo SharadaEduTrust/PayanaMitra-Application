@@ -339,7 +339,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-
     if (location && location.length > 50) {
       results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'Location cannot exceed 50 characters' })
       continue
@@ -371,12 +370,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (foodAllergy && foodAllergy.length > 50) {
-      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'food_allergy cannot exceed 50 characters' })
+    if (foodAllergy && foodAllergy.length > 30) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'food_allergy cannot exceed 30 characters' })
       continue
     }
-    if (emgName && emgName.length > 50) {
-      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'emergency_contact_name cannot exceed 50 characters' })
+    if (emgName && emgName.length > 20) {
+      results.push({ row: rowNum, phone: rawPhone, status: 'error', error: 'emergency_contact_name cannot exceed 20 characters' })
       continue
     }
     if (emgNo && !PHONE_REGEX.test(emgNo)) {
@@ -688,9 +687,9 @@ export async function POST(req: NextRequest) {
 
     // Create auth user + profile
     try {
-      const initialPin = rawPhone.slice(-4)
-      const email_auth = phoneToEmail(rawPhone)
-      const password   = await derivePassword(rawPhone, initialPin)
+      const initialPin = cleanPhone.slice(-4)
+      const email_auth = phoneToEmail(cleanPhone)
+      const password   = await derivePassword(cleanPhone, initialPin)
 
       const { data: authData, error: authErr } = await admin.auth.admin.createUser({
         email: email_auth,
@@ -705,7 +704,7 @@ export async function POST(req: NextRequest) {
 
       const insertPayload: Record<string, unknown> = {
         id: authData.user.id,
-        phone: rawPhone,
+        phone: cleanPhone,
         first_name,
         last_name,
         role: mappedRole,
@@ -844,11 +843,11 @@ export async function POST(req: NextRequest) {
       }
 
       // Record in map to prevent duplicate inserts within the same batch
-      existingPhoneMap.set(rawPhone, createdUserId)
-      if (rawPhone.startsWith('+91')) {
-        existingPhoneMap.set(rawPhone.replace(/^\+91/, ''), createdUserId)
+      existingPhoneMap.set(cleanPhone, createdUserId)
+      if (cleanPhone.startsWith('+91')) {
+        existingPhoneMap.set(cleanPhone.replace(/^\+91/, ''), createdUserId)
       } else {
-        existingPhoneMap.set(`+91${rawPhone}`, createdUserId)
+        existingPhoneMap.set(`+91${cleanPhone}`, createdUserId)
       }
       if (['leader', 'admin'].includes(mappedRole)) {
         leaderLookupMap.set(rawPhone, createdUserId)

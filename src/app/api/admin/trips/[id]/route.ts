@@ -179,7 +179,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
 
     const { error } = await admin.from('trips').delete().eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ ok: true, message: 'Trail deleted permanently' }, { status: 200 })
+    return NextResponse.json({ ok: true, message: 'Trip deleted permanently' }, { status: 200 })
   }
 
   // Default: Soft-deactivate to retain historical records

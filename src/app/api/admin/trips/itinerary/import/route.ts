@@ -307,6 +307,14 @@ export async function POST(req: NextRequest) {
       continue
     }
 
+    // Delete existing activities for this day before inserting to prevent duplicates on re-import
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (admin.from('activities') as any).delete().eq('itinerary_day_id', dayId)
+    } catch {
+      // Non-fatal: proceed with inserts; worst case is duplicates surfacing as DB errors
+    }
+
     for (const a of acts) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

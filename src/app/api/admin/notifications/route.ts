@@ -9,6 +9,7 @@ import { getSession } from '@/lib/server/auth'
 
 const SendNotificationSchema = z.object({
   recipients: z.array(z.string().uuid('Invalid user ID')).min(1, 'At least one recipient is required'),
+  trip_id:    z.string().uuid('Invalid trip ID').optional().nullable(),
   title:      z.string().min(1, 'Title is required').max(200, 'Title cannot exceed 200 characters'),
   body:       z.string().max(2000, 'Body cannot exceed 2000 characters').optional().nullable(),
 })
@@ -39,11 +40,12 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const { recipients, title, body } = parsed.data
+  const { recipients, trip_id, title, body } = parsed.data
   const admin = createAdminClient()
 
   const rows = recipients.map(user_id => ({
     user_id,
+    trip_id: trip_id || null,
     title: title.trim(),
     body: body?.trim() || null,
     is_read: false,

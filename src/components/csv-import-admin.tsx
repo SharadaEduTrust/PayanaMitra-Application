@@ -378,6 +378,10 @@ export default function CsvImportAdmin({
       setTrailImporting(false);
 
       if (!res.ok) {
+        // Show row-level error table even on 422, so admin can see which rows failed and why
+        if (json?.results && Array.isArray(json.results) && json.results.length > 0) {
+          setTrailReport(json);
+        }
         setTrailError(json?.error ?? "Failed to import trails.");
         return;
       }
@@ -795,14 +799,14 @@ export default function CsvImportAdmin({
                   <tr>
                     <td className="mono"><strong>First Name</strong></td>
                     <td>Alphabetic with special characters like . and space</td>
-                    <td>Max 20 characters</td>
+                    <td>Max 50 characters</td>
                     <td><span className="pill mandatory">Mandatory</span></td>
                     <td>Arvind</td>
                   </tr>
                   <tr>
                     <td className="mono"><strong>Last Name</strong></td>
                     <td>Alphabetic with special characters like . and space</td>
-                    <td>Max 20 characters</td>
+                    <td>Max 50 characters</td>
                     <td><span className="pill mandatory">Mandatory</span></td>
                     <td>Kamath</td>
                   </tr>
@@ -1047,21 +1051,21 @@ export default function CsvImportAdmin({
                     <td className="mono"><strong>Destination</strong></td>
                     <td>Alphanumeric / text</td>
                     <td>Max 100 characters</td>
-                    <td><span className="pill mandatory">Mandatory</span></td>
+                    <td><span className="pill optional">Optional</span></td>
                     <td>Karnataka</td>
                   </tr>
                   <tr>
                     <td className="mono"><strong>Start Date</strong></td>
                     <td>Calendar date (DD-MM-YYYY or DD/MM/YYYY)</td>
                     <td>DD-MM-YYYY / DD/MM/YYYY / YYYY-MM-DD</td>
-                    <td><span className="pill mandatory">Mandatory</span></td>
+                    <td><span className="pill optional">Optional</span></td>
                     <td className="mono">15-06-2026</td>
                   </tr>
                   <tr>
                     <td className="mono"><strong>End Date</strong></td>
                     <td>Calendar date (DD-MM-YYYY or DD/MM/YYYY)</td>
                     <td>DD-MM-YYYY / DD/MM/YYYY / YYYY-MM-DD</td>
-                    <td><span className="pill mandatory">Mandatory</span></td>
+                    <td><span className="pill optional">Optional</span></td>
                     <td className="mono">20-06-2026</td>
                   </tr>
                   <tr>
@@ -1390,7 +1394,7 @@ export default function CsvImportAdmin({
                     <td>Alphanumeric / city name</td>
                     <td>Max 100 characters</td>
                     <td>
-                      <span className="pill mandatory">Mandatory</span>
+                      <span className="pill optional">Optional</span>
                     </td>
                     <td>Mysuru</td>
                   </tr>
@@ -1399,7 +1403,7 @@ export default function CsvImportAdmin({
                     <td>Narrative / Day Highlights</td>
                     <td>Free text (Max 2,000 characters)</td>
                     <td>
-                      <span className="pill mandatory">Mandatory</span>
+                      <span className="pill optional">Optional</span>
                     </td>
                     <td>Arrival in Mysuru, heritage palace walk & welcome dinner</td>
                   </tr>
@@ -1760,7 +1764,7 @@ export default function CsvImportAdmin({
                     <td className="mono">15/08/28</td>
                   </tr>
                   <tr>
-                    <td className="mono">Country</td>
+                    <td className="mono">Visa Country</td>
                     <td>Alphabetic / text (Country for visa)</td>
                     <td>Max 20 characters</td>
                     <td><span className="pill optional">Optional</span></td>
@@ -1950,10 +1954,10 @@ export default function CsvImportAdmin({
                   )}
                 </div>
 
-                {mappingReport.results && mappingReport.results.length > 0 && (
+                {mappingReport.results && mappingReport.results.filter((r) => r.status === "error").length > 0 && (
                   <div style={{ marginTop: "12px" }}>
-                    <h4 style={{ margin: "0 0 8px", fontSize: "14px" }}>
-                      Processed Records ({mappingReport.results.length}):
+                    <h4 style={{ margin: "0 0 8px", fontSize: "14px", color: "var(--color-danger, #ef4444)" }}>
+                      Failed Records ({mappingReport.results.filter((r) => r.status === "error").length}):
                     </h4>
                     <div style={{ maxHeight: "320px", overflowY: "auto", border: "1px solid var(--line)", borderRadius: "4px" }}>
                       <table className="admin-table" style={{ margin: 0 }}>
@@ -1963,42 +1967,21 @@ export default function CsvImportAdmin({
                             <th>Mobile Number</th>
                             <th>Guest Name</th>
                             <th>Trail Id</th>
-                            <th>Trail Name</th>
-                            <th>Status</th>
-                            <th>Details</th>
+                            <th>Error Details</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {mappingReport.results.map((r, i) => (
-                            <tr key={i}>
-                              <td className="mono">{r.row}</td>
-                              <td className="mono">{r.phone || "—"}</td>
-                              <td>{r.guest_name || "—"}</td>
-                              <td className="mono">{r.trip_code || "—"}</td>
-                              <td>{r.trip_name || "—"}</td>
-                              <td>
-                                <span
-                                  className={`pill ${
-                                    r.status === "created" ? "on" : r.status === "skipped" ? "neutral" : "off"
-                                  }`}
-                                  style={
-                                    r.status === "error"
-                                      ? { color: "#ef4444", borderColor: "#ef4444" }
-                                      : undefined
-                                  }
-                                >
-                                  {r.status === "created"
-                                    ? "Mapped"
-                                    : r.status === "skipped"
-                                    ? "Skipped"
-                                    : "Failed"}
-                                </span>
-                              </td>
-                              <td style={r.status === "error" ? { color: "var(--color-danger, #ef4444)" } : undefined}>
-                                {r.error || (r.status === "created" ? "Enrolled successfully" : "—")}
-                              </td>
-                            </tr>
-                          ))}
+                          {mappingReport.results
+                            .filter((r) => r.status === "error")
+                            .map((r, i) => (
+                              <tr key={i}>
+                                <td className="mono">{r.row}</td>
+                                <td className="mono">{r.phone || "—"}</td>
+                                <td>{r.guest_name || "—"}</td>
+                                <td className="mono">{r.trip_code || "—"}</td>
+                                <td style={{ color: "var(--color-danger, #ef4444)" }}>{r.error}</td>
+                              </tr>
+                            ))}
                         </tbody>
                       </table>
                     </div>

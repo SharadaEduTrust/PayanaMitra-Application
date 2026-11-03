@@ -26,8 +26,8 @@ const schema = z.object({
   insurance_company: z.string().trim().max(50, "Max 50 characters").optional().nullable(),
   insurance_expiry: optionalDate,
   food_preference: z.enum(["veg", "non_veg"]).optional().nullable(),
-  food_allergy: z.string().trim().max(50, "Max 50 characters").optional().nullable(),
-  emergency_contact_name: z.string().trim().max(50, "Max 50 characters").optional().nullable(),
+  food_allergy: z.string().trim().max(30, "Max 30 characters").optional().nullable(),
+  emergency_contact_name: z.string().trim().max(20, "Max 20 characters").optional().nullable(),
   emergency_contact_no: z.preprocess(
     (val) => (typeof val === "string" && val.trim() === "" ? null : val),
     z.string().trim().regex(/^\+?[0-9]{10,15}$/, "Emergency contact number must be 10-15 digits").nullable().optional()
@@ -88,6 +88,7 @@ export async function POST(request: Request) {
   }
 
   // Handle PAN in guest_documents
+  const docWarnings: string[] = [];
   const pan = emptyToNull(parsed.data.pan);
   if (pan) {
     try {
@@ -101,24 +102,27 @@ export async function POST(request: Request) {
 
       if (existingPan) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (admin.from("guest_documents") as any).update({
+        const { error: panUpdErr } = await (admin.from("guest_documents") as any).update({
           doc_number_enc: enc.ciphertext,
           iv: enc.iv,
           auth_tag: enc.authTag,
           updated_at: new Date().toISOString(),
         }).eq("id", existingPan.id);
+        if (panUpdErr) { console.error("Failed to save PAN:", panUpdErr.message); docWarnings.push("PAN") }
       } else {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (admin.from("guest_documents") as any).insert({
+        const { error: panInsErr } = await (admin.from("guest_documents") as any).insert({
           user_id: user.id,
           doc_type: "pan",
           doc_number_enc: enc.ciphertext,
           iv: enc.iv,
           auth_tag: enc.authTag,
         });
+        if (panInsErr) { console.error("Failed to save PAN:", panInsErr.message); docWarnings.push("PAN") }
       }
     } catch (panErr) {
       console.error("Failed to encrypt PAN:", panErr);
+      docWarnings.push("PAN");
     }
   }
 
@@ -136,25 +140,28 @@ export async function POST(request: Request) {
 
       if (existingAadhar) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (admin.from("guest_documents") as any).update({
+        const { error: aadharUpdErr } = await (admin.from("guest_documents") as any).update({
           doc_type: "aadhar",
           doc_number_enc: enc.ciphertext,
           iv: enc.iv,
           auth_tag: enc.authTag,
           updated_at: new Date().toISOString(),
         }).eq("id", existingAadhar.id);
+        if (aadharUpdErr) { console.error("Failed to save Aadhar:", aadharUpdErr.message); docWarnings.push("Aadhar") }
       } else {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (admin.from("guest_documents") as any).insert({
+        const { error: aadharInsErr } = await (admin.from("guest_documents") as any).insert({
           user_id: user.id,
           doc_type: "aadhar",
           doc_number_enc: enc.ciphertext,
           iv: enc.iv,
           auth_tag: enc.authTag,
         });
+        if (aadharInsErr) { console.error("Failed to save Aadhar:", aadharInsErr.message); docWarnings.push("Aadhar") }
       }
     } catch (aadharErr) {
       console.error("Failed to encrypt Aadhar:", aadharErr);
+      docWarnings.push("Aadhar");
     }
   }
 
@@ -176,7 +183,7 @@ export async function POST(request: Request) {
 
       if (existingPassport) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (admin.from("guest_documents") as any).update({
+        const { error: passUpdErr } = await (admin.from("guest_documents") as any).update({
           doc_number_enc: enc.ciphertext,
           iv: enc.iv,
           auth_tag: enc.authTag,
@@ -185,9 +192,10 @@ export async function POST(request: Request) {
           issued_country: passportLocation,
           updated_at: new Date().toISOString(),
         }).eq("id", existingPassport.id);
+        if (passUpdErr) { console.error("Failed to save Passport:", passUpdErr.message); docWarnings.push("Passport") }
       } else {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (admin.from("guest_documents") as any).insert({
+        const { error: passInsErr } = await (admin.from("guest_documents") as any).insert({
           user_id: user.id,
           doc_type: "passport",
           doc_number_enc: enc.ciphertext,
@@ -197,9 +205,11 @@ export async function POST(request: Request) {
           expiry_date: passportExpiry,
           issued_country: passportLocation,
         });
+        if (passInsErr) { console.error("Failed to save Passport:", passInsErr.message); docWarnings.push("Passport") }
       }
     } catch (passErr) {
       console.error("Failed to encrypt Passport:", passErr);
+      docWarnings.push("Passport");
     }
   }
 
@@ -220,7 +230,7 @@ export async function POST(request: Request) {
 
       if (existingVisa) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (admin.from("guest_documents") as any).update({
+        const { error: visaUpdErr } = await (admin.from("guest_documents") as any).update({
           doc_number_enc: enc.ciphertext,
           iv: enc.iv,
           auth_tag: enc.authTag,
@@ -228,9 +238,10 @@ export async function POST(request: Request) {
           issued_country: visaCountry,
           updated_at: new Date().toISOString(),
         }).eq("id", existingVisa.id);
+        if (visaUpdErr) { console.error("Failed to save Visa:", visaUpdErr.message); docWarnings.push("Visa") }
       } else {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (admin.from("guest_documents") as any).insert({
+        const { error: visaInsErr } = await (admin.from("guest_documents") as any).insert({
           user_id: user.id,
           doc_type: "visa",
           doc_number_enc: enc.ciphertext,
@@ -239,10 +250,21 @@ export async function POST(request: Request) {
           expiry_date: visaExpiry,
           issued_country: visaCountry,
         });
+        if (visaInsErr) { console.error("Failed to save Visa:", visaInsErr.message); docWarnings.push("Visa") }
       }
     } catch (visaErr) {
       console.error("Failed to encrypt Visa:", visaErr);
+      docWarnings.push("Visa");
     }
+  }
+
+  if (docWarnings.length > 0) {
+    return NextResponse.json({
+      ok: true,
+      saved: true,
+      warnings: docWarnings,
+      message: `Details saved, but the following documents could not be stored: ${docWarnings.join(", ")}`,
+    });
   }
 
   return NextResponse.json({ ok: true, saved: true });

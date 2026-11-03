@@ -271,7 +271,7 @@ export async function POST(req: NextRequest) {
     // Active / Inactive check
     const isInactive = activeInput.toLowerCase() === 'inactive' || activeInput.toLowerCase() === 'no' || activeInput.toLowerCase() === 'off'
     const is_active = !isInactive
-    const status = isInactive ? 'archived' : 'draft'
+    const status = isInactive ? 'archived' : 'active'
 
     // Check duplicate
     if (existingCodes.has(trip_code.toLowerCase())) {

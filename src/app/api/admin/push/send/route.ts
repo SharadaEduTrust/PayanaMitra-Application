@@ -18,9 +18,7 @@ const SendPushSchema = z.object({
   body:         z.string().max(2000, 'Max 2000 characters').optional(),
 })
 
-async function requireAdminOrLeader(tripId: string) {
-  const profile = await getSession()
-  if (!profile) return { error: 'Unauthorized', status: 401 } as const
+async function requireAdminOrLeader(tripId: string, profile: { id: string; role: string }) {
   if (profile.role === 'admin') return { profile }
 
   if (profile.role === 'leader') {
@@ -41,6 +39,12 @@ async function requireAdminOrLeader(tripId: string) {
 }
 
 export async function POST(req: NextRequest) {
+  const profile = await getSession()
+  if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (profile.role !== 'admin' && profile.role !== 'leader') {
+    return NextResponse.json({ error: 'Forbidden: Only admins and trail leaders may send notifications' }, { status: 403 })
+  }
+
   let body: unknown
   try {
     body = await req.json()
@@ -58,7 +62,7 @@ export async function POST(req: NextRequest) {
 
   const { trip_id, title, body: pushBody } = parsed.data
 
-  const guard = await requireAdminOrLeader(trip_id)
+  const guard = await requireAdminOrLeader(trip_id, profile)
   if ('error' in guard) {
     return NextResponse.json({ error: guard.error }, { status: guard.status })
   }

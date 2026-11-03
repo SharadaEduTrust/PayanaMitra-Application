@@ -111,8 +111,12 @@ export async function POST(req: NextRequest) {
   if (!loginRes.ok) {
     return NextResponse.json({
       ok: true,
+      requiresLogin: true,
       message: "Account created successfully. Please sign in with your phone and the last 4 digits.",
       role: "traveller",
+      session: null,
+      tokenHash: null,
+      firstName,
     });
   }
 

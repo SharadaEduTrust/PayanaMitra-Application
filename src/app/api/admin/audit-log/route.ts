@@ -28,8 +28,10 @@ export async function GET(req: NextRequest) {
   if ('error' in guard) return NextResponse.json({ error: guard.error }, { status: guard.status })
 
   const { searchParams } = new URL(req.url)
-  const page   = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
-  const limit  = Math.min(100, parseInt(searchParams.get('limit') ?? '20', 10))
+  const rawPage = parseInt(searchParams.get('page') ?? '1', 10)
+  const rawLimit = parseInt(searchParams.get('limit') ?? '20', 10)
+  const page   = Math.max(1, Number.isNaN(rawPage) ? 1 : rawPage)
+  const limit  = Math.min(100, Math.max(1, Number.isNaN(rawLimit) ? 20 : rawLimit))
   const actor  = searchParams.get('actor')
   const entity = searchParams.get('entity')
   const action = searchParams.get('action')
@@ -56,8 +58,11 @@ export async function GET(req: NextRequest) {
     query = (query as any).eq('entity', entity)
   }
   if (action) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    query = (query as any).ilike('action', `%${action}%`)
+    const cleanAction = action.replace(/[%_,()\\*]/g, ' ').trim()
+    if (cleanAction) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query = (query as any).ilike('action', `%${cleanAction}%`)
+    }
   }
 
   const { data, error, count } = await query

@@ -38,6 +38,13 @@ export default function DashboardNav({ role }: { role: string }) {
             href={link.href}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => {
+              // Ensure opening in a separate new tab/window in all browsers and standalone PWAs
+              const win = window.open(link.href, "_blank", "noopener,noreferrer");
+              if (win) {
+                e.preventDefault();
+              }
+            }}
           >
             <span>{link.label}</span>
             <ExternalLink

@@ -1508,7 +1508,7 @@ export default function UsersAdmin({
                     {renderSortHeader("Email Id", "email")}
                     {renderSortHeader("Active / Inactive", "isActive")}
                     {renderSortHeader("Date Last Active", "lastActiveAt")}
-                    <th style={{ textAlign: "right", paddingRight: "18px", whiteSpace: "nowrap" }} aria-label="Actions">Actions</th>
+                    <th className="sticky-actions-col" style={{ textAlign: "right", paddingRight: "18px", whiteSpace: "nowrap" }} aria-label="Actions">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1524,11 +1524,26 @@ export default function UsersAdmin({
                             <span className="guest-avatar-bubble">
                               {row.firstName?.charAt(0) || "U"}
                             </span>
-                            <strong style={{ color: "#0f172a" }}>{row.firstName}</strong>
+                            <button
+                              type="button"
+                              onClick={() => startEdit(row)}
+                              className="guest-name-edit-btn"
+                              title={`Click to edit ${row.firstName} ${row.lastName}`}
+                            >
+                              <strong>{row.firstName}</strong>
+                              <span className="name-edit-icon" title="Quick edit">✏️</span>
+                            </button>
                           </div>
                         </td>
                         <td>
-                          <strong style={{ color: "#0f172a" }}>{row.lastName}</strong>
+                          <button
+                            type="button"
+                            onClick={() => startEdit(row)}
+                            className="guest-name-edit-btn"
+                            title={`Click to edit ${row.firstName} ${row.lastName}`}
+                          >
+                            <strong>{row.lastName}</strong>
+                          </button>
                         </td>
                         <td>
                           <span className={`role-badge role-badge-${row.role === "traveller" ? "guest" : row.role}`}>
@@ -1569,7 +1584,7 @@ export default function UsersAdmin({
                         <td className="small muted" style={{ whiteSpace: "nowrap" }}>
                           {row.lastActiveAt ? new Date(row.lastActiveAt).toLocaleDateString("en-IN") : "Never"}
                         </td>
-                        <td style={{ textAlign: "right", paddingRight: "18px" }}>
+                        <td className="sticky-actions-col" style={{ textAlign: "right", paddingRight: "18px" }}>
                           <div className="row-action-pills" style={{ justifyContent: "flex-end" }}>
                             <button
                               type="button"

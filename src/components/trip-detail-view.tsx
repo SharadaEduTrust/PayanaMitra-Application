@@ -211,34 +211,12 @@ export default function TripDetailView({
         </p>
       )}
 
-      <div className="trip-columns">
-        <section className="panel">
+      {trip.remarks && (
+        <section className="panel" style={{ marginBottom: "20px" }}>
           <h2 className="serif">Trail notes</h2>
-          {trip.remarks ? <p>{trip.remarks}</p> : <p className="panel-note">No notes from your coordinator yet.</p>}
+          <p>{trip.remarks}</p>
         </section>
-
-        <section className="panel">
-          <h2 className="serif">Contacts</h2>
-          {contacts.length === 0 ? (
-            <p className="panel-note">Guide, hotel and transport contacts will appear here.</p>
-          ) : (
-            <div className="contact-list">
-              {contacts.map((contact) => (
-                <div key={contact.id}>
-                  <span className="contact-label">{contact.role ?? "Contact"}</span>
-                  <span className="contact-name">{contact.name}</span>
-                  {contact.phone && (
-                    <a className="contact-phone" href={`tel:${contact.phone}`}>
-                      {contact.phone}
-                    </a>
-                  )}
-                  {contact.email && <a className="contact-phone" href={`mailto:${contact.email}`}>{contact.email}</a>}
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
+      )}
 
       <section className="panel">
         <h2 className="serif">Day-wise itinerary</h2>
@@ -284,6 +262,28 @@ export default function TripDetailView({
                   </ol>
                 )}
               </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="panel" style={{ marginTop: "24px" }}>
+        <h2 className="serif">Contacts</h2>
+        {contacts.length === 0 ? (
+          <p className="panel-note">Guide, hotel and transport contacts will appear here.</p>
+        ) : (
+          <div className="contact-list">
+            {contacts.map((contact) => (
+              <div key={contact.id}>
+                <span className="contact-label">{contact.role ?? "Contact"}</span>
+                <span className="contact-name">{contact.name}</span>
+                {contact.phone && (
+                  <a className="contact-phone" href={`tel:${contact.phone}`}>
+                    {contact.phone}
+                  </a>
+                )}
+                {contact.email && <a className="contact-phone" href={`mailto:${contact.email}`}>{contact.email}</a>}
+              </div>
             ))}
           </div>
         )}

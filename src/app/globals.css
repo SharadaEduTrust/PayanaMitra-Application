@@ -1594,6 +1594,62 @@ a.admin-control-btn-secondary:hover {
 }
 .admin-table-users {
   min-width: 1200px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.admin-table-users th.sticky-actions-col,
+.admin-table-users td.sticky-actions-col {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  border-left: 1px solid #e2e8f0;
+  box-shadow: -4px 0 10px rgba(0, 0, 0, 0.05);
+}
+.admin-table-users th.sticky-actions-col {
+  z-index: 3;
+  background: #f8fafc;
+}
+.admin-table-users tbody tr td.sticky-actions-col {
+  background: #ffffff;
+}
+.admin-table-users tbody tr:nth-child(even) td.sticky-actions-col {
+  background: #fdfbf7;
+}
+.admin-table-users tbody tr:hover td.sticky-actions-col {
+  background: #f7f3ec !important;
+}
+
+/* Quick Edit Guest Name Button */
+.guest-name-edit-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #0f172a;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+.guest-name-edit-btn:hover {
+  color: var(--forest, #1e3a2b);
+}
+.guest-name-edit-btn:hover strong {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  color: var(--forest, #1e3a2b);
+}
+.guest-name-edit-btn .name-edit-icon {
+  font-size: 11px;
+  opacity: 0.45;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.guest-name-edit-btn:hover .name-edit-icon {
+  opacity: 1;
+  transform: scale(1.15);
 }
 .admin-table-trips {
   min-width: 880px;

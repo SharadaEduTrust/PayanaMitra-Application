@@ -17,6 +17,9 @@ interface ImportHistoryEntry {
     skipped: number;
     error_count: number;
     status: "success" | "partial" | "failed";
+    reverted?: boolean;
+    reverted_at?: string;
+    reverted_count?: number;
   };
   created_at: string;
   profiles: { first_name: string; last_name: string; phone: string } | null;
@@ -26,6 +29,9 @@ function ImportHistory({ section, refreshKey }: { section: string; refreshKey: n
   const [entries, setEntries] = useState<ImportHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [revertingId, setRevertingId] = useState<string | null>(null);
+  const [revertNotice, setRevertNotice] = useState<string>("");
+  const [revertError, setRevertError] = useState<string>("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -39,6 +45,35 @@ function ImportHistory({ section, refreshKey }: { section: string; refreshKey: n
       setLoading(false);
     }
   }, [section]);
+
+  const handleRevert = async (entry: ImportHistoryEntry) => {
+    const filename = entry.payload?.filename || "this file";
+    const totalAffected = (entry.payload?.created ?? 0) + (entry.payload?.updated ?? 0);
+    const confirmMsg = `Are you sure you want to revert this import?\n\nFile: ${filename}\nAffected records: ${totalAffected}\n\nThis will undo and remove the records imported from this batch.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setRevertingId(entry.id);
+    setRevertError("");
+    setRevertNotice("");
+    try {
+      const res = await fetch("/api/admin/csv-import/revert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ auditId: entry.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setRevertError(data.error || "Failed to revert import.");
+      } else {
+        setRevertNotice(data.message || `Successfully reverted import of ${filename}.`);
+        await load();
+      }
+    } catch (err) {
+      setRevertError(err instanceof Error ? err.message : "Network error while reverting.");
+    } finally {
+      setRevertingId(null);
+    }
+  };
 
   // Auto-open and refresh when a new import happens (refreshKey changes)
   useEffect(() => {
@@ -114,6 +149,9 @@ function ImportHistory({ section, refreshKey }: { section: string; refreshKey: n
 
       {open && (
         <div style={{ marginTop: "12px" }}>
+          {revertNotice && <p className="form-notice" role="status" style={{ margin: "0 0 10px" }}>{revertNotice}</p>}
+          {revertError && <p className="form-error" role="alert" style={{ margin: "0 0 10px" }}>{revertError}</p>}
+
           {entries.length === 0 && !loading ? (
             <p style={{ fontSize: "13px", color: "#64748b", margin: 0 }}>No imports recorded yet for this section.</p>
           ) : (
@@ -130,36 +168,81 @@ function ImportHistory({ section, refreshKey }: { section: string; refreshKey: n
                     <th>Errors</th>
                     <th>Status</th>
                     <th>By</th>
+                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {entries.map((e) => (
-                    <tr key={e.id}>
-                      <td className="mono" style={{ whiteSpace: "nowrap" }}>{fmt(e.created_at)}</td>
-                      <td style={{ maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                          title={e.payload?.filename}>
-                        {e.payload?.filename ?? "—"}
-                      </td>
-                      <td className="mono">{e.payload?.total_rows ?? 0}</td>
-                      <td className="mono" style={{ color: "#16a34a", fontWeight: (e.payload?.created ?? 0) > 0 ? 700 : 400 }}>
-                        {e.payload?.created ?? 0}
-                      </td>
-                      <td className="mono" style={{ color: "#2563eb", fontWeight: (e.payload?.updated ?? 0) > 0 ? 700 : 400 }}>
-                        {e.payload?.updated ?? 0}
-                      </td>
-                      <td className="mono">{e.payload?.skipped ?? 0}</td>
-                      <td className="mono" style={{ color: (e.payload?.error_count ?? 0) > 0 ? "#dc2626" : undefined, fontWeight: (e.payload?.error_count ?? 0) > 0 ? 700 : 400 }}>
-                        {e.payload?.error_count ?? 0}
-                      </td>
-                      <td>{statusPill(e.payload?.status ?? "failed")}</td>
-                      <td style={{ fontSize: "12px", color: "#64748b", whiteSpace: "nowrap" }}>
-                        {(() => {
-                          const prof = Array.isArray(e.profiles) ? e.profiles[0] : e.profiles;
-                          return prof ? `${prof.first_name || ""} ${prof.last_name || ""}`.trim() || prof.phone || "Admin" : "—";
-                        })()}
-                      </td>
-                    </tr>
-                  ))}
+                  {entries.map((e) => {
+                    const isReverted = Boolean(e.payload?.reverted);
+                    const canRevert = !isReverted && ((e.payload?.created ?? 0) > 0 || (e.payload?.updated ?? 0) > 0);
+
+                    return (
+                      <tr key={e.id}>
+                        <td className="mono" style={{ whiteSpace: "nowrap" }}>{fmt(e.created_at)}</td>
+                        <td style={{ maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                            title={e.payload?.filename}>
+                          {e.payload?.filename ?? "—"}
+                        </td>
+                        <td className="mono">{e.payload?.total_rows ?? 0}</td>
+                        <td className="mono" style={{ color: "#16a34a", fontWeight: (e.payload?.created ?? 0) > 0 ? 700 : 400 }}>
+                          {e.payload?.created ?? 0}
+                        </td>
+                        <td className="mono" style={{ color: "#2563eb", fontWeight: (e.payload?.updated ?? 0) > 0 ? 700 : 400 }}>
+                          {e.payload?.updated ?? 0}
+                        </td>
+                        <td className="mono">{e.payload?.skipped ?? 0}</td>
+                        <td className="mono" style={{ color: (e.payload?.error_count ?? 0) > 0 ? "#dc2626" : undefined, fontWeight: (e.payload?.error_count ?? 0) > 0 ? 700 : 400 }}>
+                          {e.payload?.error_count ?? 0}
+                        </td>
+                        <td>{statusPill(e.payload?.status ?? "failed")}</td>
+                        <td style={{ fontSize: "12px", color: "#64748b", whiteSpace: "nowrap" }}>
+                          {(() => {
+                            const prof = Array.isArray(e.profiles) ? e.profiles[0] : e.profiles;
+                            return prof ? `${prof.first_name || ""} ${prof.last_name || ""}`.trim() || prof.phone || "Admin" : "—";
+                          })()}
+                        </td>
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          {isReverted ? (
+                            <span
+                              className="pill"
+                              style={{
+                                background: "#f1f5f9",
+                                color: "#64748b",
+                                border: "1px solid #cbd5e1",
+                                fontSize: "11px",
+                                fontWeight: 600,
+                              }}
+                              title={e.payload?.reverted_at ? `Reverted on ${fmt(e.payload.reverted_at)}` : "Reverted"}
+                            >
+                              ↩ Reverted
+                            </span>
+                          ) : canRevert ? (
+                            <button
+                              type="button"
+                              onClick={() => handleRevert(e)}
+                              disabled={revertingId === e.id}
+                              style={{
+                                padding: "3px 9px",
+                                fontSize: "11px",
+                                color: "#b91c1c",
+                                border: "1px solid #fca5a5",
+                                background: "#fff5f5",
+                                borderRadius: "4px",
+                                cursor: revertingId === e.id ? "wait" : "pointer",
+                                fontWeight: 600,
+                                transition: "all 0.15s ease",
+                              }}
+                              title="Revert and undo this import"
+                            >
+                              {revertingId === e.id ? "Reverting…" : "↺ Revert"}
+                            </button>
+                          ) : (
+                            <span style={{ color: "#94a3b8", fontSize: "12px" }}>—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

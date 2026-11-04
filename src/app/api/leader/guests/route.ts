@@ -19,14 +19,20 @@ export async function GET(req: NextRequest) {
   const targetLeaderId = profile.role === 'admin'
     ? (searchParams.get('leader_id') || profile.id)
     : profile.id
+  const targetTripId = searchParams.get('trip_id')
 
   const admin = createAdminClient()
 
   // 1. Get trips led by target leader
-  const { data: ledTrips } = await admin
-    .from('trips')
-    .select('id')
-    .eq('leader_id', targetLeaderId)
+  let tripsQuery = admin.from('trips').select('id')
+  if (profile.role !== 'admin' || !searchParams.get('leader_id')) {
+    tripsQuery = tripsQuery.eq('leader_id', targetLeaderId)
+  }
+  if (targetTripId) {
+    tripsQuery = tripsQuery.eq('id', targetTripId)
+  }
+
+  const { data: ledTrips } = await tripsQuery
 
   const tripIds = (ledTrips ?? []).map((t: { id: string }) => t.id)
 

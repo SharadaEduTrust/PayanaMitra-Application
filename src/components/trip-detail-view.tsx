@@ -89,6 +89,16 @@ export default function TripDetailView({
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
           <span className={`pill ${trip.status === "published" ? "upcoming" : "past"}`}>{trip.status}</span>
           {isLeader && (
+            <Link
+              href={`/dashboard/guests?trip_id=${trip.id}`}
+              className="btn btn-secondary"
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 14px", fontSize: "12px" }}
+            >
+              <span>👥</span>
+              <span>View Guests</span>
+            </Link>
+          )}
+          {isLeader && (
             <button
               type="button"
               className="btn btn-primary"
@@ -131,7 +141,15 @@ export default function TripDetailView({
               Send schedule updates, weather warnings, or departure reminders directly to all guests booked on this trail via in-app alert and push notification.
             </p>
           </div>
-          <div>
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+            <Link
+              href={`/dashboard/guests?trip_id=${trip.id}`}
+              className="btn btn-secondary"
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
+            >
+              <span>👥</span>
+              <span>View Trail Guests</span>
+            </Link>
             <button
               type="button"
               className="btn btn-primary"
@@ -273,6 +291,11 @@ export default function TripDetailView({
 
       {(isLeader || userRole === "admin") && (
         <div className="trip-footer-actions">
+          {isLeader && (
+            <Link className="btn btn-secondary" href={`/dashboard/guests?trip_id=${trip.id}`}>
+              View Trail Guests
+            </Link>
+          )}
           {isLeader && (
             <button
               type="button"

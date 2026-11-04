@@ -16,6 +16,7 @@ export type TripSummary = {
   feedbackClosesOn?: string | null;
   feedbackDaysRemaining?: number;
   feedbackFormUrl?: string | null;
+  isLeader?: boolean;
 };
 
 const sections = [
@@ -151,13 +152,20 @@ export default function TripList({
                         ) : null
                       )}
 
-                      {trip.status === "closed" ? (
+                      {trip.status === "closed" && !trip.isLeader && role !== "leader" && role !== "admin" ? (
                         <p className="muted small">Your coordinator has not published this trail yet.</p>
                       ) : (
                         <div className="trip-card-actions">
-                          <Link className="btn btn-primary" href={`/dashboard/trips/${trip.id}`}>
-                            View itinerary
-                          </Link>
+                          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                            <Link className="btn btn-primary" href={`/dashboard/trips/${trip.id}`}>
+                              View itinerary
+                            </Link>
+                            {(role === "leader" || role === "admin" || trip.isLeader) && (
+                              <Link className="btn btn-secondary" href={`/dashboard/guests?trip_id=${trip.id}`}>
+                                View guests
+                              </Link>
+                            )}
+                          </div>
                           {(role === "traveller" || role === "leader" || !role) &&
                             (trip.status === "past" || trip.feedbackState === "open") && (
                               <Link

@@ -10,6 +10,7 @@ const TIME_RE = /^\d{2}:\d{2}(:\d{2})?$/
 
 const VALID_MEAL_PLANS = new Set([
   'Breakfast',
+  'Breakfast & Lunch',
   'Breakfast & Dinner',
   'Lunch & Dinner',
   'Breakfast, Lunch & Dinner',
@@ -18,6 +19,7 @@ const VALID_MEAL_PLANS = new Set([
 function normalizeMealPlan(val: string): string {
   const trimmed = val.trim()
   if (/^breakfast$/i.test(trimmed)) return 'Breakfast'
+  if (/^breakfast\s*(?:&|and)\s*lunch$/i.test(trimmed)) return 'Breakfast & Lunch'
   if (/^breakfast\s*(?:&|and)\s*dinner$/i.test(trimmed)) return 'Breakfast & Dinner'
   if (/^lunch\s*(?:&|and)\s*dinner$/i.test(trimmed)) return 'Lunch & Dinner'
   if (/^breakfast\s*(?:,|&|and)?\s*lunch\s*(?:,|&|and)\s*dinner$/i.test(trimmed)) return 'Breakfast, Lunch & Dinner'
@@ -138,7 +140,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       if (!VALID_MEAL_PLANS.has(normalized)) {
         errors.push({
           row: rowNum,
-          error: `Invalid meal_plan (Meal Plan): "${rawMealPlan}". Supported values: "Breakfast", "Breakfast & Dinner", "Lunch & Dinner", "Breakfast, Lunch & Dinner"`,
+          error: `Invalid meal_plan (Meal Plan): "${rawMealPlan}". Supported values: "Breakfast", "Breakfast & Lunch", "Breakfast & Dinner", "Lunch & Dinner", "Breakfast, Lunch & Dinner"`,
         })
         skipped++
         continue

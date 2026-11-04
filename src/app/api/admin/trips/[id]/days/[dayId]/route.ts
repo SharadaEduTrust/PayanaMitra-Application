@@ -13,6 +13,7 @@ interface Params { params: Promise<{ id: string; dayId: string }> }
 
 const MealPlanSchema = z.enum([
   'Breakfast',
+  'Breakfast & Lunch',
   'Breakfast & Dinner',
   'Lunch & Dinner',
   'Breakfast, Lunch & Dinner',

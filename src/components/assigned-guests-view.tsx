@@ -10,6 +10,8 @@ export type AssignedGuest = {
   email?: string | null;
   location?: string | null;
   remarks?: string | null;
+  trip_ids?: string[];
+  trails?: string[];
   traveller_details?: Array<{
     dob?: string | null;
     food_preference?: string | null;
@@ -29,16 +31,41 @@ export type AssignedGuest = {
   } | null;
 };
 
-export default function AssignedGuestsView({ initialGuests }: { initialGuests: AssignedGuest[] }) {
+export type LeaderTripOption = {
+  id: string;
+  name: string;
+  trip_code?: string;
+};
+
+export default function AssignedGuestsView({
+  initialGuests,
+  trips = [],
+  initialTripId,
+}: {
+  initialGuests: AssignedGuest[];
+  trips?: LeaderTripOption[];
+  initialTripId?: string;
+}) {
+  const [selectedTripId, setSelectedTripId] = useState<string>(initialTripId || "all");
   const [query, setQuery] = useState("");
   const [sortField, setSortField] = useState<"name" | "location" | "food">("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return initialGuests;
+  const selectedTrip = useMemo(
+    () => (selectedTripId !== "all" ? trips.find((t) => t.id === selectedTripId) : null),
+    [trips, selectedTripId]
+  );
 
-    return initialGuests.filter((guest) => {
+  const filtered = useMemo(() => {
+    let list = initialGuests;
+    if (selectedTripId !== "all") {
+      list = list.filter((g) => g.trip_ids && g.trip_ids.includes(selectedTripId));
+    }
+
+    const q = query.trim().toLowerCase();
+    if (!q) return list;
+
+    return list.filter((guest) => {
       const details = Array.isArray(guest.traveller_details)
         ? guest.traveller_details[0]
         : guest.traveller_details;
@@ -49,6 +76,7 @@ export default function AssignedGuestsView({ initialGuests }: { initialGuests: A
       const location = (guest.location || "").toLowerCase();
       const emergency = (details?.emergency_contact_name || "").toLowerCase();
       const food = (details?.food_preference || "").toLowerCase();
+      const trailsStr = (guest.trails || []).join(" ").toLowerCase();
 
       return (
         fullName.includes(q) ||
@@ -56,10 +84,11 @@ export default function AssignedGuestsView({ initialGuests }: { initialGuests: A
         email.includes(q) ||
         location.includes(q) ||
         emergency.includes(q) ||
-        food.includes(q)
+        food.includes(q) ||
+        trailsStr.includes(q)
       );
     });
-  }, [initialGuests, query]);
+  }, [initialGuests, selectedTripId, query]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -83,7 +112,7 @@ export default function AssignedGuestsView({ initialGuests }: { initialGuests: A
 
   return (
     <div>
-      {/* Search and Sort Toolbar */}
+      {/* Search and Filter Toolbar */}
       <div
         style={{
           display: "flex",
@@ -91,7 +120,7 @@ export default function AssignedGuestsView({ initialGuests }: { initialGuests: A
           alignItems: "center",
           flexWrap: "wrap",
           gap: "12px",
-          marginBottom: "20px",
+          marginBottom: "16px",
           padding: "14px 18px",
           background: "var(--paper, rgba(255,255,255,0.03))",
           border: "1px solid var(--line, rgba(255,255,255,0.08))",
@@ -99,7 +128,7 @@ export default function AssignedGuestsView({ initialGuests }: { initialGuests: A
         }}
       >
         {/* Search Input with Magnifying Glass */}
-        <div style={{ position: "relative", display: "inline-flex", alignItems: "center", minWidth: "260px", flex: "1 1 280px" }}>
+        <div style={{ position: "relative", display: "inline-flex", alignItems: "center", minWidth: "240px", flex: "1 1 240px" }}>
           <svg
             width="16"
             height="16"
@@ -147,6 +176,28 @@ export default function AssignedGuestsView({ initialGuests }: { initialGuests: A
           )}
         </div>
 
+        {/* Trail Filter Dropdown */}
+        {trips && trips.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span className="muted small" style={{ whiteSpace: "nowrap" }}>Trail:</span>
+            <select
+              value={selectedTripId}
+              onChange={(e) => setSelectedTripId(e.target.value)}
+              style={{ padding: "6px 12px", borderRadius: "6px", maxWidth: "240px", textOverflow: "ellipsis" }}
+            >
+              <option value="all">All Trails ({initialGuests.length})</option>
+              {trips.map((t) => {
+                const count = initialGuests.filter((g) => g.trip_ids?.includes(t.id)).length;
+                return (
+                  <option key={t.id} value={t.id}>
+                    {t.name} {t.trip_code ? `(${t.trip_code})` : ""} ({count})
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        )}
+
         {/* Sort Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
           <span className="muted small" style={{ whiteSpace: "nowrap" }}>Sort by:</span>
@@ -174,11 +225,58 @@ export default function AssignedGuestsView({ initialGuests }: { initialGuests: A
         </div>
       </div>
 
+      {/* Active Trail Filter Banner */}
+      {selectedTrip && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "10px",
+            padding: "8px 14px",
+            marginBottom: "18px",
+            borderRadius: "6px",
+            background: "rgba(30, 58, 43, 0.06)",
+            border: "1px solid var(--forest, #1e3a2b)",
+            fontSize: "12px",
+          }}
+        >
+          <span>
+            Showing guests mapped to: <strong>{selectedTrip.name}</strong>
+            {selectedTrip.trip_code ? ` (${selectedTrip.trip_code})` : ""}
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelectedTripId("all")}
+            className="btn btn-secondary"
+            style={{ padding: "3px 10px", fontSize: "11px" }}
+          >
+            Show all trails
+          </button>
+        </div>
+      )}
+
       {sorted.length === 0 ? (
         <section className="panel">
           <p className="panel-note">
-            {query ? `No guests found matching "${query}".` : "No guests currently assigned."}
+            {query
+              ? `No guests found matching "${query}".`
+              : selectedTripId !== "all"
+              ? `No guests are currently mapped to ${selectedTrip?.name || "this trail"}.`
+              : "No guests currently assigned."}
           </p>
+          {selectedTripId !== "all" && !query && (
+            <div style={{ marginTop: "12px" }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setSelectedTripId("all")}
+              >
+                View all assigned guests
+              </button>
+            </div>
+          )}
         </section>
       ) : (
         <div style={{ display: "grid", gap: "20px" }}>
@@ -199,6 +297,24 @@ export default function AssignedGuestsView({ initialGuests }: { initialGuests: A
                       {guest.email && ` · ${guest.email}`}
                       {guest.location && ` · ${guest.location}`}
                     </div>
+                    {guest.trails && guest.trails.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px" }}>
+                        {guest.trails.map((trailName) => (
+                          <span
+                            key={trailName}
+                            className="pill"
+                            style={{
+                              fontSize: "11px",
+                              padding: "2px 8px",
+                              background: "var(--soft, #f4ebe1)",
+                              color: "var(--forest, #1e3a2b)",
+                            }}
+                          >
+                            📍 {trailName}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {details?.food_preference && (
                     <span className="pill on" style={{ textTransform: "none", fontWeight: 600 }}>

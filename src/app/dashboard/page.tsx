@@ -57,15 +57,15 @@ export default async function DashboardPage() {
       firstName={profile.first_name}
       role={profile.role}
       grouped={{
-        current: grouped.current.map(decorate),
-        upcoming: grouped.upcoming.map(decorate),
-        past: grouped.past.map(decorate),
+        current: grouped.current.map((t) => decorate(t, profile.id, profile.role)),
+        upcoming: grouped.upcoming.map((t) => decorate(t, profile.id, profile.role)),
+        past: grouped.past.map((t) => decorate(t, profile.id, profile.role)),
       }}
     />
   );
 }
 
-function decorate(trip: Trip) {
+function decorate(trip: Trip, profileId: string, role: string) {
   const fbStatus = calculateFeedbackStatus(trip);
   return {
     id: trip.id,
@@ -80,5 +80,6 @@ function decorate(trip: Trip) {
     feedbackClosesOn: fbStatus.closesOnDate,
     feedbackDaysRemaining: fbStatus.daysRemaining,
     feedbackFormUrl: fbStatus.formUrl,
+    isLeader: role === "admin" || trip.leader_id === profileId,
   };
 }

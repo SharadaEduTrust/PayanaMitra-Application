@@ -116,10 +116,26 @@ export default function GoogleFormFeedbackView({
             <h3 className="serif" style={{ margin: "2px 0 6px", fontSize: "1.25rem", color: "var(--forest, #14352a)" }}>
               Google Feedback Form
             </h3>
-            <p className="small muted" style={{ margin: 0, lineHeight: "1.5" }}>
+            <p className="small muted" style={{ margin: "0 0 12px", lineHeight: "1.5" }}>
               The comprehensive Google feedback form for <strong>{trip.name}</strong> will activate once the trail concludes on{" "}
               <strong>{feedbackStatus.opensOnDate}</strong>. Submissions will be accepted for {feedbackStatus.windowDays} days.
             </p>
+            {feedbackStatus.formUrl && (
+              <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", marginTop: "8px" }}>
+                <a
+                  href={feedbackStatus.formUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => openExternalUrl(feedbackStatus.formUrl!, e)}
+                  className="btn btn-secondary"
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px", textDecoration: "none", fontSize: "13px" }}
+                >
+                  <span>Open Google Form</span>
+                  <span>↗</span>
+                </a>
+                <span className="small muted" style={{ fontSize: "11px" }}>Opens in a new tab</span>
+              </div>
+            )}
           </div>
         </div>
       </section>

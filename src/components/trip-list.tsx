@@ -193,19 +193,17 @@ export default function TripList({
                         <p className="muted small">Your coordinator has not published this trail yet.</p>
                       ) : (
                         <div className="trip-card-actions">
-                          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-                            <Link className="btn btn-primary" href={`/dashboard/trips/${trip.id}`}>
-                              View itinerary
+                          <Link className="btn btn-primary" href={`/dashboard/trips/${trip.id}`}>
+                            View itinerary
+                          </Link>
+                          {(role === "leader" || role === "admin" || trip.isLeader) && (
+                            <Link className="btn btn-secondary" href={`/dashboard/guests?trip_id=${trip.id}`}>
+                              View guests
                             </Link>
-                            {(role === "leader" || role === "admin" || trip.isLeader) && (
-                              <Link className="btn btn-secondary" href={`/dashboard/guests?trip_id=${trip.id}`}>
-                                View guests
-                              </Link>
-                            )}
-                          </div>
+                          )}
                           {(trip.isLeader || role === "leader" || role === "admin" || trip.status === "current" || trip.status === "past" || trip.feedbackState === "open") && (
                             <Link
-                              className="btn btn-secondary trip-card-feedback-btn"
+                              className="btn btn-secondary"
                               href={`/dashboard/trips/${trip.id}/feedback`}
                             >
                               Feedback

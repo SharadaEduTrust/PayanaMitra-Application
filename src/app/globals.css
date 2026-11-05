@@ -1118,15 +1118,11 @@ h3 {
 .trip-facts .alert dd { color:#7A4A2E; }
 .trip-card-actions {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-top: auto;
-  padding-top: 10px;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
-}
-.trip-card-actions .trip-card-feedback-btn {
-  margin-left: auto;
+  margin-top: auto;
+  padding-top: 12px;
 }
 .pill.upcoming { background:var(--soft); color:var(--forest); }
 .pill.current { background:#F6E7C8; color:#8B6B50; }

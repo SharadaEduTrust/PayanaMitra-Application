@@ -242,6 +242,28 @@ export default function TripDetailView({
         </p>
       )}
 
+      <section className="panel" style={{ marginBottom: "20px" }}>
+        <h2 className="serif">Contacts</h2>
+        {contacts.length === 0 ? (
+          <p className="panel-note">Guide, hotel and transport contacts will appear here.</p>
+        ) : (
+          <div className="contact-list">
+            {contacts.map((contact) => (
+              <div key={contact.id}>
+                <span className="contact-label">{contact.role ?? "Contact"}</span>
+                <span className="contact-name">{contact.name}</span>
+                {contact.phone && (
+                  <a className="contact-phone" href={`tel:${contact.phone}`}>
+                    {contact.phone}
+                  </a>
+                )}
+                {contact.email && <a className="contact-phone" href={`mailto:${contact.email}`}>{contact.email}</a>}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       {trip.remarks && (
         <section className="panel" style={{ marginBottom: "20px" }}>
           <h2 className="serif">Trail notes</h2>
@@ -293,28 +315,6 @@ export default function TripDetailView({
                   </ol>
                 )}
               </article>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="panel" style={{ marginTop: "24px" }}>
-        <h2 className="serif">Contacts</h2>
-        {contacts.length === 0 ? (
-          <p className="panel-note">Guide, hotel and transport contacts will appear here.</p>
-        ) : (
-          <div className="contact-list">
-            {contacts.map((contact) => (
-              <div key={contact.id}>
-                <span className="contact-label">{contact.role ?? "Contact"}</span>
-                <span className="contact-name">{contact.name}</span>
-                {contact.phone && (
-                  <a className="contact-phone" href={`tel:${contact.phone}`}>
-                    {contact.phone}
-                  </a>
-                )}
-                {contact.email && <a className="contact-phone" href={`mailto:${contact.email}`}>{contact.email}</a>}
-              </div>
             ))}
           </div>
         )}

@@ -25,6 +25,17 @@ export default function TripMembers({ tripId }: { tripId: string }) {
   const [csvLoading, setCsvLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Create New Guest Modal State
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newGuestForm, setNewGuestForm] = useState({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    email: "",
+    location: "",
+  });
+  const [createLoading, setCreateLoading] = useState(false);
+
   async function reloadMembers() {
     try {
       const res = await fetch(`/api/admin/trips/${tripId}/members`);
@@ -148,6 +159,108 @@ export default function TripMembers({ tripId }: { tripId: string }) {
     }
   }
 
+  async function addSingleMember(userId: string) {
+    setError("");
+    setStatus("");
+    setLoading(true);
+
+    try {
+      const res = await fetch(`/api/admin/trips/${tripId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_ids: [userId] }),
+      });
+
+      const json = await res.json().catch(() => null);
+      setLoading(false);
+
+      if (!res.ok) {
+        setError(json?.error ?? "Failed to add guest to trail.");
+        return;
+      }
+
+      const candidate = candidates.find((c) => c.id === userId);
+      if (candidate) {
+        setMembers((current) => [
+          ...current,
+          {
+            userId: candidate.id,
+            name: `${candidate.first_name} ${candidate.last_name}`,
+            phone: candidate.phone,
+          },
+        ]);
+        setSelectedUserIds((prev) => prev.filter((id) => id !== userId));
+        setStatus(`Successfully added ${candidate.first_name} ${candidate.last_name} to this trail.`);
+      }
+    } catch {
+      setLoading(false);
+      setError("Network error while adding guest to trail.");
+    }
+  }
+
+  async function handleCreateAndAddGuest(e: FormEvent) {
+    e.preventDefault();
+    setCreateLoading(true);
+    setError("");
+    setStatus("");
+
+    try {
+      // 1. Create user
+      const userRes = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          first_name: newGuestForm.firstName.trim(),
+          last_name: newGuestForm.lastName.trim(),
+          phone: newGuestForm.phone.trim(),
+          email: newGuestForm.email.trim() || undefined,
+          location: newGuestForm.location.trim() || undefined,
+          role: "traveller",
+        }),
+      });
+
+      const userJson = await userRes.json().catch(() => null);
+      if (!userRes.ok) {
+        setCreateLoading(false);
+        setError(userJson?.error ?? "Failed to create guest.");
+        return;
+      }
+
+      const createdUser = userJson.data;
+
+      // 2. Add to trail
+      const memberRes = await fetch(`/api/admin/trips/${tripId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_ids: [createdUser.id] }),
+      });
+
+      setCreateLoading(false);
+
+      if (!memberRes.ok) {
+        setError("Guest was created but could not be added to trail. Please select them from the list below.");
+        return;
+      }
+
+      setMembers((prev) => [
+        ...prev,
+        {
+          userId: createdUser.id,
+          name: `${createdUser.first_name} ${createdUser.last_name}`,
+          phone: createdUser.phone,
+        },
+      ]);
+
+      setCandidates((prev) => [createdUser, ...prev]);
+      setShowCreateModal(false);
+      setNewGuestForm({ firstName: "", lastName: "", phone: "", email: "", location: "" });
+      setStatus(`Successfully created and added ${createdUser.first_name} ${createdUser.last_name} to this trail.`);
+    } catch {
+      setCreateLoading(false);
+      setError("Network error while creating and adding guest.");
+    }
+  }
+
   async function addSelectedMembers() {
     if (selectedUserIds.length === 0) return;
     setError("");
@@ -180,7 +293,7 @@ export default function TripMembers({ tripId }: { tripId: string }) {
 
       setMembers((current) => [...current, ...newlyAdded]);
       setSelectedUserIds([]);
-      setStatus(`Successfully mapped ${count} guest${count !== 1 ? "s" : ""} to this trail.`);
+      setStatus(`Successfully added ${count} guest${count !== 1 ? "s" : ""} to this trail.`);
     } catch {
       setLoading(false);
       setError("Network error while adding guests.");
@@ -314,11 +427,20 @@ export default function TripMembers({ tripId }: { tripId: string }) {
             Only enrolled guests can access details of this trail on their dashboard.
           </p>
         </div>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => setShowCreateModal(true)}
+            style={{ fontSize: "12.5px", padding: "5px 12px", fontWeight: 600 }}
+          >
+            + Create New Guest
+          </button>
           <button
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => setShowCsv(!showCsv)}
+            style={{ fontSize: "12.5px", padding: "5px 12px" }}
           >
             {showCsv ? "Hide CSV Import" : "Import Guests (CSV)"}
           </button>
@@ -399,9 +521,9 @@ export default function TripMembers({ tripId }: { tripId: string }) {
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "10px" }}>
           <div>
-            <strong style={{ fontSize: "14.5px", color: "#0f172a" }}>Choose Guests to Map to This Trail</strong>
+            <strong style={{ fontSize: "15px", color: "#0f172a" }}>Add Registered Guests to This Trail</strong>
             <div className="muted small" style={{ marginTop: "2px" }}>
-              Select one or multiple guests below. ({availableCandidates.length} unregistered guest{availableCandidates.length !== 1 ? "s" : ""} available)
+              Select one or multiple guests below to enroll them in this trail ({availableCandidates.length} available to add).
             </div>
           </div>
           <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
@@ -420,13 +542,13 @@ export default function TripMembers({ tripId }: { tripId: string }) {
               className="btn btn-primary btn-sm"
               onClick={addSelectedMembers}
               disabled={selectedUserIds.length === 0 || loading}
-              style={{ fontSize: "13px", padding: "6px 16px" }}
+              style={{ fontSize: "13px", padding: "6px 16px", fontWeight: 600 }}
             >
               {loading
-                ? "Mapping…"
+                ? "Adding to Trail…"
                 : selectedUserIds.length === 0
-                ? "Map Selected Guests"
-                : `Map Selected Guests (${selectedUserIds.length})`}
+                ? "+ Add Selected Guests to Trail"
+                : `+ Add Selected Guests to Trail (${selectedUserIds.length})`}
             </button>
           </div>
         </div>
@@ -446,7 +568,7 @@ export default function TripMembers({ tripId }: { tripId: string }) {
         {/* Checkbox List of Available Guests */}
         <div
           style={{
-            maxHeight: "220px",
+            maxHeight: "240px",
             overflowY: "auto",
             border: "1px solid var(--line, #cbd5e1)",
             borderRadius: "6px",
@@ -465,77 +587,121 @@ export default function TripMembers({ tripId }: { tripId: string }) {
             filteredCandidates.map((c) => {
               const isChecked = selectedUserIds.includes(c.id);
               return (
-                <label
+                <div
                   key={c.id}
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: "10px",
-                    padding: "9px 12px",
+                    padding: "8px 12px",
                     borderBottom: "1px solid #f1f5f9",
-                    cursor: "pointer",
                     background: isChecked ? "rgba(45, 90, 39, 0.08)" : "transparent",
                     transition: "background 0.15s ease",
-                    userSelect: "none",
                   }}
                 >
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => toggleCandidate(c.id)}
+                  <label
                     style={{
-                      width: "16px",
-                      height: "16px",
-                      accentColor: "var(--forest, #2d5a27)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      flex: 1,
                       cursor: "pointer",
+                      userSelect: "none",
+                      margin: 0,
                     }}
-                  />
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", flex: 1 }}>
-                    <span style={{ fontWeight: 600, color: "#0f172a", fontSize: "13.5px" }}>
-                      {c.first_name} {c.last_name}
-                    </span>
-                    <span className="mono" style={{ fontSize: "13px", color: "#334155" }}>
-                      {c.phone}
-                    </span>
-                    {c.email && (
-                      <span className="small muted" style={{ fontSize: "12px" }}>
-                        · {c.email}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => toggleCandidate(c.id)}
+                      style={{
+                        width: "16px",
+                        height: "16px",
+                        accentColor: "var(--forest, #2d5a27)",
+                        cursor: "pointer",
+                      }}
+                    />
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", flex: 1 }}>
+                      <span style={{ fontWeight: 600, color: "#0f172a", fontSize: "13.5px" }}>
+                        {c.first_name} {c.last_name}
+                      </span>
+                      <span className="mono" style={{ fontSize: "13px", color: "#334155" }}>
+                        {c.phone}
+                      </span>
+                      {c.email && (
+                        <span className="small muted" style={{ fontSize: "12px" }}>
+                          · {c.email}
+                        </span>
+                      )}
+                    </div>
+                    {isChecked && (
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          color: "var(--forest, #2d5a27)",
+                          background: "rgba(45, 90, 39, 0.12)",
+                          padding: "2px 8px",
+                          borderRadius: "10px",
+                        }}
+                      >
+                        Selected
                       </span>
                     )}
-                  </div>
-                  {isChecked && (
-                    <span
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: 700,
-                        color: "var(--forest, #2d5a27)",
-                        background: "rgba(45, 90, 39, 0.12)",
-                        padding: "2px 8px",
-                        borderRadius: "10px",
-                      }}
-                    >
-                      Selected
-                    </span>
-                  )}
-                </label>
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => addSingleMember(c.id)}
+                    disabled={loading}
+                    style={{ fontSize: "11.5px", padding: "4px 10px", whiteSpace: "nowrap" }}
+                    title={`Directly add ${c.first_name} to this trail`}
+                  >
+                    + Add to Trail
+                  </button>
+                </div>
               );
             })
           )}
         </div>
 
         {selectedUserIds.length > 0 && (
-          <div style={{ marginTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--forest, #2d5a27)" }}>
-              ✓ {selectedUserIds.length} guest{selectedUserIds.length !== 1 ? "s" : ""} selected ready to map
+          <div
+            style={{
+              marginTop: "12px",
+              padding: "10px 14px",
+              background: "rgba(45, 90, 39, 0.08)",
+              border: "1px solid rgba(45, 90, 39, 0.25)",
+              borderRadius: "6px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "10px",
+            }}
+          >
+            <span style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--forest, #2d5a27)" }}>
+              ✓ {selectedUserIds.length} guest{selectedUserIds.length !== 1 ? "s" : ""} selected ready to add to trail
             </span>
-            <button
-              type="button"
-              className="link-btn"
-              onClick={() => setSelectedUserIds([])}
-              style={{ fontSize: "12px", color: "#64748b" }}
-            >
-              Clear selection
-            </button>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <button
+                type="button"
+                className="link-btn"
+                onClick={() => setSelectedUserIds([])}
+                style={{ fontSize: "12px", color: "#64748b" }}
+              >
+                Clear selection
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={addSelectedMembers}
+                disabled={loading}
+                style={{ fontSize: "13px", padding: "6px 16px", fontWeight: 600 }}
+              >
+                {loading ? "Adding…" : `+ Add Selected Guests to Trail (${selectedUserIds.length})`}
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -578,7 +744,7 @@ export default function TripMembers({ tripId }: { tripId: string }) {
         </div>
 
         {members.length === 0 ? (
-          <p className="panel-note">No guests enrolled yet. Select guests above to map them to this trail.</p>
+          <p className="panel-note">No guests enrolled yet. Select guests above and click &quot;+ Add Selected Guests to Trail&quot; or &quot;+ Create New Guest&quot; to enroll them.</p>
         ) : filteredMembers.length === 0 ? (
           <p className="panel-note">No enrolled guests match &ldquo;{memberSearch}&rdquo;.</p>
         ) : (
@@ -640,6 +806,94 @@ export default function TripMembers({ tripId }: { tripId: string }) {
 
       {error && <p className="form-error" role="alert" style={{ marginTop: "12px" }}>{error}</p>}
       {status && <p className="form-notice" role="status" style={{ marginTop: "12px" }}>{status}</p>}
+
+      {/* Quick Create New Guest Modal */}
+      {showCreateModal && (
+        <div className="modal-backdrop">
+          <form
+            className="admin-card"
+            onSubmit={handleCreateAndAddGuest}
+            style={{ maxWidth: "480px", width: "100%", maxHeight: "90vh", overflowY: "auto" }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h2 className="serif" style={{ margin: 0, fontSize: "1.3rem" }}>Create & Add Guest to Trail</h2>
+              <button type="button" className="link-btn" onClick={() => setShowCreateModal(false)}>✕ Cancel</button>
+            </div>
+
+            <p className="admin-hint" style={{ marginTop: 0, marginBottom: "16px" }}>
+              Creates a new guest profile and immediately enrolls them into this trail.
+            </p>
+
+            <div className="field-row">
+              <label className="form-field">
+                First Name *
+                <input
+                  required
+                  placeholder="e.g. John"
+                  value={newGuestForm.firstName}
+                  onChange={(e) => setNewGuestForm({ ...newGuestForm, firstName: e.target.value })}
+                />
+              </label>
+              <label className="form-field">
+                Last Name *
+                <input
+                  required
+                  placeholder="e.g. Doe"
+                  value={newGuestForm.lastName}
+                  onChange={(e) => setNewGuestForm({ ...newGuestForm, lastName: e.target.value })}
+                />
+              </label>
+            </div>
+
+            <label className="form-field">
+              Mobile Number * (used for sign-in)
+              <input
+                required
+                type="tel"
+                placeholder="10-digit mobile, e.g. 9876543210"
+                value={newGuestForm.phone}
+                onChange={(e) => setNewGuestForm({ ...newGuestForm, phone: e.target.value.replace(/[^\d+]/g, "") })}
+              />
+            </label>
+
+            <label className="form-field">
+              Email Address (Optional)
+              <input
+                type="email"
+                placeholder="guest@example.com"
+                value={newGuestForm.email}
+                onChange={(e) => setNewGuestForm({ ...newGuestForm, email: e.target.value })}
+              />
+            </label>
+
+            <label className="form-field">
+              City / Location (Optional)
+              <input
+                placeholder="e.g. Bangalore"
+                value={newGuestForm.location}
+                onChange={(e) => setNewGuestForm({ ...newGuestForm, location: e.target.value })}
+              />
+            </label>
+
+            <div className="form-actions" style={{ marginTop: "18px" }}>
+              <button
+                className="btn btn-primary"
+                type="submit"
+                disabled={createLoading}
+              >
+                {createLoading ? "Creating & Adding…" : "+ Create & Add to Trail"}
+              </button>
+              <button
+                className="btn btn-secondary"
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </section>
   );
 }

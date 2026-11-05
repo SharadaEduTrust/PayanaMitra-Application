@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { FeedbackStatus } from "@/lib/feedback";
+import { openExternalUrl } from "@/lib/utils";
 
 export default function GoogleFormFeedbackView({
   trip,
@@ -226,6 +227,7 @@ export default function GoogleFormFeedbackView({
             href={feedbackStatus.formUrl!}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => openExternalUrl(feedbackStatus.formUrl!, e)}
             className="btn btn-primary"
             style={{ padding: "10px 20px", fontSize: "13px", display: "inline-flex", alignItems: "center", gap: "8px", textDecoration: "none" }}
           >

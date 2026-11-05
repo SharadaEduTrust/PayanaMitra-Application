@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { DOCUMENT_TYPES, formatDocType } from "@/lib/documents";
+import { openExternalUrl } from "@/lib/utils";
 
 export type SavedDoc = {
   id: string;
@@ -176,6 +177,7 @@ export default function SavedDocumentsList({
                     href={doc.download_url}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={(e) => openExternalUrl(doc.download_url!, e)}
                     className="link-btn"
                     style={{ fontSize: "12px" }}
                   >

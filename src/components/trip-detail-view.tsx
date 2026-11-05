@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { calculateFeedbackStatus } from "@/lib/feedback";
 import TrailBroadcastModal from "@/components/trail-broadcast-modal";
+import { openExternalUrl } from "@/lib/utils";
 
 export type DayView = {
   id: string;
@@ -30,6 +31,17 @@ export type ContactView = {
   email: string | null;
 };
 
+export type TrailGuestView = {
+  id: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  emergencyName: string | null;
+  emergencyPhone: string | null;
+  foodPreference: string | null;
+  foodAllergy: string | null;
+};
+
 function dateRange(start: string | null, end: string | null) {
   if (!start) return "Dates to be decided";
   const format = (value: string) =>
@@ -41,6 +53,7 @@ export default function TripDetailView({
   trip,
   days,
   contacts,
+  trailGuests = [],
   canContribute,
   userRole,
   isLeader = false,
@@ -59,6 +72,7 @@ export default function TripDetailView({
   };
   days: DayView[];
   contacts: ContactView[];
+  trailGuests?: TrailGuestView[];
   canContribute: boolean;
   userRole?: string;
   isLeader?: boolean;
@@ -185,6 +199,7 @@ export default function TripDetailView({
                 href={feedbackStatus.formUrl!}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => openExternalUrl(feedbackStatus.formUrl!, e)}
                 className="btn btn-primary"
                 style={{ display: "inline-flex", alignItems: "center", gap: "6px", textDecoration: "none", whiteSpace: "nowrap" }}
               >
@@ -288,6 +303,89 @@ export default function TripDetailView({
           </div>
         )}
       </section>
+
+      {isLeader && trailGuests && trailGuests.length > 0 && (
+        <section className="panel" style={{ marginTop: "24px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
+            <div>
+              <div className="eyebrow">Trail Lead Directory</div>
+              <h2 className="serif" style={{ margin: "2px 0 0" }}>Booked Trail Guests & Emergency Contacts</h2>
+            </div>
+            <Link
+              href={`/dashboard/guests?trip_id=${trip.id}`}
+              className="btn btn-secondary"
+              style={{ fontSize: "12px", padding: "6px 12px" }}
+            >
+              Full Guest Manager →
+            </Link>
+          </div>
+
+          <div style={{ display: "grid", gap: "12px" }}>
+            {trailGuests.map((guest) => (
+              <div
+                key={guest.id}
+                style={{
+                  padding: "14px 18px",
+                  borderRadius: "8px",
+                  background: "var(--paper, #fdfbf7)",
+                  border: "1px solid var(--line, #e2d9cd)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "14px",
+                }}
+              >
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                    <strong style={{ fontSize: "1.05rem", color: "var(--forest, #1e3a2b)" }}>{guest.name}</strong>
+                    {guest.foodPreference && (
+                      <span className="pill on" style={{ fontSize: "10px", padding: "1px 6px" }}>
+                        {guest.foodPreference === "veg" ? "Veg" : guest.foodPreference === "non_veg" ? "Non-Veg" : guest.foodPreference}
+                      </span>
+                    )}
+                    {guest.foodAllergy && (
+                      <span className="pill" style={{ fontSize: "10px", padding: "1px 6px", background: "#fef3c7", color: "#92400e" }}>
+                        ⚠️ {guest.foodAllergy}
+                      </span>
+                    )}
+                  </div>
+                  <div className="muted small" style={{ marginTop: "4px" }}>
+                    <a className="contact-phone mono" href={`tel:${guest.phone}`} style={{ textDecoration: "none", fontWeight: 600 }}>
+                      📞 {guest.phone}
+                    </a>
+                    {guest.email && (
+                      <span style={{ marginLeft: "12px" }}>
+                        <a href={`mailto:${guest.email}`} style={{ color: "inherit" }}>
+                          ✉️ {guest.email}
+                        </a>
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ minWidth: "200px" }}>
+                  <span className="eyebrow" style={{ fontSize: "10px", display: "block", marginBottom: "2px" }}>Emergency Contact</span>
+                  {guest.emergencyName ? (
+                    <div>
+                      <strong>{guest.emergencyName}</strong>
+                      {guest.emergencyPhone && (
+                        <div>
+                          <a className="contact-phone mono small" href={`tel:${guest.emergencyPhone}`}>
+                            📞 {guest.emergencyPhone}
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="muted small">Not provided</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {(isLeader || userRole === "admin") && (
         <div className="trip-footer-actions">

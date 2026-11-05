@@ -52,10 +52,17 @@ export default async function DashboardPage() {
     past: trips.filter((trip) => tripStatus(trip) === "past"),
   };
 
+  const { count: unreadCount } = await admin
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", profile.id)
+    .eq("is_read", false);
+
   return (
     <TripList
       firstName={profile.first_name}
       role={profile.role}
+      unreadCount={unreadCount ?? 0}
       grouped={{
         current: grouped.current.map((t) => decorate(t, profile.id, profile.role)),
         upcoming: grouped.upcoming.map((t) => decorate(t, profile.id, profile.role)),

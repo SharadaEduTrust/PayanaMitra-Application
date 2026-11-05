@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { openExternalUrl } from "@/lib/utils";
 
 export type AdminFeedbackItem = {
   id: string;
@@ -257,6 +258,7 @@ export default function FeedbackAdmin({ feedback, trips, initialTripId }: Props)
                 href={selectedTrip.feedback_form_url}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => openExternalUrl(selectedTrip.feedback_form_url!, e)}
                 className="btn btn-secondary"
                 style={{
                   display: "inline-flex",
@@ -590,6 +592,7 @@ export default function FeedbackAdmin({ feedback, trips, initialTripId }: Props)
                       href={item.trip.feedback_form_url}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={(e) => openExternalUrl(item.trip!.feedback_form_url!, e)}
                       style={{
                         fontSize: "12px",
                         color: "#2563eb",

@@ -44,7 +44,7 @@ Managing experiential tours often suffers from fragmented tools: itineraries sen
 
 Payana Mitra unifies these workflows into a single high-security portal:
 - **Centralized Trip Control:** Admins design, publish, clone, and manage multi-day trips and itineraries.
-- **Field Coordination:** Trail leaders receive real-time rosters with emergency details, dietary preferences, and one-tap broadcasts.
+- **Field Coordination:** Trail leaders receive real-time rosters with emergency details, dietary preferences, guest directory, and one-tap broadcasts.
 - **Secure Guest Companion:** Travellers get a mobile-optimized day-by-day itinerary, an AES-256 encrypted personal document vault, and real-time push & WhatsApp updates.
 
 ---
@@ -55,6 +55,7 @@ Payana Mitra unifies these workflows into a single high-security portal:
 - **Trail / Trip Management:** Create, edit, publish, archive, and delete trips.
 - **Deep Trip Duplication:** One-click cloning of entire itineraries, day schedules, and activities via the `copy_trip()` PostgreSQL stored procedure.
 - **Granular Itinerary Builder:** Day-by-day scheduling with meal plans (`EP`, `CP`, `MAP`, `AP`, custom lunch/dinner flags), activity time intervals, order indexing, and destinations.
+- **Guest Enrollment:** Instant guest mapping, single-click trail addition, and modal creation for new guests.
 - **CSV Import Engine:**
   - Bulk import users with automatic duplicate checking, role assignment, and validation.
   - Bulk import complex multi-day itineraries with downloadable template sheets.
@@ -68,91 +69,85 @@ Payana Mitra unifies these workflows into a single high-security portal:
 
 ### 2. Trail Leaders (Field Leads)
 - **Assigned Guests Roster:** Dedicated `trail_leader_view` showing enrolled guests, rooming/dietary requirements, medical disclosures, and emergency contacts.
+- **Booked Guest Directory:** Immediate access to guest contacts and emergency phone numbers on assigned trail pages.
 - **Trail Broadcasts:** Instant alerts sent directly to travellers on a specific active trip.
-- **Emergency Directory:** Quick-dial emergency contacts and logistics personnel.
+- **Emergency Directory:** Quick-dial emergency contacts and logistics personnel placed below the day-by-day itinerary.
+- **Guest Feedback Portal:** Dedicated leader portal (`/dashboard/feedback`) to monitor satisfaction ratings and written comments across assigned expeditions.
 - **Live Location Tracking:** Monitor check-ins and GPS pings submitted by travellers.
 
 ### 3. Travellers & Guests
-- **Interactive Daily Itinerary:** Timeline view of daily activities, timing, meal arrangements, transit checkpoints, and hotel details.
-- **Encrypted Document Locker:** Secure storage for flight tickets, visas, insurance policies, and identity documents (passports, PAN, Aadhaar).
-- **Frictionless Auth:** Fast, passwordless phone + 4-digit PIN authentication with automated initial PIN assignment.
-- **Notification Inbox:** Real-time updates and trip announcements with unread badge indicators.
-- **Trip Surveys & Feedback:** Direct feedback submission to help organizers improve future departures.
+- **Mobile-First Itinerary Companion:** Day-by-day timeline showing planned timings, activity details, transport logistics, and meal coverage.
+- **Encrypted Document Vault:** Secure AES-256-GCM encrypted storage for passports, Aadhaar cards, visas, permits, and vaccination certificates.
+- **External Resource Watching:** Automatic new tab / window launching for Payana Quiz, external Google Forms, and documents without disrupting active app sessions.
+- **Live Notification Alerts:** Visual unread bell badge counters across top headers, sidebar navigation, and dashboard notification banner cards.
+- **Direct Emergency Calling:** One-tap calling for tour coordinators, guides, drivers, and local hotel front desks.
+- **Feedback Submission:** Post-trail star ratings, comments, and direct Google Form survey integration.
 
 ---
 
 ## 🔒 Security & Data Protection Architecture
 
-Payana Mitra implements enterprise-grade data isolation and encryption safeguards:
+Payana Mitra enforces strict defense-in-depth security across every layer of the application:
 
-| Security Layer | Implementation Details |
-|---|---|
-| **Field-Level Encryption** | Sensitive guest fields (e.g., Passport numbers, PAN numbers, Identification details) are encrypted at rest using **AES-256-GCM** with 96-bit auth tags and cryptographically secure IVs (`lib/server/crypto.ts`). Values are decrypted strictly server-side for authorized sessions. |
-| **Row Level Security (RLS)** | Supabase PostgreSQL enforces strict tenant policies across all 13+ tables. Travellers can only access their own profile, assigned trips, and own documents; Trail Leaders access only assigned guests; Admins bypass via Service Role where auditable. |
-| **Password Derivation** | PINs and passwords are never stored in plaintext. They are derived using **HMAC-SHA256** combined with a high-entropy server-side pepper (`AUTH_PEPPER`). |
-| **Brute-Force Login Guard** | Authentication attempts are tracked in the `login_attempts` table with exponential lockout penalties against brute-force attacks. |
-| **Inactivity Session Timeout** | Automatic session revocation and cookie cleanup after **30 minutes of inactivity** monitored across both middleware and client watchers. |
-| **Secure Document Storage** | Supabase Storage buckets (`guest-documents`) with strict file-type whitelisting, virus/magic-byte checks, and signed temporary URLs. |
+1. **PostgreSQL Row Level Security (RLS)**
+   - All 15 database tables enforce RLS policies.
+   - Enrolled travellers can *only* select and read their own trips, documents, and notifications.
+   - Field trail leaders can only view rosters and guest details for trails they are explicitly assigned to lead.
+   - Only users with verified `role = 'admin'` can mutate platform data, perform CSV bulk imports, or trigger mass broadcasts.
+
+2. **End-to-End At-Rest Document Encryption**
+   - Personal travel documents uploaded by guests (passports, national IDs, medical records) are encrypted using **AES-256-GCM** before being streamed to Supabase Storage.
+   - Decryption occurs entirely server-side in streaming memory chunks, requiring verified ownership or administrative permissions.
+
+3. **Secure PIN & Password Derivation**
+   - User PINs and passwords are hashed using **HMAC-SHA256** combined with a high-entropy server-side secret pepper (`AUTH_PEPPER`).
+   - Constant-time string comparison (`crypto.timingSafeEqual`) prevents timing attack vulnerabilities during authentication.
+
+4. **Inactivity Session Timeout Protection**
+   - Continuous client-side activity listener automatically logs out inactive sessions after 15 minutes of inactivity on shared or public devices.
 
 ---
 
-## 💻 Tech Stack
+## 🛠 Tech Stack
 
-### Core Framework & UI
-- **Framework:** [Next.js 16](https://nextjs.org/) (App Router, Server Actions, Route Handlers)
+- **Framework:** [Next.js 16](https://nextjs.org/) (App Router, Server Actions, Server Components)
 - **Frontend Library:** [React 19](https://react.dev/)
-- **Language:** [TypeScript 5](https://www.typescriptlang.org/) (Strict Mode)
-- **Styling:** [Tailwind CSS v4](https://tailwindcss.com/) with OKLCH color palettes & [tw-animate-css](https://github.com)
-- **Components:** [shadcn/ui](https://ui.shadcn.com/) & [@base-ui/react](https://base-ui.com/)
+- **Language:** [TypeScript 5](https://www.typescriptlang.org/)
+- **Database & Storage:** [Supabase](https://supabase.com/) (PostgreSQL 15+, Row Level Security, S3-Compatible Storage Buckets)
+- **Styling:** [Tailwind CSS v4](https://tailwindcss.com/)
+- **Document Compression:** [iLoveAPI](https://developer.ilovepdf.com/) + [sharp](https://sharp.pixelplumbing.com/)
+- **Notifications:** Web Push API (`web-push` / VAPID) + Meta WhatsApp Cloud API
 - **Icons:** [Lucide React](https://lucide.dev/)
-
-### Backend, Database & Cloud Services
-- **Database & Auth:** [Supabase](https://supabase.com/) (Managed PostgreSQL, GoTrue Auth, Storage)
-- **Client & Middleware:** `@supabase/ssr` & `@supabase/supabase-js`
-- **Schema Validation:** [Zod 4](https://zod.dev/)
-- **Push Notifications:** [Web Push (VAPID)](https://github.com/web-push-libs/web-push)
-- **Messaging:** [WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api) (Meta Business Platform)
-- **Document Optimization:** [iLoveAPI](https://developer.ilovepdf.com/) (PDF & Image compression) & [sharp](https://sharp.pixelplumbing.com/)
 
 ---
 
 ## 📁 Project Structure
 
-```text
+```
 payana-mitra/
-├── docs/                      # Architectural docs, guides, and progress trackers
-├── public/                    # Static assets, branding logos, icons, PWA manifests
-├── scripts/                   # CLI maintenance & automated test scripts
-│   ├── backend-test.ts        # Comprehensive 10-section backend verification suite
-│   ├── create-admin.ts        # Script to elevate a user to admin role
-│   ├── rls-test.ts            # Row Level Security isolation test suite
-│   ├── seed.ts                # Database seeder (sample trips, days, activities, users)
-│   ├── test-compression.ts    # iLoveAPI / sharp upload compression testing
-│   ├── test-itinerary-import.ts # Itinerary CSV import integration tests
-│   └── test-mapping-import.ts # User CSV import & mapping tests
 ├── src/
-│   ├── app/                   # Next.js App Router (Pages, Layouts, API Handlers)
-│   │   ├── (auth)/            # /login, /signup, /change-password
-│   │   ├── admin/             # Admin control panel (/trips, /users, /audit-log, /import, etc.)
-│   │   ├── dashboard/         # Traveller & Leader portal (/trips, /documents, /guests, etc.)
-│   │   └── api/               # Serverless API routes (auth, admin, trips, push, whatsapp)
-│   ├── components/            # Reusable UI components & feature modules
-│   │   ├── ui/                # Base design system primitives (buttons, inputs, cards)
-│   │   ├── csv-import-admin.tsx # Smart CSV bulk importer with column mapping
-│   │   ├── trip-editor.tsx    # Multi-day itinerary and activity manager
-│   │   ├── assigned-guests-view.tsx # Trail leader field roster
-│   │   └── ...                # Feature-specific dialogs, forms, and views
-│   ├── lib/                   # Shared utility libraries
-│   │   ├── compression/       # iLoveAPI & Sharp file compression pipelines
-│   │   ├── server/            # Server-only utilities (crypto, auth, whatsapp, push)
-│   │   ├── supabase/          # Supabase client factories (client, server, admin, middleware)
-│   │   ├── auth.ts            # Authentication helpers & session helpers
-│   │   ├── crypto.ts          # AES-256-GCM symmetric encryption methods
-│   │   └── types.ts           # Domain-specific TypeScript declarations
-│   ├── middleware.ts          # Global edge auth verification and session keeper
-│   └── types/                 # Auto-generated and custom database definitions
-└── supabase/
-    └── migrations/            # Ordered PostgreSQL migration scripts (001_init.sql ... 015)
+│   ├── app/
+│   │   ├── (auth)/             # Login, signup, pin verification
+│   │   ├── admin/              # Admin dashboard, trip builder, CSV import
+│   │   ├── dashboard/          # Traveller & trail leader dashboard, itineraries
+│   │   └── api/                # Secure API endpoints (auth, trips, documents, push)
+│   ├── components/             # Reusable UI components & modals
+│   ├── lib/
+│   │   ├── auth.ts             # Auth session resolution and role guards
+│   │   ├── crypto.ts           # AES-256-GCM and HMAC-SHA256 crypto helpers
+│   │   ├── compression/        # iLoveAPI & sharp file optimization pipeline
+│   │   ├── feedback.ts         # Google Form & feedback calculation logic
+│   │   ├── notifications.ts    # Web push and in-app notification dispatcher
+│   │   ├── whatsapp.ts         # Meta Cloud WhatsApp API client
+│   │   └── supabase/           # Supabase client singletons & admin clients
+│   └── types/                  # TypeScript interface definitions
+├── supabase/
+│   └── migrations/             # Idempotent PostgreSQL DDL, procedures, RLS policies
+├── scripts/
+│   ├── seed.ts                 # Database seeding script for development
+│   ├── create-admin.ts         # Interactive CLI admin promotion tool
+│   └── test-backend.ts         # Automated backend test suite
+└── public/                     # Static assets, branding, PWA manifest
 ```
 
 ---
@@ -160,17 +155,18 @@ payana-mitra/
 ## 🚀 Getting Started
 
 ### Prerequisites
-- **Node.js:** `v20.x` or later (LTS recommended)
-- **Package Manager:** `npm` (included with Node.js)
-- **Supabase Account:** Free or Pro project at [supabase.com](https://supabase.com) (or local Supabase CLI)
+
+- **Node.js:** `v20.x` or higher
+- **Package Manager:** `npm` (v10+)
+- **Supabase Account:** Local Supabase CLI or cloud project instance
 
 ---
 
 ### 1. Clone and Install
 
 ```bash
-git clone https://github.com/your-username/payana-mitra.git
-cd payana-mitra
+git clone https://github.com/SharadaEduTrust/PayanaMitra-Application.git
+cd PayanaMitra-Application
 npm install
 ```
 
@@ -178,54 +174,23 @@ npm install
 
 ### 2. Configure Environment Variables
 
-Create your local environment file by copying the template:
-
+Create a local environment configuration file:
 ```bash
 cp .env.example .env.local
 ```
 
-Open `.env.local` and configure your credentials.
-
-#### Generating Cryptographic Keys
-
-1. **Authentication Pepper (`AUTH_PEPPER`)**:
-   ```bash
-   openssl rand -base64 32
-   ```
-
-2. **Field Encryption Key (`ENCRYPTION_KEY`)**:
-   ```bash
-   openssl rand -base64 32
-   ```
-
-3. **Web Push VAPID Key Pair (`VAPID_PUBLIC_KEY` & `VAPID_PRIVATE_KEY`)**:
-   ```bash
-   npx web-push generate-vapid-keys
-   ```
+Fill in your project credentials (see [Environment Variables Reference](#-environment-variables-reference) below).
 
 ---
 
 ### 3. Database Setup & Migrations
 
-Execute the migrations in sequential order against your Supabase SQL Editor (or apply via Supabase CLI):
-
+Execute the migrations in sequential order against your Supabase PostgreSQL instance:
 ```bash
-# Order of execution:
-# 1.  supabase/migrations/001_init.sql
-# 2.  supabase/migrations/002_login_guard.sql
-# 3.  supabase/migrations/003_leader_role.sql
-# 4.  supabase/migrations/004_sheet_features.sql
-# 5.  supabase/migrations/005_profile_avatar.sql
-# 6.  supabase/migrations/006_spec_alignment.sql
-# 7.  supabase/migrations/007_spec_alignment_and_storage.sql
-# 8.  supabase/migrations/008_document_issued_date.sql
-# 9.  supabase/migrations/009_profile_referral_name.sql
-# 10. supabase/migrations/010_guest_details_passport_issue_and_visa.sql
-# 11. supabase/migrations/011_google_form_feedback.sql
-# 12. supabase/migrations/012_feedback_rating_ten.sql
-# 13. supabase/migrations/013_allow_lunch_and_dinner_meal_plan.sql
-# 14. supabase/migrations/014_temp_uploads_storage.sql
-# 15. supabase/migrations/015_increase_guest_documents_bucket_limit.sql
+# Using Supabase CLI
+supabase db push
+
+# Or run the SQL files in supabase/migrations/ directly via Supabase SQL Editor
 ```
 
 Ensure the following Supabase Storage buckets exist:

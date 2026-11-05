@@ -203,15 +203,14 @@ export default function TripList({
                               </Link>
                             )}
                           </div>
-                          {(role === "traveller" || role === "leader" || !role) &&
-                            (trip.status === "past" || trip.feedbackState === "open") && (
-                              <Link
-                                className="btn btn-secondary trip-card-feedback-btn"
-                                href={`/dashboard/trips/${trip.id}/feedback`}
-                              >
-                                Feedback
-                              </Link>
-                            )}
+                          {(trip.isLeader || role === "leader" || role === "admin" || trip.status === "current" || trip.status === "past" || trip.feedbackState === "open") && (
+                            <Link
+                              className="btn btn-secondary trip-card-feedback-btn"
+                              href={`/dashboard/trips/${trip.id}/feedback`}
+                            >
+                              Feedback
+                            </Link>
+                          )}
                         </div>
                       )}
                     </article>

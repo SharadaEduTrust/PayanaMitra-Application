@@ -102,6 +102,14 @@ export default function TripDetailView({
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
           <span className={`pill ${trip.status === "published" ? "upcoming" : "past"}`}>{trip.status}</span>
+          <Link
+            href={`/dashboard/trips/${trip.id}/feedback`}
+            className="btn btn-secondary"
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 14px", fontSize: "12px" }}
+          >
+            <span>⭐</span>
+            <span>{isLeader ? "Feedback & Reviews" : "Feedback"}</span>
+          </Link>
           {isLeader && (
             <Link
               href={`/dashboard/guests?trip_id=${trip.id}`}
@@ -156,6 +164,14 @@ export default function TripDetailView({
             </p>
           </div>
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+            <Link
+              href={`/dashboard/trips/${trip.id}/feedback`}
+              className="btn btn-secondary"
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
+            >
+              <span>⭐</span>
+              <span>Feedback & Reviews</span>
+            </Link>
             <Link
               href={`/dashboard/guests?trip_id=${trip.id}`}
               className="btn btn-secondary"

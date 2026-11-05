@@ -78,6 +78,7 @@ export default function TripDetailView({
   isLeader?: boolean;
 }) {
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+  const [isGuestsCollapsed, setIsGuestsCollapsed] = useState(false);
 
   const feedbackStatus = calculateFeedbackStatus({
     start_date: trip.startDate,
@@ -193,6 +194,105 @@ export default function TripDetailView({
         </section>
       )}
 
+      {isLeader && trailGuests && trailGuests.length > 0 && (
+        <section className="panel" style={{ marginBottom: "20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+            <div>
+              <div className="eyebrow">Trail Lead Directory</div>
+              <h2 className="serif" style={{ margin: "2px 0 0" }}>
+                Booked Trail Guests & Emergency Contacts ({trailGuests.length})
+              </h2>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setIsGuestsCollapsed((prev) => !prev)}
+                style={{ fontSize: "12px", padding: "6px 12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                aria-expanded={!isGuestsCollapsed}
+              >
+                <span>{isGuestsCollapsed ? "Expand" : "Collapse"}</span>
+                <span style={{ fontSize: "10px" }}>{isGuestsCollapsed ? "▼" : "▲"}</span>
+              </button>
+              <Link
+                href={`/dashboard/guests?trip_id=${trip.id}`}
+                className="btn btn-secondary"
+                style={{ fontSize: "12px", padding: "6px 12px" }}
+              >
+                Full Guest Manager →
+              </Link>
+            </div>
+          </div>
+
+          {!isGuestsCollapsed && (
+            <div style={{ display: "grid", gap: "12px", marginTop: "16px" }}>
+              {trailGuests.map((guest) => (
+                <div
+                  key={guest.id}
+                  style={{
+                    padding: "14px 18px",
+                    borderRadius: "8px",
+                    background: "var(--paper, #fdfbf7)",
+                    border: "1px solid var(--line, #e2d9cd)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "14px",
+                  }}
+                >
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                      <strong style={{ fontSize: "1.05rem", color: "var(--forest, #1e3a2b)" }}>{guest.name}</strong>
+                      {guest.foodPreference && (
+                        <span className="pill on" style={{ fontSize: "10px", padding: "1px 6px" }}>
+                          {guest.foodPreference === "veg" ? "Veg" : guest.foodPreference === "non_veg" ? "Non-Veg" : guest.foodPreference}
+                        </span>
+                      )}
+                      {guest.foodAllergy && (
+                        <span className="pill" style={{ fontSize: "10px", padding: "1px 6px", background: "#fef3c7", color: "#92400e" }}>
+                          ⚠️ {guest.foodAllergy}
+                        </span>
+                      )}
+                    </div>
+                    <div className="muted small" style={{ marginTop: "4px" }}>
+                      <a className="contact-phone mono" href={`tel:${guest.phone}`} style={{ textDecoration: "none", fontWeight: 600 }}>
+                        📞 {guest.phone}
+                      </a>
+                      {guest.email && (
+                        <span style={{ marginLeft: "12px" }}>
+                          <a href={`mailto:${guest.email}`} style={{ color: "inherit" }}>
+                            ✉️ {guest.email}
+                          </a>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ minWidth: "200px" }}>
+                    <span className="eyebrow" style={{ fontSize: "10px", display: "block", marginBottom: "2px" }}>Emergency Contact</span>
+                    {guest.emergencyName ? (
+                      <div>
+                        <strong>{guest.emergencyName}</strong>
+                        {guest.emergencyPhone && (
+                          <div>
+                            <a className="contact-phone mono small" href={`tel:${guest.emergencyPhone}`}>
+                              📞 {guest.emergencyPhone}
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="muted small">Not provided</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {feedbackStatus.configured && feedbackStatus.state === "open" && (
         <section className="feedback-banner-card" style={{ marginBottom: "20px", padding: "18px 22px", borderRadius: "8px", background: "linear-gradient(135deg, rgba(20,53,42,0.12), rgba(246,231,200,0.35))", border: "1px solid var(--forest, #14352a)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "14px" }}>
@@ -241,28 +341,6 @@ export default function TripDetailView({
           This trail is still a draft. Your coordinator will publish it when the itinerary is final.
         </p>
       )}
-
-      <section className="panel" style={{ marginBottom: "20px" }}>
-        <h2 className="serif">Contacts</h2>
-        {contacts.length === 0 ? (
-          <p className="panel-note">Guide, hotel and transport contacts will appear here.</p>
-        ) : (
-          <div className="contact-list">
-            {contacts.map((contact) => (
-              <div key={contact.id}>
-                <span className="contact-label">{contact.role ?? "Contact"}</span>
-                <span className="contact-name">{contact.name}</span>
-                {contact.phone && (
-                  <a className="contact-phone" href={`tel:${contact.phone}`}>
-                    {contact.phone}
-                  </a>
-                )}
-                {contact.email && <a className="contact-phone" href={`mailto:${contact.email}`}>{contact.email}</a>}
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
 
       {trip.remarks && (
         <section className="panel" style={{ marginBottom: "20px" }}>
@@ -320,88 +398,27 @@ export default function TripDetailView({
         )}
       </section>
 
-      {isLeader && trailGuests && trailGuests.length > 0 && (
-        <section className="panel" style={{ marginTop: "24px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
-            <div>
-              <div className="eyebrow">Trail Lead Directory</div>
-              <h2 className="serif" style={{ margin: "2px 0 0" }}>Booked Trail Guests & Emergency Contacts</h2>
-            </div>
-            <Link
-              href={`/dashboard/guests?trip_id=${trip.id}`}
-              className="btn btn-secondary"
-              style={{ fontSize: "12px", padding: "6px 12px" }}
-            >
-              Full Guest Manager →
-            </Link>
-          </div>
-
-          <div style={{ display: "grid", gap: "12px" }}>
-            {trailGuests.map((guest) => (
-              <div
-                key={guest.id}
-                style={{
-                  padding: "14px 18px",
-                  borderRadius: "8px",
-                  background: "var(--paper, #fdfbf7)",
-                  border: "1px solid var(--line, #e2d9cd)",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                  gap: "14px",
-                }}
-              >
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                    <strong style={{ fontSize: "1.05rem", color: "var(--forest, #1e3a2b)" }}>{guest.name}</strong>
-                    {guest.foodPreference && (
-                      <span className="pill on" style={{ fontSize: "10px", padding: "1px 6px" }}>
-                        {guest.foodPreference === "veg" ? "Veg" : guest.foodPreference === "non_veg" ? "Non-Veg" : guest.foodPreference}
-                      </span>
-                    )}
-                    {guest.foodAllergy && (
-                      <span className="pill" style={{ fontSize: "10px", padding: "1px 6px", background: "#fef3c7", color: "#92400e" }}>
-                        ⚠️ {guest.foodAllergy}
-                      </span>
-                    )}
-                  </div>
-                  <div className="muted small" style={{ marginTop: "4px" }}>
-                    <a className="contact-phone mono" href={`tel:${guest.phone}`} style={{ textDecoration: "none", fontWeight: 600 }}>
-                      📞 {guest.phone}
-                    </a>
-                    {guest.email && (
-                      <span style={{ marginLeft: "12px" }}>
-                        <a href={`mailto:${guest.email}`} style={{ color: "inherit" }}>
-                          ✉️ {guest.email}
-                        </a>
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div style={{ minWidth: "200px" }}>
-                  <span className="eyebrow" style={{ fontSize: "10px", display: "block", marginBottom: "2px" }}>Emergency Contact</span>
-                  {guest.emergencyName ? (
-                    <div>
-                      <strong>{guest.emergencyName}</strong>
-                      {guest.emergencyPhone && (
-                        <div>
-                          <a className="contact-phone mono small" href={`tel:${guest.emergencyPhone}`}>
-                            📞 {guest.emergencyPhone}
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="muted small">Not provided</span>
-                  )}
-                </div>
+      <section className="panel" style={{ marginTop: "24px" }}>
+        <h2 className="serif">Contacts</h2>
+        {contacts.length === 0 ? (
+          <p className="panel-note">Guide, hotel and transport contacts will appear here.</p>
+        ) : (
+          <div className="contact-list">
+            {contacts.map((contact) => (
+              <div key={contact.id}>
+                <span className="contact-label">{contact.role ?? "Contact"}</span>
+                <span className="contact-name">{contact.name}</span>
+                {contact.phone && (
+                  <a className="contact-phone" href={`tel:${contact.phone}`}>
+                    {contact.phone}
+                  </a>
+                )}
+                {contact.email && <a className="contact-phone" href={`mailto:${contact.email}`}>{contact.email}</a>}
               </div>
             ))}
           </div>
-        </section>
-      )}
+        )}
+      </section>
 
       {(isLeader || userRole === "admin") && (
         <div className="trip-footer-actions">

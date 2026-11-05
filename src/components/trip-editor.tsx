@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { openExternalUrl } from "@/lib/utils";
 
 export type EditableDay = {
   id?: string;
@@ -601,6 +602,7 @@ export default function TripEditor({
                 href={form.feedbackFormUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => openExternalUrl(form.feedbackFormUrl!, e)}
                 className="btn btn-secondary"
                 style={{ padding: "6px 12px", fontSize: "12px" }}
               >

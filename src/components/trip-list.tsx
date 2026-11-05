@@ -36,10 +36,12 @@ export default function TripList({
   firstName,
   role,
   grouped,
+  unreadCount = 0,
 }: {
   firstName?: string;
   role: string;
   grouped: Record<string, TripSummary[]>;
+  unreadCount?: number;
 }) {
   const total = Object.values(grouped).reduce((count, list) => count + list.length, 0);
 
@@ -57,12 +59,47 @@ export default function TripList({
           {role === "admin" && (
             <Link className="btn btn-secondary" href="/admin">Admin panel</Link>
           )}
+          <Link
+            className="btn btn-secondary topbar-bell-btn"
+            href="/dashboard/notifications"
+            aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ""}`}
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px", position: "relative" }}
+          >
+            <span style={{ fontSize: "14px" }}>🔔</span>
+            <span>Notifications</span>
+            {unreadCount > 0 && (
+              <span className="bell-badge-pill">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </Link>
           <Link className="btn btn-secondary" href="/dashboard/profile">My profile</Link>
         </div>
       </header>
 
       <div className="trips-page">
         <WelcomeBanner firstName={firstName} />
+
+        {unreadCount > 0 && (
+          <div className="unread-notification-card">
+            <span className="unread-card-bell">🔔</span>
+            <div style={{ flex: 1, minWidth: "220px" }}>
+              <h3 style={{ margin: "0 0 3px", fontSize: "14px", fontWeight: 700, color: "var(--forest, #1e3a2b)" }}>
+                You have {unreadCount} unread notification{unreadCount > 1 ? "s" : ""}
+              </h3>
+              <p className="small muted" style={{ margin: 0 }}>
+                Important trail alerts, itinerary updates, and reminders have been sent by your coordinator.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/notifications"
+              className="btn btn-primary"
+              style={{ fontSize: "12px", padding: "7px 16px", whiteSpace: "nowrap" }}
+            >
+              View Updates →
+            </Link>
+          </div>
+        )}
         {total === 0 ? (
           <div className="panel-empty">
             <img src="/illustrations/empty-state.webp" alt="" />

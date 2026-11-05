@@ -29,9 +29,13 @@ export default async function TripPage({ params }: Params) {
   const trip = tripData as Trip | null;
   if (!trip) notFound();
 
-  const [{ data: dayRows }, { data: contactRows }] = await Promise.all([
+  const [{ data: dayRows }, { data: contactRows }, { data: leaderProfile }, { data: coordinatorRows }] = await Promise.all([
     admin.from("itinerary_days").select("*").eq("trip_id", id).order("day_number"),
     admin.from("trip_contacts").select("*").eq("trip_id", id).order("name"),
+    trip.leader_id
+      ? admin.from("profiles").select("id, first_name, last_name, phone, email").eq("id", trip.leader_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    admin.from("profiles").select("id, first_name, last_name, phone, email").eq("role", "admin").eq("is_active", true).order("created_at", { ascending: true }).limit(1),
   ]);
 
   const days = (dayRows ?? []) as ItineraryDay[];
@@ -45,6 +49,88 @@ export default async function TripPage({ params }: Params) {
       .in("itinerary_day_id", dayIds)
       .order("activity_order");
     activities = (data ?? []) as Activity[];
+  }
+
+  const isLeader = profile.role === "admin" || trip.leader_id === profile.id;
+
+  // Build complete contacts list: Leader + Coordinator + Logistical Contacts (guides/hotels/transport)
+  const combinedContacts: Array<{ id: string; name: string; role: string | null; phone: string | null; email: string | null }> = [];
+
+  if (leaderProfile) {
+    combinedContacts.push({
+      id: `leader-${leaderProfile.id}`,
+      name: `${leaderProfile.first_name} ${leaderProfile.last_name}`.trim(),
+      role: "Trail Leader",
+      phone: leaderProfile.phone,
+      email: leaderProfile.email,
+    });
+  }
+
+  const coordinator = coordinatorRows?.[0];
+  if (coordinator && (!leaderProfile || leaderProfile.phone !== coordinator.phone)) {
+    combinedContacts.push({
+      id: `coord-${coordinator.id}`,
+      name: `${coordinator.first_name} ${coordinator.last_name}`.trim(),
+      role: "Trail Coordinator",
+      phone: coordinator.phone,
+      email: coordinator.email,
+    });
+  }
+
+  for (const contact of (contactRows ?? []) as TripContact[]) {
+    // Avoid duplicate phone/name if already listed
+    if (!combinedContacts.some((c) => (c.phone && c.phone === contact.phone) || c.name.toLowerCase() === contact.name.toLowerCase())) {
+      combinedContacts.push({
+        id: contact.id,
+        name: contact.name,
+        role: contact.role,
+        phone: contact.phone,
+        email: contact.email,
+      });
+    }
+  }
+
+  // For Trail Leaders and Admins: query full guest roster with direct phone & emergency contacts
+  let trailGuests: Array<{
+    id: string;
+    name: string;
+    phone: string;
+    email: string | null;
+    emergencyName: string | null;
+    emergencyPhone: string | null;
+    foodPreference: string | null;
+    foodAllergy: string | null;
+  }> = [];
+
+  if (isLeader) {
+    const { data: memberRows } = await admin
+      .from("trip_members")
+      .select("user_id")
+      .eq("trip_id", id);
+
+    const guestIds = (memberRows ?? []).map((m: { user_id: string }) => m.user_id);
+    if (guestIds.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: guestProfiles } = await (admin.from("profiles") as any)
+        .select("id, first_name, last_name, phone, email, traveller_details(*)")
+        .in("id", guestIds)
+        .order("first_name", { ascending: true });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      trailGuests = (guestProfiles ?? []).map((g: any) => {
+        const details = Array.isArray(g.traveller_details) ? g.traveller_details[0] : g.traveller_details;
+        return {
+          id: g.id,
+          name: `${g.first_name} ${g.last_name}`.trim(),
+          phone: g.phone,
+          email: g.email ?? null,
+          emergencyName: details?.emergency_contact_name ?? null,
+          emergencyPhone: details?.emergency_contact_no ?? null,
+          foodPreference: details?.food_preference ?? null,
+          foodAllergy: details?.food_allergy ?? null,
+        };
+      });
+    }
   }
 
   const fbConfig = extractFeedbackConfig(trip);
@@ -81,16 +167,11 @@ export default async function TripPage({ params }: Params) {
             order: activity.activity_order,
           })),
       }))}
-      contacts={(contactRows ?? []).map((contact: TripContact) => ({
-        id: contact.id,
-        name: contact.name,
-        role: contact.role,
-        phone: contact.phone,
-        email: contact.email,
-      }))}
+      contacts={combinedContacts}
+      trailGuests={trailGuests}
       canContribute={profile.role === "admin" || profile.role === "leader"}
       userRole={profile.role}
-      isLeader={profile.role === "admin" || trip.leader_id === profile.id}
+      isLeader={isLeader}
     />
   );
 }

@@ -1,16 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import LogoutButton from "@/components/logout-button";
 
 export default function MobileNav({
   title = "Menu",
   redirectTo = "/login",
+  unreadCount = 0,
 }: {
   title?: string;
   redirectTo?: string;
+  unreadCount?: number;
 }) {
   const [open, setOpen] = useState(false);
+  const [count, setCount] = useState<number>(unreadCount);
+
+  useEffect(() => {
+    setCount(unreadCount);
+  }, [unreadCount]);
+
+  useEffect(() => {
+    function handleUpdate(e: Event) {
+      const customEvent = e as CustomEvent<{ unreadCount?: number }>;
+      if (typeof customEvent.detail?.unreadCount === "number") {
+        setCount(customEvent.detail.unreadCount);
+      }
+    }
+    window.addEventListener("payana:notifications-updated", handleUpdate);
+    return () => {
+      window.removeEventListener("payana:notifications-updated", handleUpdate);
+    };
+  }, []);
 
   function toggle() {
     const side = document.querySelector(".sidebar, .admin-side");
@@ -40,6 +61,29 @@ export default function MobileNav({
         >
           <span>☰</span> {title}
         </button>
+
+        <Link
+          href="/dashboard/notifications"
+          className="btn btn-secondary"
+          aria-label={`Notifications ${count > 0 ? `(${count} unread)` : ""}`}
+          style={{
+            position: "relative",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "5px",
+            padding: "6px 11px",
+            fontSize: "13px",
+            textDecoration: "none",
+          }}
+        >
+          <span style={{ fontSize: "14px" }}>🔔</span>
+          {count > 0 && (
+            <span className="mobile-bell-badge">
+              {count > 99 ? "99+" : count}
+            </span>
+          )}
+        </Link>
+
         <LogoutButton
           redirectTo={redirectTo}
           className="btn btn-secondary"

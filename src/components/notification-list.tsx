@@ -28,7 +28,10 @@ export default function NotificationList({ notifications }: { notifications: Ent
 
   async function markRead(id: string) {
     const supabase = createClient();
-    setEntries((current) => current.map((entry) => (entry.id === id ? { ...entry, is_read: true } : entry)));
+    const updated = entries.map((entry) => (entry.id === id ? { ...entry, is_read: true } : entry));
+    setEntries(updated);
+    const newUnread = updated.filter((e) => !e.is_read).length;
+    window.dispatchEvent(new CustomEvent("payana:notifications-updated", { detail: { unreadCount: newUnread } }));
 
     // RLS permits the user to update only their own rows.
     const { error } = await supabase.from("notifications").update({ is_read: true }).eq("id", id);
@@ -36,6 +39,17 @@ export default function NotificationList({ notifications }: { notifications: Ent
       setEntries(notifications);
     }
     router.refresh();
+  }
+
+  async function markAllRead() {
+    try {
+      await fetch("/api/notifications", { method: "PATCH" });
+      setEntries((current) => current.map((e) => ({ ...e, is_read: true })));
+      window.dispatchEvent(new CustomEvent("payana:notifications-updated", { detail: { unreadCount: 0 } }));
+      router.refresh();
+    } catch {
+      // ignore
+    }
   }
 
   if (entries.length === 0) {
@@ -51,7 +65,26 @@ export default function NotificationList({ notifications }: { notifications: Ent
 
   return (
     <section className="panel">
-      {unread > 0 && <p className="panel-note">{unread} unread</p>}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+        {unread > 0 ? (
+          <p className="panel-note" style={{ margin: 0, fontWeight: 600 }}>
+            <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", background: "#e11d48", marginRight: "6px" }} />
+            {unread} unread notification{unread > 1 ? "s" : ""}
+          </p>
+        ) : (
+          <p className="panel-note" style={{ margin: 0 }}>All caught up</p>
+        )}
+        {unread > 0 && (
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={markAllRead}
+            style={{ fontSize: "12px", padding: "4px 12px" }}
+          >
+            ✓ Mark all as read
+          </button>
+        )}
+      </div>
       <div className="contact-list">
         {entries.map((entry) => (
           <button

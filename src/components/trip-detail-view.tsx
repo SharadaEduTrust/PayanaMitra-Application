@@ -399,9 +399,9 @@ export default function TripDetailView({
       )}
 
       <section className="panel" style={{ marginTop: "24px" }}>
-        <h2 className="serif">Contacts</h2>
+        <h2 className="serif">Contact details</h2>
         {contacts.length === 0 ? (
-          <p className="panel-note">Guide, hotel and transport contacts will appear here.</p>
+          <p className="panel-note">Guide, hotel, leader and transport contacts will appear here.</p>
         ) : (
           <div className="contact-list">
             {contacts.map((contact) => (
